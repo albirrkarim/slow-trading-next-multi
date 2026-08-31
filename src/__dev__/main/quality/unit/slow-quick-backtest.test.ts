@@ -7,6 +7,7 @@ import { createTestPosition } from "../fixtures/position";
 
 const slowQuickBacktest = slowTrading.quickBacktest;
 const {
+  combineQuickSimulationSeries,
   calculateQuickPositionMetrics,
   calculateQuickSharpeRatio,
   calculateQuickUnusedCapitalDurationMetrics,
@@ -95,6 +96,48 @@ describe("slow quick backtest report helpers", () => {
     expect(result.series[1][0].level).toBe(-4);
   });
 
+  it("combines account markers under one trade simulation chart group", () => {
+    const result = combineQuickSimulationSeries([
+      {
+        name: "Account 1",
+        result: {
+          simulationSeries: {
+            names: ["TRADE SIMULATION INJ"],
+            series: [
+              [{ time: 1, level: -3, text: "TRADE SIMULATION ENTRY INJ" }],
+            ],
+          },
+        },
+      },
+      {
+        name: "Account 2",
+        result: {
+          simulationSeries: {
+            names: ["TRADE SIMULATION BTC"],
+            series: [
+              [{ time: 2, level: 2, text: "TRADE SIMULATION EXIT BTC" }],
+            ],
+          },
+        },
+      },
+    ]);
+
+    // BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST
+    expect(result.names).toEqual([
+      "TRADE SIMULATION INJ",
+      "TRADE SIMULATION BTC",
+    ]);
+    expect(result.names.every((name) => name.startsWith("TRADE SIMULATION"))).toBe(
+      true,
+    );
+    expect(result.series[0][0].text).toBe(
+      "Account 1: TRADE SIMULATION ENTRY INJ",
+    );
+    expect(result.series[1][0].text).toBe(
+      "Account 2: TRADE SIMULATION EXIT BTC",
+    );
+  });
+
   it("converts simulated closed positions into read-only quick trade history rows", () => {
     const result = positionsToQuickTradeHistory({
       INJ: [
@@ -152,6 +195,9 @@ describe("slow quick backtest report helpers", () => {
   it("exposes the grouped quick backtest API", () => {
     // PROD:QUICK_BACKTEST_VISIBLE_VPOINTS
     expect(slowQuickBacktest.run).toBeTypeOf("function");
+    expect(slowQuickBacktest.report.combineQuickSimulationSeries).toBe(
+      combineQuickSimulationSeries,
+    );
     expect(slowQuickBacktest.report.calculateQuickSharpeRatio).toBe(
       calculateQuickSharpeRatio,
     );

@@ -703,6 +703,31 @@ function combineQuickGrowthSeries(
   };
 }
 
+/** Combines account markers under the chart's single TRADE SIMULATION group. */
+export function combineQuickSimulationSeries(
+  accountResults: Array<{
+    name: string;
+    result: Pick<SlowQuickBacktestResult, "simulationSeries">;
+  }>,
+): SlowQuickBacktestResult["simulationSeries"] {
+  // BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST
+  return {
+    names: accountResults.flatMap(
+      (account) => account.result.simulationSeries.names,
+    ),
+    series: accountResults.flatMap((account) =>
+      account.result.simulationSeries.series.map((markers) =>
+        markers.map((marker) => ({
+          ...marker,
+          text: marker.text
+            ? `${account.name}: ${marker.text}`
+            : marker.text,
+        })),
+      ),
+    ),
+  };
+}
+
 /** Runs every enabled account and combines their trades into one report. */
 async function run(
   input: SlowQuickBacktestInput,
@@ -841,22 +866,14 @@ async function run(
       .flatMap((account) => account.result.tradeHistory)
       .sort((left, right) => (right.closed?.t ?? 0) - (left.closed?.t ?? 0)),
     growthOvertimeSeries: combineQuickGrowthSeries(accountResults),
-    simulationSeries: {
-      names: accountResults.flatMap((account) =>
-        account.result.simulationSeries.names.map(
-          (name) => `${account.name}: ${name}`,
-        ),
-      ),
-      series: accountResults.flatMap(
-        (account) => account.result.simulationSeries.series,
-      ),
-    },
+    simulationSeries: combineQuickSimulationSeries(accountResults),
   };
 }
 
 const slowQuickBacktest = {
   run,
   report: {
+    combineQuickSimulationSeries,
     growthOvertimeToQuickSeries,
     calculatePositionDrawdownPct,
     calculateQuickPositionMetrics,
