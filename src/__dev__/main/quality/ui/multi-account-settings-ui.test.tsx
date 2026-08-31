@@ -4,6 +4,8 @@
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -187,6 +189,17 @@ function createDraft(): ConfigDraft {
 }
 
 describe("multi-account settings UI", () => {
+  it("keeps the dashboard combined without a global account selector", () => {
+    const source = readFileSync(
+      path.resolve("src/components/LiveDashboard/LiveDashboardPage.tsx"),
+      "utf8",
+    );
+
+    expect(source).not.toContain("Dashboard account");
+    expect(source).not.toContain("dashboardAccountFilter");
+    expect(source).not.toMatch(/params:\s*\{\s*account:/);
+  });
+
   it("switches the Trading editor without losing the previous account's draft", async () => {
     const user = userEvent.setup();
 

@@ -66,9 +66,13 @@ export default function LiveDashboardNavbar({
         boxShadow: 2,
         gap: { xs: 0.75, md: 1 },
         display: "grid",
+        gridTemplateAreas: {
+          xs: '"identity" "pnl" "actions"',
+          md: '"identity pnl actions"',
+        },
         gridTemplateColumns: {
           xs: "minmax(0, 1fr)",
-          md: "minmax(0, 1fr) auto auto",
+          md: "minmax(0, 1fr) auto minmax(0, 1fr)",
         },
         width: "100%",
         maxWidth: "100%",
@@ -77,7 +81,6 @@ export default function LiveDashboardNavbar({
         overflowX: "hidden",
       }}
     >
-
       <NavbarIdentitySection
         configDraft={configDraft}
         dashboardState={dashboardState}
@@ -112,7 +115,6 @@ export default function LiveDashboardNavbar({
         tryWithdrawNow={tryWithdrawNow}
         tryingWithdraw={tryingWithdraw}
       />
-
     </Box>
   );
 }

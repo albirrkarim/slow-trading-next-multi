@@ -111,7 +111,7 @@ blocking deletion until those dependencies are resolved.
 
 Its combined
 
-14. Should dashboard totals and trade history default to all accounts combined, or require selecting one account? I recommend combined totals with an account filter.
+14. Should dashboard totals and trade history default to all accounts combined, or require selecting one account?
 
 Annotation 1 Since all accounts share one trade-history storage, the dashboard needs to decide what to display.
 
@@ -122,16 +122,18 @@ Account A profit: +100 USDT
 Account B loss:    -30 USDT
 ```
 
-Two possible dashboard behaviors:
+Two possible dashboard behaviors were considered:
 
 - **Combined view:** shows total profit of `+70 USDT`.
 - **Account view:** selecting Account A shows only `+100 USDT`; selecting Account B shows only `-30 USDT`.
 
-Better to supporting both:
+Final decision:
 
-- Show all accounts combined by default.
-- Add an account filter for viewing one account.
+- The dashboard is always combined across all enabled accounts.
+- Do not show a global dashboard account selector.
 - Each history row displays its account name or slug.
+- A feature that needs account-specific editing or actions must provide its own
+  local account selector instead of changing the entire dashboard.
 
 1. Should a backtest run one selected account’s Trading configuration, or run every enabled account and compare their results?
 
@@ -200,9 +202,10 @@ simulation memory. The final report combines all closed positions into one
 `positions[]`; every position keeps its account slug and the history table shows
 it. Quick Backtest exposes one starting-balance input per enabled account.
 
-The dashboard loads all accounts and combines balances, open positions, and
-history by default. Trade history provides an account filter. Shared Daily PnL
-uses the combined shared history.
+The dashboard always loads all enabled accounts and combines balances, open
+positions, and history. It has no global account selector. Shared Daily PnL uses
+the combined shared history. Any account-specific feature owns a local account
+selector that changes only that feature.
 
 The Trading tab edits one account at a time. Its `Editing Account` selector is
 placed directly above the Trading form and changes only the profile being

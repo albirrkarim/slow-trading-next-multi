@@ -135,6 +135,7 @@ export function NavbarIdentitySection({
         alignItems: "center",
         gap: { xs: 0.75, md: 1 },
         flexWrap: { xs: "wrap", md: "nowrap" },
+        gridArea: "identity",
         minWidth: 0,
       }}
     >
@@ -246,6 +247,8 @@ export function NavbarDayPreviewSection({
         gap: { xs: 0.5, md: 1 },
         flexWrap: "wrap",
         alignItems: "center",
+        gridArea: "pnl",
+        justifySelf: { xs: "start", md: "center" },
         minWidth: 0,
       }}
     >
@@ -403,7 +406,9 @@ export function NavbarActionsSection({
         display: "flex",
         gap: { xs: 0.25, md: 1 },
         alignItems: "center",
+        gridArea: "actions",
         justifyContent: { xs: "flex-start", md: "flex-end" },
+        justifySelf: { xs: "stretch", md: "end" },
         flexWrap: "wrap",
         minWidth: 0,
       }}

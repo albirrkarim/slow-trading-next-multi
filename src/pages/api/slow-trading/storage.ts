@@ -4,7 +4,7 @@ import slowTrading, {
 } from "@/lib/slowTrading";
 import { tradeLog } from "@/lib/trading/helper/log";
 
-async function loadDashboardState(account?: string) {
+async function loadDashboardState() {
   const catalog = await slowTrading.storage.data.load({ modeScope: "active" });
   const orderedAccounts = [
     catalog.account,
@@ -23,28 +23,7 @@ async function loadDashboardState(account?: string) {
   }
   const combined =
     await slowTrading.storage.dashboard.buildCombinedStateRealtime(storages);
-  if (!account) return combined;
-
-  const selectedStorage = storages.find(
-    (storage) => storage.account.slug === account,
-  );
-  if (!selectedStorage) {
-    throw new Error(`Unknown exchange account: ${account}`);
-  }
-  const selected = slowTrading.storage.dashboard.buildState(selectedStorage);
-  const selectedSummary = combined.accountSummaries.find(
-    (summary) => summary.slug === account,
-  );
-
-  return {
-    ...selected,
-    accountSummaries: combined.accountSummaries,
-    balances: selectedSummary?.balances ?? selected.balances,
-    history: combined.history.filter((position) => position.account === account),
-    openPositions: combined.openPositions.filter(
-      (position) => position.account === account,
-    ),
-  };
+  return combined;
 }
 
 export default async function handler(
@@ -57,10 +36,8 @@ export default async function handler(
     await slowTrading.runner.get();
 
     if (req.method === "GET") {
-      const account = Array.isArray(req.query.account)
-        ? req.query.account[0]
-        : req.query.account;
-      res.status(200).json(await loadDashboardState(account));
+      res.setHeader("Cache-Control", "no-store");
+      res.status(200).json(await loadDashboardState());
       return;
     }
 

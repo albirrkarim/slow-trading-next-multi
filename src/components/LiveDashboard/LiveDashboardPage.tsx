@@ -6,12 +6,8 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import {
   Box,
   Button,
-  FormControl,
   Grid,
-  InputLabel,
   LinearProgress,
-  MenuItem,
-  Select,
   Typography,
   useMediaQuery,
 } from "@mui/material";
@@ -148,7 +144,6 @@ export default function DynamicTradeHistoryPage({
   >({});
   const [dashboardState, setDashboardState] =
     useState<SlowTradingDashboardState | null>(null);
-  const [dashboardAccountFilter, setDashboardAccountFilter] = useState("all");
   const [quickSimulationSeries, setQuickSimulationSeries] =
     useState<QuickBacktestSimulationSeries>({
       names: [],
@@ -220,10 +215,7 @@ export default function DynamicTradeHistoryPage({
     return symbolsLocal;
   }
 
-  const execute = async (
-    reinitialize = false,
-    accountFilter = dashboardAccountFilter,
-  ) => {
+  const execute = async (reinitialize = false) => {
     if (reinitialize) {
       setReinitializing(true);
     } else {
@@ -235,9 +227,6 @@ export default function DynamicTradeHistoryPage({
 
       const stateResp = await axios.get<SlowTradingDashboardState>(
         endpoints.slow.prod.storage,
-        {
-          params: accountFilter === "all" ? undefined : { account: accountFilter },
-        },
       );
       const nextState = stateResp.data;
       const exchangeType = nextState.config.exchangeType;
@@ -397,12 +386,6 @@ export default function DynamicTradeHistoryPage({
       try {
         const stateResp = await axios.get<SlowTradingDashboardState>(
           endpoints.slow.prod.storage,
-          {
-            params:
-              dashboardAccountFilter === "all"
-                ? undefined
-                : { account: dashboardAccountFilter },
-          },
         );
 
         if (!isActive) {
@@ -443,7 +426,7 @@ export default function DynamicTradeHistoryPage({
       isActive = false;
       window.clearInterval(intervalId);
     };
-  }, [dashboardAccountFilter]);
+  }, []);
 
   const currentExchangeType =
     dashboardState?.config.exchangeType ?? "tokocrypto";
@@ -530,9 +513,7 @@ export default function DynamicTradeHistoryPage({
         executed?: boolean;
         message?: string;
       }>(endpoints.slow.prod.entry, {
-        account:
-          dashboardState?.accountFilter ??
-          dashboardState?.runtime.exchangeAccountSlug,
+        account: dashboardState?.runtime.exchangeAccountSlug,
         symbol,
       });
 
@@ -832,33 +813,6 @@ export default function DynamicTradeHistoryPage({
           color={reinitializing ? "warning" : "primary"}
           sx={{ height: 3 }}
         />
-      )}
-
-      {dashboardState && (
-        <Box sx={{ display: "flex", justifyContent: "flex-end", m: 1 }}>
-          <FormControl size="small" sx={{ minWidth: 220 }}>
-            <InputLabel id="dashboard-account-filter-label">
-              Dashboard account
-            </InputLabel>
-            <Select
-              label="Dashboard account"
-              labelId="dashboard-account-filter-label"
-              value={dashboardAccountFilter}
-              onChange={(event) => {
-                const account = event.target.value;
-                setDashboardAccountFilter(account);
-                void execute(false, account);
-              }}
-            >
-              <MenuItem value="all">All accounts (combined)</MenuItem>
-              {dashboardState.runtime.exchangeAccounts.map((account) => (
-                <MenuItem key={account.slug} value={account.slug}>
-                  {account.name || account.slug}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
       )}
 
       <Box sx={{ m: 1 }}>
