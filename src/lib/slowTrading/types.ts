@@ -11,6 +11,7 @@ import type {
 import type {
   Position,
   PositionExecutionMode,
+  TradingModelConfig,
 } from "@/lib/trading/models";
 import type { BlackSwanState } from "@/lib/trading/black-swan";
 import type { SlowTradingCyclePerformanceSummary } from "./performance";
@@ -445,6 +446,26 @@ export interface SlowTradingAccountSandboxConfig {
   enabled: boolean;
   initialBalanceUSDT: number;
 }
+
+/** Model settings shared by every account and persisted only in config.json. */
+export type SlowTradingSharedModelConfig = Pick<
+  TradingModelConfig,
+  "minimalAssetOnTrade" | "safePercentPerMonth" | "safeUSDTPerMonth"
+>;
+
+/** Shared strategy fields persisted once in config.json. */
+export type SlowTradingPersistedSharedConfig = Pick<
+  DynamicTradeConfig,
+  | "blackSwan"
+  | "decisionEngineVersion"
+  | "description"
+  | "exchangeType"
+  | "name"
+  | "symbols"
+  | "tradingMode"
+> & {
+  modelConfig: SlowTradingSharedModelConfig;
+};
 
 /** Complete persisted SLOW account profile excluding its mode memory. */
 export interface SlowTradingAccount extends ExchangeAccount {

@@ -91,6 +91,14 @@ interface LoadSlowTradingStorageOptions {
   modeScope?: "all" | "active";
 }
 
+/** Legacy config files may still contain a complete effective trading config. */
+type SlowTradingReadableConfigFileData = Omit<
+  SlowTradingConfigFileData,
+  "config"
+> & {
+  config: SlowTradingStorageData["config"];
+};
+
 /**
  * Create the default SLOW strategy config without allocating mode memory.
  */
@@ -395,7 +403,8 @@ function splitSlowTradingStorage(
   return {
     accounts,
     configFile: {
-      config: sharedConfig,
+      // PROD:MULTI_ACCOUNT_CONFIG_OWNERSHIP
+      config: slowTradingAccountConfig.shared.toPersistedConfig(sharedConfig),
       runtime,
       updatedAt: storage.updatedAt,
     },
@@ -451,7 +460,7 @@ async function loadSlowTradingConfigFile(accountSlug?: string): Promise<{
   const configRaw = hasConfigFile
     ? ((await fs.readJSON(
         FILES.slow.config,
-      )) as Partial<SlowTradingConfigFileData>)
+      )) as Partial<SlowTradingReadableConfigFileData>)
     : {};
   const baseConfig = createDefaultSlowTradingConfig();
   const baseRuntime = createDefaultSlowTradingRuntime();

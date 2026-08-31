@@ -83,6 +83,38 @@ describe("slow specs storage", () => {
     expect(persisted.updatedAt).toBe(123);
   });
 
+  it("persists shared and account trading config with single owners", async () => {
+    const { FILES } = await import("@/components/storage");
+    const slowTradingStorage = (await import("@/lib/slowTrading")).default
+      .storage;
+    const storage = slowTradingStorage.data.createDefault();
+    storage.config.maxLeverage = 7;
+    storage.config.modelConfig.takeProfitPercent = 4;
+
+    await slowTradingStorage.data.save(storage);
+
+    const configFile = await fs.readJSON(FILES.slow.config);
+    const accountsFile = await fs.readJSON(FILES.slow.accounts);
+
+    // PROD:MULTI_ACCOUNT_CONFIG_OWNERSHIP
+    expect(configFile.config).not.toHaveProperty("maxLeverage");
+    expect(configFile.config.modelConfig).not.toHaveProperty(
+      "takeProfitPercent",
+    );
+    expect(configFile.config).toMatchObject({
+      name: storage.config.name,
+      symbols: storage.config.symbols,
+    });
+    expect(accountsFile.accounts[0].trading).toMatchObject({
+      maxLeverage: 7,
+      modelConfig: { takeProfitPercent: 4 },
+    });
+
+    const loaded = await slowTradingStorage.data.load();
+    expect(loaded.config.maxLeverage).toBe(7);
+    expect(loaded.config.modelConfig.takeProfitPercent).toBe(4);
+  });
+
   it("enables the daily PnL notification when migrating a pre-feature config", async () => {
     const { FILES } = await import("@/components/storage");
     const slowTradingStorage = (await import("@/lib/slowTrading")).default

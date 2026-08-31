@@ -2,6 +2,7 @@ import type { DynamicTradeConfig } from "@/lib/dynamic";
 import type {
   SlowTradingAccount,
   SlowTradingAccountTradingConfig,
+  SlowTradingPersistedSharedConfig,
 } from "./types";
 import { clone } from "./storage/common";
 
@@ -112,9 +113,37 @@ function sharedFromEffectiveConfig(
   return next;
 }
 
+/** Selects only config.json-owned fields from a complete effective config. */
+function toPersistedSharedConfig(
+  config: DynamicTradeConfig,
+): SlowTradingPersistedSharedConfig {
+  const persisted: SlowTradingPersistedSharedConfig = {
+    name: config.name,
+    description: config.description,
+    symbols: clone(config.symbols),
+    modelConfig: {
+      minimalAssetOnTrade: config.modelConfig.minimalAssetOnTrade,
+      safePercentPerMonth: config.modelConfig.safePercentPerMonth,
+      safeUSDTPerMonth: config.modelConfig.safeUSDTPerMonth,
+    },
+    exchangeType: config.exchangeType,
+    tradingMode: config.tradingMode,
+  };
+
+  if (config.decisionEngineVersion !== undefined) {
+    persisted.decisionEngineVersion = config.decisionEngineVersion;
+  }
+  if (config.blackSwan !== undefined) {
+    persisted.blackSwan = clone(config.blackSwan);
+  }
+
+  return persisted;
+}
+
 const slowTradingAccountConfig = {
   shared: {
     fromEffectiveConfig: sharedFromEffectiveConfig,
+    toPersistedConfig: toPersistedSharedConfig,
   },
   trading: {
     fromEffectiveConfig,

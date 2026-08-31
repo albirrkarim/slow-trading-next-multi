@@ -179,6 +179,13 @@ interface SlowTradingAccount {
 The shared config remains stored once. Live and sandbox memory are stored under
 the account slug, while history remains shared:
 
+- `config.json` owns only shared strategy configuration and shared runtime
+  controls. It must not persist Trading-tab or per-account Sandbox settings.
+- `accounts.json` stores complete account profiles and is the sole owner of
+  credentials, enabled state, Trading-tab configuration, and Sandbox settings.
+- `memory.json` owns live and sandbox execution memory under each immutable
+  account slug.
+
 ```typescript
 interface SlowTradingMemoryFile {
   accounts: Record<
@@ -236,4 +243,5 @@ these exact TC comments:
 - `PROD:MULTI_ACCOUNT_WITHDRAWAL_OWNER`
 - `PROD:MULTI_ACCOUNT_COMBINED_DAILY_PNL`
 - `PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD`
+- `PROD:MULTI_ACCOUNT_CONFIG_OWNERSHIP`
 - `BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST`
