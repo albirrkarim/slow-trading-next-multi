@@ -195,7 +195,9 @@ export function NavbarIdentitySection({
         >
           {accountSummaries.map((account) => (
             <Box
+              aria-label={`${account.name} balance`}
               key={account.slug}
+              role="group"
               sx={{
                 alignItems: "center",
                 display: "flex",

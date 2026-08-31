@@ -204,6 +204,18 @@ The dashboard loads all accounts and combines balances, open positions, and
 history by default. Trade history provides an account filter. Shared Daily PnL
 uses the combined shared history.
 
+The Trading tab edits one account at a time. Its `Editing Account` selector is
+placed directly above the Trading form and changes only the profile being
+edited; it does not choose which account executes. Runtime > Sandbox renders
+one visible Sandbox section per account, including that account's mode toggle,
+initial balance, and reset action. The shared Management tab has no execution
+account selector.
+
+The navbar renders one account chip and one independent balance summary for
+every enabled account. Each chip shows that account's current live or sandbox
+mode. Disabled accounts are omitted from the navbar even when they continue
+managing an existing position.
+
 ## F. Required Test Codes (TC)
 
 Following `docs/slow/SPECS/_SPECS.md`, the implementation and its tests must use

@@ -156,6 +156,56 @@ describe("SLOW multi-account specs", () => {
     ]);
   });
 
+  it("retains each account's balance summary in the combined dashboard", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const defaults = slowTrading.storage.data.createDefault();
+    const template = defaults.runtime.exchangeAccounts[0];
+    await slowTrading.storage.data.save(defaults);
+    await slowTrading.storage.account.saveAccounts(
+      [
+        {
+          ...template,
+          slug: "alpha",
+          name: "Alpha",
+          sandbox: { enabled: true, initialBalanceUSDT: 100 },
+        },
+        {
+          ...template,
+          slug: "beta",
+          name: "Beta",
+          enabled: false,
+          sandbox: { enabled: true, initialBalanceUSDT: 200 },
+        },
+      ],
+      defaults.sharedConfig,
+    );
+
+    const alpha = await slowTrading.storage.data.load({ account: "alpha" });
+    const beta = await slowTrading.storage.data.load({ account: "beta" });
+    alpha.modes.sandbox.dynamicTradeMemory.quoteAsset = 111;
+    beta.modes.sandbox.dynamicTradeMemory.quoteAsset = 222;
+
+    const dashboard =
+      await slowTrading.storage.dashboard.buildCombinedStateRealtime([
+        alpha,
+        beta,
+      ]);
+
+    // PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD
+    expect(dashboard.accountSummaries).toEqual([
+      expect.objectContaining({
+        slug: "alpha",
+        enabled: true,
+        balances: expect.objectContaining({ availableQuoteAsset: 111 }),
+      }),
+      expect.objectContaining({
+        slug: "beta",
+        enabled: false,
+        balances: expect.objectContaining({ availableQuoteAsset: 222 }),
+      }),
+    ]);
+  });
+
   it("documents executable guards for sequencing and account dependencies", async () => {
     const [
       cycle,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Grid, Stack } from "@mui/material";
+import { Box, Grid, MenuItem, Stack } from "@mui/material";
 import adaptiveAveraging from "@/lib/trading/adaptive-averaging";
 
 import ExitStrategyReference from "./ExitStrategyReference";
@@ -9,7 +9,10 @@ import SettingsGroup from "./SettingsGroup";
 import SettingsInfoField from "./SettingsInfoField";
 import TradingSettingsPreview from "./TradingSettingsPreview";
 import type { ConfigDraft, ConfigDraftSetter, DashboardState } from "./types";
-import { updateAccountSettingsInConfigDraft } from "./helpers";
+import {
+  applyAccountProfileToConfigDraft,
+  updateAccountSettingsInConfigDraft,
+} from "./helpers";
 
 interface SettingsDialogTradingTabProps {
   configDraft: ConfigDraft;
@@ -18,10 +21,11 @@ interface SettingsDialogTradingTabProps {
 }
 
 function TradingAccountSettings({
+  accountSelector,
   configDraft,
   dashboardState,
   setConfigDraft,
-}: SettingsDialogTradingTabProps) {
+}: SettingsDialogTradingTabProps & { accountSelector?: React.ReactNode }) {
   const averagingEnabled = configDraft.enableWatchLogic ?? false;
   const adaptiveConfig = adaptiveAveraging.config.normalize(
     configDraft.adaptiveAveraging,
@@ -31,6 +35,11 @@ function TradingAccountSettings({
     <Grid container spacing={3} alignItems="flex-start">
       <Grid size={{ xs: 12, sm: 12, md: 6, lg: 6 }}>
         <Stack gap={3} sx={{ minWidth: 0 }}>
+          {accountSelector && (
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              {accountSelector}
+            </Box>
+          )}
           <SettingsGroup title="Entry">
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 6 }}>
@@ -454,6 +463,34 @@ export default function SettingsDialogTradingTab({
 
   return (
     <TradingAccountSettings
+      accountSelector={
+        configDraft.exchangeAccounts.length > 0 ? (
+          <SettingsInfoField
+            info="Chooses which account's Trading configuration is shown in this editor. It does not control which accounts execute."
+            label="Editing Account"
+            onChange={(event) => {
+              const account = configDraft.exchangeAccounts.find(
+                (candidate) => candidate.slug === event.target.value,
+              );
+              setConfigDraft((current) =>
+                current && account
+                  ? applyAccountProfileToConfigDraft(current, account)
+                  : current,
+              );
+            }}
+            select
+            size="small"
+            sx={{ width: { xs: "100%", sm: 240 } }}
+            value={configDraft.exchangeAccountSlug}
+          >
+            {configDraft.exchangeAccounts.map((account) => (
+              <MenuItem key={account.slug} value={account.slug}>
+                {account.name}
+              </MenuItem>
+            ))}
+          </SettingsInfoField>
+        ) : undefined
+      }
       configDraft={configDraft}
       dashboardState={dashboardState}
       setConfigDraft={setSelectedAccountDraft}

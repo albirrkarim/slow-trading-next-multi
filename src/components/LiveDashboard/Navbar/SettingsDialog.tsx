@@ -13,7 +13,13 @@ import SaveIcon from "@mui/icons-material/Save";
 import SettingsIcon from "@mui/icons-material/Settings";
 import ShieldOutlinedIcon from "@mui/icons-material/ShieldOutlined";
 import TuneIcon from "@mui/icons-material/Tune";
-import { Box, Button, IconButton, MenuItem, Tab, Tabs } from "@mui/material";
+import {
+  Box,
+  Button,
+  IconButton,
+  Tab,
+  Tabs,
+} from "@mui/material";
 import SettingsDialogRuntimeTab from "./SettingsDialogRuntimeTab";
 import SettingsDialogBackupTab from "./SettingsDialogBackupTab";
 import SettingsDialogBlackSwanTab from "./SettingsDialogBlackSwanTab";
@@ -22,8 +28,6 @@ import SettingsDialogMcpTab from "./SettingsDialogMcpTab";
 import SettingsDialogNotificationTab from "./SettingsDialogNotificationTab";
 import SettingsDialogTradingTab from "./SettingsDialogTradingTab";
 import SettingsDialogWithdrawTab from "./SettingsDialogWithdrawTab";
-import SettingsInfoField from "./SettingsInfoField";
-import { applyAccountProfileToConfigDraft } from "./helpers";
 import type { ConfigDraft, ConfigDraftSetter, DashboardState } from "./types";
 
 export const SETTINGS_TABS = [
@@ -169,32 +173,6 @@ export default function SettingsDialog(props: {
               ))}
             </Tabs>
 
-            {activeTab === "trading" && (
-              <SettingsInfoField
-                info="Chooses which account's Trading configuration is shown in this editor. It does not control which accounts execute."
-                label="Editing Account"
-                onChange={(event) => {
-                  const account = configDraft.exchangeAccounts.find(
-                    (candidate) => candidate.slug === event.target.value,
-                  );
-                  setConfigDraft((current) =>
-                    current && account
-                      ? applyAccountProfileToConfigDraft(current, account)
-                      : current,
-                  );
-                }}
-                select
-                size="small"
-                sx={{ minWidth: { xs: "100%", md: 240 } }}
-                value={configDraft.exchangeAccountSlug}
-              >
-                {configDraft.exchangeAccounts.map((account) => (
-                  <MenuItem key={account.slug} value={account.slug}>
-                    {account.name} · {account.enabled ? "enabled" : "paused"}
-                  </MenuItem>
-                ))}
-              </SettingsInfoField>
-            )}
           </Box>
 
           <Box sx={{ minHeight: 420 }}>
