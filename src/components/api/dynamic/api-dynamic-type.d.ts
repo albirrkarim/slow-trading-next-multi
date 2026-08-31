@@ -76,6 +76,7 @@ export interface DynamicTradeBacktestReturn {
 }
 
 export interface DynamicTradeClosedTrade {
+  account: string;
   symbol: string;
   entryTime: number;
   exitTime?: number;
@@ -84,6 +85,8 @@ export interface DynamicTradeClosedTrade {
 }
 
 export interface DynamicTradeBacktestInput {
+  /** Run every enabled persisted SLOW account and combine the result. */
+  multiAccount?: boolean;
   mode: "kline" | "volatility_point";
   symbols: string[];
   range: string;

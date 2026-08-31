@@ -430,6 +430,7 @@ describe("slow specs storage", () => {
     await slowTradingStorage.mode.saveState("sandbox", storage.modes.sandbox);
 
     const identity = {
+      account: storage.account.slug,
       entryId: "note-entry",
       entryTime: Date.UTC(2026, 6, 1),
       exitTime: Date.UTC(2026, 6, 2),

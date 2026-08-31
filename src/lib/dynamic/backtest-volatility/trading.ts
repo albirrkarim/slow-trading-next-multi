@@ -13,6 +13,7 @@ import type {
   VolatilityPoint,
 } from "@/lib/dynamic";
 import { TradingMode } from "@/lib/exchange";
+import { getCurrentExchangeAccountSlug } from "@/lib/exchange/account-context";
 import {
   adjustEntryMarginForSlowConfig,
   buildSlowWatchReserveState,
@@ -273,6 +274,8 @@ export function tryOpenBacktestEntry({
   const entryMessage = recommend.message ?? message;
 
   modelMemory.positions.push({
+    // BOTH:MULTI_ACCOUNT_POSITION_OWNER
+    account: getCurrentExchangeAccountSlug(),
     symbol,
     executionMode: "sandbox",
     tradingMode: config.tradingMode,

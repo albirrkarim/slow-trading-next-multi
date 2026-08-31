@@ -4,6 +4,7 @@ import type {
   SlowTradingWithdrawalWallet,
 } from "../types";
 import slowTradingWithdrawalSchedule from "../withdrawal-schedule";
+import { DEFAULT_EXCHANGE_ACCOUNT_SLUG } from "./constants";
 
 /**
  * Normalizes id into the shape expected by SLOW.
@@ -67,6 +68,8 @@ function normalizeWithdrawalSchedule(
 
   return {
     id: normalizeId(raw.id, `schedule-${index + 1}`),
+    account:
+      String(raw.account ?? "").trim() || DEFAULT_EXCHANGE_ACCOUNT_SLUG,
     name: String(raw.name ?? "").trim() || `Schedule ${index + 1}`,
     enabled: raw.enabled !== false,
     amountUSDT,

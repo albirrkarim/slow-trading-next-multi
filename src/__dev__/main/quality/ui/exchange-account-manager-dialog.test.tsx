@@ -26,7 +26,7 @@ function createConfigDraft(): ConfigDraft {
     decisionEngineVersion: "decision.v19",
     description: "",
     entrySignalBypass: false,
-    exchangeAccountId: "1",
+    exchangeAccountSlug: "1",
     exchangeAccounts: [
       {
         createdAt: now,
@@ -35,9 +35,14 @@ function createConfigDraft(): ConfigDraft {
           apiSecret: "",
         },
         description: "",
-        id: "1",
+        slug: "new-binance-account",
         name: "New Binance Account",
         type: "binance",
+        enabled: true,
+        trading: {
+          modelConfig: { takeProfitPercent: 5 },
+        },
+        sandbox: { enabled: false, initialBalanceUSDT: 1000 },
         updatedAt: now,
       },
     ],

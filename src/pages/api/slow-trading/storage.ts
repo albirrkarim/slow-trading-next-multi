@@ -4,6 +4,34 @@ import slowTrading, {
 } from "@/lib/slowTrading";
 import { tradeLog } from "@/lib/trading/helper/log";
 
+async function loadDashboardState(account?: string) {
+  if (account) {
+    const storage = await slowTrading.storage.data.load({
+      account,
+      includeHistory: true,
+    });
+    return slowTrading.storage.dashboard.buildStateRealtime(storage);
+  }
+
+  const catalog = await slowTrading.storage.data.load({ modeScope: "active" });
+  const orderedAccounts = [
+    catalog.account,
+    ...catalog.runtime.exchangeAccounts.filter(
+      (accountItem) => accountItem.slug !== catalog.account.slug,
+    ),
+  ];
+  const storages = [];
+  for (const accountItem of orderedAccounts) {
+    storages.push(
+      await slowTrading.storage.data.load({
+        account: accountItem.slug,
+        includeHistory: true,
+      }),
+    );
+  }
+  return slowTrading.storage.dashboard.buildCombinedStateRealtime(storages);
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -14,12 +42,10 @@ export default async function handler(
     await slowTrading.runner.get();
 
     if (req.method === "GET") {
-      const storage = await slowTrading.storage.data.load({
-        includeHistory: true,
-      });
-      res
-        .status(200)
-        .json(await slowTrading.storage.dashboard.buildStateRealtime(storage));
+      const account = Array.isArray(req.query.account)
+        ? req.query.account[0]
+        : req.query.account;
+      res.status(200).json(await loadDashboardState(account));
       return;
     }
 
@@ -83,9 +109,7 @@ export default async function handler(
           });
       }
 
-      res
-        .status(200)
-        .json(await slowTrading.storage.dashboard.buildStateRealtime(storage));
+      res.status(200).json(await loadDashboardState());
       return;
     }
 

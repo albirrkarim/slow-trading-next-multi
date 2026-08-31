@@ -2,7 +2,7 @@ import axios, { type AxiosRequestConfig } from "axios";
 import crypto from "crypto";
 import { BASE_URL } from "./config";
 import { tradeLog } from "@lib/trading";
-import { getCurrentExchangeAccountId } from "@/lib/exchange/account-context";
+import { getCurrentExchangeAccountSlug } from "@/lib/exchange/account-context";
 import { getBinanceCredentials } from "@/lib/exchange/credentials";
 
 export class BinanceApiError extends Error {
@@ -73,8 +73,8 @@ export async function requestPrivate<T>(
   } = {},
 ): Promise<T> {
   try {
-    const accountId = getCurrentExchangeAccountId();
-    const creds = getBinanceCredentials(accountId);
+    const accountSlug = getCurrentExchangeAccountSlug();
+    const creds = getBinanceCredentials(accountSlug);
 
     param.recvWindow = 5000;
     param.timestamp = Date.now();

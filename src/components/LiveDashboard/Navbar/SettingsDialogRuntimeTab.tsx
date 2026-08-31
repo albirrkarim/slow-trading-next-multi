@@ -19,6 +19,7 @@ import SettingsInfoField from "./SettingsInfoField";
 import SettingsDialogSection from "./SettingsDialogSection";
 import RuntimeMonitoringSettings from "./RuntimeMonitoringSettings";
 import type { ConfigDraft, ConfigDraftSetter } from "./types";
+import { updateAccountSettingsInConfigDraft } from "./helpers";
 
 const DEFAULT_SYNC_ONLINE_BASE_URL = "https://wealth.reinventwp.com";
 
@@ -26,8 +27,8 @@ interface SettingsDialogRuntimeTabProps {
   configDraft: ConfigDraft;
   onReinitialize: () => Promise<void>;
   reinitializing: boolean;
-  resetSandbox: () => Promise<void>;
-  resettingSandbox: boolean;
+  resetSandbox: (accountSlug: string) => Promise<void>;
+  resettingSandboxAccount: string | null;
   setConfigDraft: ConfigDraftSetter;
   syncOnlineStorageToLocal: (onlineBaseUrl: string) => Promise<void>;
   syncingOnlineStorage: boolean;
@@ -70,7 +71,7 @@ export default function SettingsDialogRuntimeTab({
   onReinitialize,
   reinitializing,
   resetSandbox,
-  resettingSandbox,
+  resettingSandboxAccount,
   setConfigDraft,
   syncOnlineStorageToLocal,
   syncingOnlineStorage,
@@ -174,63 +175,108 @@ export default function SettingsDialogRuntimeTab({
 
       <Grid size={{ xs: 12, md: 6 }}>
         <SettingsDialogSection
-          title="Sandbox"
-          description="Sandbox mode simulates balance and position handling locally without touching the real exchange."
+          title="Sandbox Accounts"
+          description="Each account independently chooses live or sandbox execution and owns its sandbox starting balance."
         >
           <Stack spacing={2}>
-            <RuntimeToggle
-              checked={configDraft.sandboxEnabled}
-              label="Sandbox Mode"
-              description="When ON, orders are simulated locally and no live exchange orders are sent."
-              onChange={(checked) =>
-                setConfigDraft((prev) =>
-                  prev ? { ...prev, sandboxEnabled: checked } : prev,
-                )
-              }
-            />
+            {(configDraft.exchangeAccounts ?? []).map((account) => {
+              const resetting = resettingSandboxAccount === account.slug;
+              return (
+                <Box
+                  key={account.slug}
+                  sx={{
+                    border: 1,
+                    borderColor: "divider",
+                    borderRadius: 1.5,
+                    p: 2,
+                  }}
+                >
+                  <Stack spacing={2}>
+                    <Box>
+                      <Typography fontWeight={700} variant="subtitle2">
+                        {account.name}
+                      </Typography>
+                      <Typography color="text.secondary" variant="caption">
+                        {account.slug}
+                      </Typography>
+                    </Box>
 
-            <SettingsInfoField
-              label="Sandbox Initial Balance (USDT)"
-              type="number"
-              size="small"
-              fullWidth
-              value={configDraft.sandboxInitialBalanceUSDT}
-              onChange={(event) =>
-                setConfigDraft((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        sandboxInitialBalanceUSDT: event.target.value,
+                    <RuntimeToggle
+                      checked={account.sandbox.enabled}
+                      label={`${account.name} Sandbox Mode`}
+                      description="When ON, this account simulates orders locally and sends no live exchange orders."
+                      onChange={(checked) =>
+                        setConfigDraft((prev) =>
+                          prev
+                            ? updateAccountSettingsInConfigDraft(
+                                prev,
+                                account.slug,
+                                (accountDraft) => ({
+                                  ...accountDraft,
+                                  sandboxEnabled: checked,
+                                }),
+                              )
+                            : prev,
+                        )
                       }
-                    : prev,
-                )
-              }
-              info="Used when sandbox state is initialized or reset."
-            />
+                    />
 
-            <Box>
-              <Button
-                color="warning"
-                variant="outlined"
-                startIcon={<RestartAltIcon />}
-                onClick={() => {
-                  void resetSandbox();
-                }}
-                disabled={resettingSandbox || !configDraft.sandboxEnabled}
-              >
-                {resettingSandbox ? "Resetting..." : "Reset Sandbox"}
-              </Button>
+                    <SettingsInfoField
+                      label={`${account.name} Sandbox Initial Balance (USDT)`}
+                      type="number"
+                      size="small"
+                      fullWidth
+                      value={account.sandbox.initialBalanceUSDT}
+                      onChange={(event) =>
+                        setConfigDraft((prev) =>
+                          prev
+                            ? updateAccountSettingsInConfigDraft(
+                                prev,
+                                account.slug,
+                                (accountDraft) => ({
+                                  ...accountDraft,
+                                  sandboxInitialBalanceUSDT:
+                                    event.target.value,
+                                }),
+                              )
+                            : prev,
+                        )
+                      }
+                      info="Used when this account's sandbox state is initialized or reset."
+                    />
 
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: "block", mt: 1 }}
-              >
-                Rebuilds the sandbox-only state from the configured initial
-                balance. Live mode and the rest of the dashboard config are not
-                touched.
-              </Typography>
-            </Box>
+                    <Box>
+                      <Button
+                        color="warning"
+                        variant="outlined"
+                        startIcon={<RestartAltIcon />}
+                        onClick={() => {
+                          void resetSandbox(account.slug);
+                        }}
+                        disabled={
+                          resettingSandboxAccount !== null ||
+                          !account.sandbox.enabled
+                        }
+                      >
+                        {resetting
+                          ? "Resetting..."
+                          : `Reset ${account.name} Sandbox`}
+                      </Button>
+
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: "block", mt: 1 }}
+                      >
+                        Rebuilds only this account&apos;s sandbox positions and
+                        balance. Its live state and every other account are not
+                        touched.
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Box>
+              );
+            })}
           </Stack>
         </SettingsDialogSection>
 

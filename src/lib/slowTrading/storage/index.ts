@@ -1,6 +1,7 @@
 import {
-  getSlowTradingExchangeAccountId,
+  createUniqueExchangeAccountSlug,
   loadSlowTradingExchangeAccounts,
+  normalizeExchangeAccountSlug,
   runWithSlowTradingExchangeAccount,
   saveSlowTradingExchangeAccounts,
 } from "./account";
@@ -11,6 +12,7 @@ import {
 import {
   buildSlowTradingDashboardState,
   buildSlowTradingDashboardStateRealtime,
+  buildCombinedSlowTradingDashboardStateRealtime,
 } from "./dashboard";
 import {
   clearSlowTradingHistory,
@@ -41,6 +43,7 @@ import {
 } from "./mode";
 import {
   createDefaultSlowTradingStorage,
+  deleteSlowTradingAccountState,
   loadSlowTradingStorage,
   resetSandboxSlowTrading,
   saveSlowTradingModeState,
@@ -64,10 +67,12 @@ const slowTradingStorage = {
     updateErrorStatuses: updateSlowTradingErrorLogStatuses,
   },
   account: {
-    getExchangeAccountId: getSlowTradingExchangeAccountId,
+    createUniqueSlug: createUniqueExchangeAccountSlug,
     loadAccounts: loadSlowTradingExchangeAccounts,
+    normalizeSlug: normalizeExchangeAccountSlug,
     runWithExchangeAccount: runWithSlowTradingExchangeAccount,
     saveAccounts: saveSlowTradingExchangeAccounts,
+    deleteState: deleteSlowTradingAccountState,
   },
   mode: {
     createState: createModeState,
@@ -97,6 +102,7 @@ const slowTradingStorage = {
   dashboard: {
     buildState: buildSlowTradingDashboardState,
     buildStateRealtime: buildSlowTradingDashboardStateRealtime,
+    buildCombinedStateRealtime: buildCombinedSlowTradingDashboardStateRealtime,
   },
   balanceSnapshots: {
     read: readSlowTradingBalanceSnapshots,

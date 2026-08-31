@@ -290,6 +290,7 @@ export default function DynamicTradeAnalytics() {
 
             // build payload exactly as requested
             const payload = {
+                multiAccount: true,
                 mode: usedConfig.mode,
 
                 symbols: usedConfig.symbols,

@@ -7,6 +7,20 @@ function parseMode(value: unknown): SlowTradingMode | null {
   return value === "live" || value === "sandbox" ? value : null;
 }
 
+async function loadCombinedDashboardState() {
+  const catalog = await slowTrading.storage.data.load({ modeScope: "active" });
+  const storages = [];
+  for (const account of catalog.runtime.exchangeAccounts) {
+    storages.push(
+      await slowTrading.storage.data.load({
+        account: account.slug,
+        includeHistory: true,
+      }),
+    );
+  }
+  return slowTrading.storage.dashboard.buildCombinedStateRealtime(storages);
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -25,14 +39,11 @@ export default async function handler(
     }
 
     if (req.method === "DELETE" && req.body?.clearAll === true) {
-      const { deletedCount, storage: nextStorage } =
-        await slowTrading.storage.history.clear(mode);
+      const { deletedCount } = await slowTrading.storage.history.clear(mode);
       res.status(200).json({
         success: true,
         deletedCount,
-        state: await slowTrading.storage.dashboard.buildStateRealtime(
-          nextStorage,
-        ),
+        state: await loadCombinedDashboardState(),
       });
       return;
     }
@@ -44,6 +55,7 @@ export default async function handler(
     }
 
     const identity = {
+      account: String(req.body?.account || "").trim(),
       mode,
       symbol,
       entryId:
@@ -58,6 +70,10 @@ export default async function handler(
         typeof req.body?.quantity === "number" ? req.body.quantity : undefined,
       usdt: typeof req.body?.usdt === "number" ? req.body.usdt : undefined,
     };
+    if (!identity.account) {
+      res.status(400).json({ error: "Account is required" });
+      return;
+    }
 
     if (req.method === "PATCH") {
       if (typeof req.body?.notes !== "string") {
@@ -65,7 +81,7 @@ export default async function handler(
         return;
       }
 
-      const { storage: nextStorage, updated } =
+      const { updated } =
         await slowTrading.storage.history.updateNotes({
           ...identity,
           notes: req.body.notes,
@@ -78,12 +94,12 @@ export default async function handler(
 
       res.status(200).json({
         success: true,
-        state: slowTrading.storage.dashboard.buildState(nextStorage),
+        state: await loadCombinedDashboardState(),
       });
       return;
     }
 
-    const { deleted, storage: nextStorage } =
+    const { deleted } =
       await slowTrading.storage.history.deleteEntry(identity);
 
     if (!deleted) {
@@ -94,7 +110,7 @@ export default async function handler(
     res.status(200).json({
       success: true,
       deletedCount: 1,
-      state: await slowTrading.storage.dashboard.buildStateRealtime(nextStorage),
+      state: await loadCombinedDashboardState(),
     });
   } catch (error: any) {
     await slowTrading.storage.logs.appendError({

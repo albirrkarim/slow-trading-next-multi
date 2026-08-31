@@ -19,7 +19,7 @@ const REQUIRED_CONFIG_KEYS = [
   "name",
   "description",
   "decisionEngineVersion",
-  "exchangeAccountId",
+  "exchangeAccountSlug",
   "exchangeAccounts",
   "exchangeType",
   "tradingMode",

@@ -12,6 +12,7 @@ type TestClosedPosition = Omit<
 };
 
 interface TestPositionOptions {
+  account?: string;
   averaging?: PositionAveragingState;
   closed?: TestClosedPosition;
   direction?: Position["direction"];
@@ -43,6 +44,7 @@ export function createTestPosition(
   const entryLevel = options.entryLevel ?? -2;
   const marginUsdt = options.marginUsdt ?? options.notionalUsdt ?? 10;
   return {
+    account: options.account ?? "binance-1",
     symbol: options.symbol ?? "SUI",
     executionMode: options.executionMode ?? "sandbox",
     tradingMode: options.tradingMode ?? TradingMode.FUTURES,

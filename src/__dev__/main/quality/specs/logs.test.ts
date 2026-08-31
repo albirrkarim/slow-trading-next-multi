@@ -32,6 +32,7 @@ describe("slow specs logs", () => {
       timestamp: 1,
     });
     const safeHaven = await storage.logs.appendSafeHaven({
+      account: "test-account",
       mode: "live",
       previousUSDT: 10,
       nextUSDT: 12,
@@ -39,6 +40,7 @@ describe("slow specs logs", () => {
       timestamp: 2,
     });
     const withdrawal = await storage.logs.appendWithdrawal({
+      account: "test-account",
       trigger: "automatic",
       status: "executed",
       mode: "live",
@@ -120,6 +122,7 @@ describe("slow specs logs", () => {
       timestamp: 2,
     });
     const safeHaven = await storage.logs.appendSafeHaven({
+      account: "test-account",
       mode: "live",
       previousUSDT: 1,
       nextUSDT: 2,
@@ -127,6 +130,7 @@ describe("slow specs logs", () => {
       timestamp: 3,
     });
     const withdrawal = await storage.logs.appendWithdrawal({
+      account: "test-account",
       trigger: "manual",
       status: "executed",
       mode: "live",
@@ -171,6 +175,7 @@ describe("slow specs logs", () => {
     const storage = (await import("@/lib/slowTrading")).default.storage;
     await storage.logs.appendError({ source: "test", error: "keep" });
     await storage.logs.appendWithdrawal({
+      account: "test-account",
       trigger: "manual",
       status: "executed",
       mode: "live",

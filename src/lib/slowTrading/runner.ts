@@ -121,19 +121,31 @@ export class SlowTradingRunner {
       tradeLog.debug(
         `starting risk sentinel | mode=${snapshot.activeMode} exchange=${snapshot.config.exchangeType}`,
       );
-      const result = await slowTradingBlackSwan.production.run();
-      if (result.forceExitSymbols.length > 0) {
-        await this.enqueue(() =>
-          slowTradingCycle.run({
-            disableAutoEntry: true,
-            forceExitSymbols: result.forceExitSymbols,
-            ignoreRunnerEnabled: true,
-          }),
-        );
+      // PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE
+      for (const account of storage.runtime.exchangeAccounts) {
+        try {
+          const result = await slowTradingBlackSwan.production.run(account.slug);
+          if (result.forceExitSymbols.length > 0) {
+            await this.enqueue(() =>
+              slowTradingCycle.run({
+                account: account.slug,
+                disableAutoEntry: true,
+                forceExitSymbols: result.forceExitSymbols,
+                ignoreRunnerEnabled: true,
+              }),
+            );
+          }
+          tradeLog.debug(
+            `finished risk sentinel | account=${account.slug} mode=${result.mode} state=${result.next.status} reason=${result.next.reason} emergencyExits=${result.forceExitSymbols.length}`,
+          );
+        } catch (error) {
+          // PROD:MULTI_ACCOUNT_FAILURE_ISOLATION
+          tradeLog.error(
+            `risk sentinel failed | account=${account.slug}`,
+            error,
+          );
+        }
       }
-      tradeLog.debug(
-        `finished risk sentinel | mode=${result.mode} state=${result.next.status} reason=${result.next.reason} emergencyExits=${result.forceExitSymbols.length}`,
-      );
       return intervalMs;
     }
 
@@ -150,7 +162,17 @@ export class SlowTradingRunner {
     }
 
     if (stage === "capture-entry") {
-      await slowTradingQueue.scheduler.synchronize();
+      for (const account of storage.runtime.exchangeAccounts) {
+        try {
+          await slowTradingQueue.scheduler.synchronize(Date.now(), account.slug);
+        } catch (error) {
+          // PROD:MULTI_ACCOUNT_FAILURE_ISOLATION
+          tradeLog.error(
+            `queue synchronization failed | account=${account.slug}`,
+            error,
+          );
+        }
+      }
       await slowTradingQueue.processor.processDue();
     }
 

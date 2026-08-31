@@ -13,7 +13,7 @@ vi.mock("axios", () => ({
 }));
 
 vi.mock("@/lib/exchange/account-context", () => ({
-  getCurrentExchangeAccountId: () => "1",
+  getCurrentExchangeAccountSlug: () => "binance-1",
 }));
 
 vi.mock("@/lib/exchange/credentials", () => ({

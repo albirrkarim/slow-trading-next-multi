@@ -32,7 +32,7 @@ interface OpenPositionsProps {
   exitingSymbol?: string | null;
   onCoinDescriptionChange: (symbol: string, description: string) => void;
   onCoinTagsChange: (symbol: string, tags: string[]) => void;
-  onExit?: (symbol: string) => Promise<void>;
+  onExit?: (position: SlowTradingHistoryPosition) => Promise<void>;
   tagColors: Record<string, string>;
   tagDescriptions: Record<string, string>;
   volatilityMap: Record<string, VolatilityPoint[]>;
@@ -185,7 +185,11 @@ export default function OpenPositions({
                     )}
                     position={position}
                     spendableQuoteAsset={spendableQuoteAsset}
-                    exitingSymbol={exitingSymbol}
+                    exitingSymbol={
+                      exitingSymbol === `${position.account}:${position.symbol}`
+                        ? position.symbol
+                        : null
+                    }
                     onCoinDescriptionChange={onCoinDescriptionChange}
                     onCoinTagsChange={onCoinTagsChange}
                     onExit={onExit}

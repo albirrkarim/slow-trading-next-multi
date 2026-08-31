@@ -45,6 +45,7 @@ export default function TradeHistoryNotesField({
       const response = await axios.patch<{
         state?: SlowTradingDashboardState;
       }>(endpoints.slow.prod.history, {
+        account: row.account,
         mode,
         symbol: row.symbol,
         entryId: row.opened.vPoint.id,

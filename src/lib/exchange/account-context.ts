@@ -1,8 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { ExchangeType } from "./types";
 
-export type ExchangeAccountId = string;
+export type ExchangeAccountSlug = string;
 export type ExchangeAccountType = ExchangeType;
+export const DEFAULT_EXCHANGE_ACCOUNT_SLUG: ExchangeAccountSlug = "binance-1";
 
 export interface BinanceCredentials {
   apiKey: string;
@@ -26,7 +27,8 @@ export type ExchangeAccountCredentials =
   };
 
 export interface ExchangeAccount {
-  id: ExchangeAccountId;
+  /** Immutable identifier generated from the account's first saved name. */
+  slug: ExchangeAccountSlug;
   type: ExchangeAccountType;
   name: string;
   description: string;
@@ -36,14 +38,17 @@ export interface ExchangeAccount {
 }
 
 interface ExchangeAccountContext {
-  accountId: ExchangeAccountId;
+  accountSlug: ExchangeAccountSlug;
   account?: ExchangeAccount;
 }
 
 const exchangeAccountStorage = new AsyncLocalStorage<ExchangeAccountContext>();
 
-export function getCurrentExchangeAccountId(): ExchangeAccountId {
-  return exchangeAccountStorage.getStore()?.accountId ?? "1";
+export function getCurrentExchangeAccountSlug(): ExchangeAccountSlug {
+  return (
+    exchangeAccountStorage.getStore()?.accountSlug ??
+    DEFAULT_EXCHANGE_ACCOUNT_SLUG
+  );
 }
 
 export function getCurrentExchangeAccount(): ExchangeAccount | undefined {
@@ -51,13 +56,13 @@ export function getCurrentExchangeAccount(): ExchangeAccount | undefined {
 }
 
 export async function runWithExchangeAccount<T>(
-  accountOrId: ExchangeAccount | ExchangeAccountId,
+  accountOrSlug: ExchangeAccount | ExchangeAccountSlug,
   fn: () => Promise<T>,
 ): Promise<T> {
   const context =
-    typeof accountOrId === "string"
-      ? { accountId: accountOrId }
-      : { accountId: accountOrId.id, account: accountOrId };
+    typeof accountOrSlug === "string"
+      ? { accountSlug: accountOrSlug }
+      : { accountSlug: accountOrSlug.slug, account: accountOrSlug };
 
   return await exchangeAccountStorage.run(context, fn);
 }

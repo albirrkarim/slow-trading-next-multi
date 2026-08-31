@@ -11,15 +11,21 @@ import {
 import { createTestPosition } from "../fixtures/position";
 
 function createStorage(): SlowTradingStorageData {
+  const defaults = storageApi.data.createDefault();
+  const config = {
+    ...defaults.config,
+    exchangeType: "tokocrypto" as const,
+    symbols: ["SUI"],
+    tradingMode: TradingMode.SPOT,
+  };
   return {
-    config: {
-      exchangeType: "tokocrypto",
-      symbols: ["SUI"],
-      tradingMode: TradingMode.SPOT,
-    } as any,
+    ...defaults,
+    config,
+    sharedConfig: config,
     runtime: {
+      ...defaults.runtime,
       sandboxEnabled: false,
-    } as any,
+    },
     modes: {
       live: {
         tradeSettings: [

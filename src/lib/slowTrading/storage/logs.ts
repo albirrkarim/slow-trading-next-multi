@@ -218,6 +218,7 @@ export async function appendSlowTradingManagementLog(params: {
  * Appends slow trading safe haven log to SLOW persistent storage.
  */
 export async function appendSlowTradingSafeHavenLog(params: {
+  account: string;
   mode: SlowTradingMode;
   previousUSDT: number;
   nextUSDT: number;
@@ -229,6 +230,7 @@ export async function appendSlowTradingSafeHavenLog(params: {
   const nextUSDT = Number(params.nextUSDT) || 0;
   const entry: SlowTradingSafeHavenLogEntry = {
     id: createLogId("safe-haven"),
+    account: params.account,
     createdAt: params.timestamp ?? Date.now(),
     mode: params.mode,
     previousUSDT,

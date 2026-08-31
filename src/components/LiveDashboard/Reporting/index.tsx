@@ -2,7 +2,13 @@
 
 import type { SlowTradingDashboardState } from "@/lib/slowTrading";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
-import { Box, Button, Grid, Tab, Tabs } from "@mui/material";
+import {
+  Box,
+  Button,
+  Grid,
+  Tab,
+  Tabs,
+} from "@mui/material";
 import axios from "axios";
 import { useEffect, useMemo, useState } from "react";
 import { useSnackbar } from "notistack";
@@ -64,7 +70,10 @@ export default function SlowTradingReporting({
   const [view, setView] = useState<TradeHistoryView>("all");
   const startingBalanceUSDT = dashboardState.balances.startingBalanceUSDT ?? 0;
   const activeMode = dashboardState.activeMode;
-  const lossHistory = useMemo(() => history.filter(isLosingTrade), [history]);
+  const lossHistory = useMemo(
+    () => history.filter(isLosingTrade),
+    [history],
+  );
   const profitHistory = useMemo(
     () => history.filter(isProfitableTrade),
     [history],

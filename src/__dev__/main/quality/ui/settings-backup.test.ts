@@ -24,7 +24,7 @@ const configDraft = {
   enableWatchLogic: true,
   entrySignalBypass: false,
   exactLeverage: 3,
-  exchangeAccountId: "account-1",
+  exchangeAccountSlug: "account-1",
   exchangeAccounts: [
     {
       id: "account-1",

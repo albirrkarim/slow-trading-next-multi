@@ -27,7 +27,7 @@ const configDraft = {
   description: "",
   enableWatchLogic: false,
   entrySignalBypass: false,
-  exchangeAccountId: "1",
+  exchangeAccountSlug: "1",
   exchangeAccounts: [],
   exchangeType: "binance",
   maxEntryBased24HourVolPct: 0.2,

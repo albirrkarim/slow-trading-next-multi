@@ -11,6 +11,8 @@ import type {
 } from "../types";
 
 interface HydrateSlowTradingHistoryOptions {
+  /** Restrict shared history hydration to one immutable account slug. */
+  account?: string;
   /** Restrict hydration to one mode. Omit to hydrate both live and sandbox. */
   mode?: SlowTradingMode;
   /** Restrict hydration to these normalized symbols. Omit for all symbols. */
@@ -40,6 +42,7 @@ function getModeHistoryFile(mode: SlowTradingMode, symbol: string): string {
  */
 function historyPositionKey(symbol: string, position: HistoryPosition): string {
   return [
+    position.account,
     normalizeSymbol(symbol),
     position.opened.vPoint.id,
     position.opened.t,
@@ -113,13 +116,11 @@ function filterHistoryPositions(
       ? options.fromTime
       : null;
 
-  if (fromTime == null) {
-    return positions;
-  }
-
-  return positions.filter(
-    (position) => (position.closed?.t ?? 0) >= fromTime,
-  );
+  return positions.filter((position) => {
+    // BOTH:MULTI_ACCOUNT_HISTORY_OWNER
+    if (options.account && position.account !== options.account) return false;
+    return fromTime == null || (position.closed?.t ?? 0) >= fromTime;
+  });
 }
 
 /**
@@ -263,15 +264,19 @@ export async function hydrateSlowTradingHistoryFromFiles(
   storage: SlowTradingStorageData,
   options: HydrateSlowTradingHistoryOptions = {},
 ) {
+  const scopedOptions = {
+    ...options,
+    account: options.account ?? storage.account.slug,
+  };
   if (!options.mode || options.mode === "live") {
-    await hydrateModeHistoryFromFiles("live", storage.modes.live, options);
+    await hydrateModeHistoryFromFiles("live", storage.modes.live, scopedOptions);
   }
 
   if (!options.mode || options.mode === "sandbox") {
     await hydrateModeHistoryFromFiles(
       "sandbox",
       storage.modes.sandbox,
-      options,
+      scopedOptions,
     );
   }
 }

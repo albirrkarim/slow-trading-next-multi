@@ -20,6 +20,7 @@ export default async function handler(
     }
 
     const currentStorage = await slowTrading.storage.data.load({
+      account: String(req.body?.account || "").trim() || undefined,
       modeScope: "active",
     });
     const activeMode = currentStorage.runtime.sandboxEnabled ? "sandbox" : "live";
@@ -37,6 +38,7 @@ export default async function handler(
     }
 
     const result = await slowTrading.service.runSlowTradingCycle({
+      account: currentStorage.account.slug,
       ignoreRunnerEnabled: true,
       forceExitSymbols: [symbol],
       disableAutoEntry: true,

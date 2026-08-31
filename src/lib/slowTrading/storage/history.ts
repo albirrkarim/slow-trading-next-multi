@@ -4,6 +4,7 @@ import { clone, normalizeSymbol } from "./common";
 import {
   getModeHistoryRoot,
   hydrateSlowTradingHistoryFromFiles,
+  readHistoryFile,
   writeHistoryFile,
 } from "./history-files";
 import { getActiveSlowTradingMode } from "./mode";
@@ -23,6 +24,7 @@ import type {
 function historyPositionMatches(
   position: SlowTradingHistoryPosition,
   target: {
+    account?: string;
     entryId?: string;
     entryTime?: number;
     exitTime?: number;
@@ -32,6 +34,7 @@ function historyPositionMatches(
   },
 ): boolean {
   // A. Symbol must always match before checking optional identity fields.
+  if (target.account && position.account !== target.account) return false;
   const sameSymbol =
     normalizeSymbol(position.symbol) === normalizeSymbol(target.symbol);
   if (!sameSymbol) {
@@ -115,6 +118,7 @@ export async function clearSlowTradingHistory(
  * @returns Updated storage and whether one row was deleted.
  */
 export async function deleteSlowTradingHistoryEntry(params: {
+  account: string;
   entryId?: string;
   entryTime?: number;
   exitTime?: number;
@@ -124,7 +128,10 @@ export async function deleteSlowTradingHistoryEntry(params: {
   usdt?: number;
 }): Promise<{ deleted: boolean; storage: SlowTradingStorageData }> {
   // A. Load the target mode and scan only the requested symbol history.
-  const storage = await loadSlowTradingStorage({ includeHistory: true });
+  const storage = await loadSlowTradingStorage({
+    account: params.account,
+    includeHistory: true,
+  });
   const modeState = storage.modes[params.mode];
   let deleted = false;
 
@@ -134,7 +141,7 @@ export async function deleteSlowTradingHistoryEntry(params: {
       continue;
     }
 
-    const positionsSell = tradeSetting.model_memory.positionsSell ?? [];
+    const positionsSell = await readHistoryFile(params.mode, symbol);
     const nextPositions = [];
 
     // B. Drop the first matching row and keep all other closed positions.
@@ -171,6 +178,7 @@ export async function deleteSlowTradingHistoryEntry(params: {
     delete modeState.dailyPnlLimitState;
     await saveSlowTradingStorage(storage);
     await hydrateSlowTradingHistoryFromFiles(storage, {
+      account: params.account,
       mode: params.mode,
       symbols: [params.symbol],
     });
@@ -189,6 +197,7 @@ export async function deleteSlowTradingHistoryEntry(params: {
  * An empty note removes the optional field from the persisted position.
  */
 export async function updateSlowTradingHistoryEntryNotes(params: {
+  account: string;
   entryId?: string;
   entryTime?: number;
   exitTime?: number;
@@ -198,7 +207,10 @@ export async function updateSlowTradingHistoryEntryNotes(params: {
   symbol: string;
   usdt?: number;
 }): Promise<{ storage: SlowTradingStorageData; updated: boolean }> {
-  const storage = await loadSlowTradingStorage({ includeHistory: true });
+  const storage = await loadSlowTradingStorage({
+    account: params.account,
+    includeHistory: true,
+  });
   const normalizedSymbol = normalizeSymbol(params.symbol);
   const normalizedNotes = params.notes.trim();
   let updated = false;
@@ -208,7 +220,7 @@ export async function updateSlowTradingHistoryEntryNotes(params: {
       continue;
     }
 
-    const positionsSell = tradeSetting.model_memory.positionsSell ?? [];
+    const positionsSell = await readHistoryFile(params.mode, normalizedSymbol);
     const position = positionsSell.find((candidate) =>
       historyPositionMatches(
         {

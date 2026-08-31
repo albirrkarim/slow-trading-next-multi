@@ -18,6 +18,8 @@ export default async function handler(
         ? req.body.sandboxInitialBalanceUSDT
         : undefined;
     const nextStorage = await slowTrading.storage.data.resetSandbox({
+      account:
+        typeof req.body?.account === "string" ? req.body.account : undefined,
       sandboxInitialBalanceUSDT: initialBalance,
     });
     res

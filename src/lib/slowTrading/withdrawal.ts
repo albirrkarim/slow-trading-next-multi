@@ -24,6 +24,8 @@ function getExecutionAmountUSDT(
 
 /** Result returned after trying one withdrawal schedule. */
 export interface SlowTradingWithdrawalExecutionResult {
+  /** Immutable account slug whose funds were inspected. */
+  account: string;
   /** SLOW mode active when the withdrawal flow ran. */
   activeMode: "live" | "sandbox";
   /** Withdrawal amount after trigger-specific safety limits. */
@@ -86,17 +88,27 @@ export async function executeSlowTradingWithdrawalSchedule(params: {
   // A. Load active SLOW state and resolve the selected schedule.
   const trigger = params.trigger ?? "manual";
   const logAttempts = params.logAttempts !== false;
-  const storage = await slowTradingStorage.data.load({
+  const catalogStorage = await slowTradingStorage.data.load({
     modeScope: "active",
   });
+  const configuredSchedule =
+    catalogStorage.runtime.withdrawal.schedules.find(
+      (item) => item.id === params.scheduleId,
+    ) ?? null;
+  const storage = configuredSchedule
+    ? await slowTradingStorage.data.load({
+        account: configuredSchedule.account,
+        modeScope: "active",
+      })
+    : catalogStorage;
   const activeMode = slowTradingStorage.mode.getActive(storage);
   const modeState = storage.modes[activeMode];
   const withdrawal = storage.runtime.withdrawal;
-  const schedule =
-    withdrawal.schedules.find((item) => item.id === params.scheduleId) ?? null;
+  const schedule = configuredSchedule;
 
   if (!schedule) {
     await slowTradingStorage.logs.appendWithdrawal({
+      account: storage.account.slug,
       trigger,
       status: "failed",
       mode: activeMode,
@@ -121,6 +133,7 @@ export async function executeSlowTradingWithdrawalSchedule(params: {
     Number(modeState.dynamicTradeMemory.safeHaven) || 0,
   );
   const baseResponse = {
+    account: storage.account.slug,
     activeMode,
     amountUSDT,
     availableSafeHavenUSDT,
@@ -146,6 +159,7 @@ export async function executeSlowTradingWithdrawalSchedule(params: {
     }
 
     return slowTradingStorage.logs.appendWithdrawal({
+      account: storage.account.slug,
       trigger,
       status: logInput.status,
       mode: activeMode,
@@ -248,6 +262,8 @@ export async function executeSlowTradingWithdrawalSchedule(params: {
     const timestamp = Date.now();
 
     await slowTradingStorage.data.update({
+      // PROD:MULTI_ACCOUNT_WITHDRAWAL_OWNER
+      exchangeAccountSlug: storage.account.slug,
       safeHavenUSDT: nextSafeHavenUSDT,
       safeHavenLogReason: `Withdrawal schedule "${schedule.name}" executed`,
       safeHavenLogSource: "withdrawal",

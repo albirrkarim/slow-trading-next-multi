@@ -52,7 +52,7 @@ interface OpenPositionItemProps {
   exitingSymbol?: string | null;
   onCoinDescriptionChange: (symbol: string, description: string) => void;
   onCoinTagsChange: (symbol: string, tags: string[]) => void;
-  onExit?: (symbol: string) => Promise<void>;
+  onExit?: (position: SlowTradingHistoryPosition) => Promise<void>;
   tagColors: Record<string, string>;
   tagDescriptions: Record<string, string>;
   volatilityPoints: VolatilityPoint[];
@@ -256,6 +256,12 @@ export default function OpenPositionItem({
             >
               {position.symbol}
             </Typography>
+
+            <Chip
+              label={position.account}
+              size="small"
+              variant="outlined"
+            />
 
             {isSpeedupStage && (
               // PROD:SPEEDUP_STAGE
@@ -734,7 +740,7 @@ export default function OpenPositionItem({
                 size="small"
                 color="error"
                 sx={{ fontSize: "0.7rem", textTransform: "none" }}
-                onClick={() => void onExit?.(position.symbol)}
+                onClick={() => void onExit?.(position)}
                 disabled={!onExit || exitingSymbol === position.symbol}
                 title={`Click to close position for ${position.symbol}`}
               >

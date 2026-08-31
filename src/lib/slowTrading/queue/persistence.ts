@@ -8,6 +8,7 @@ import type {
   SlowTradingSafeHavenQueueItem,
   SlowTradingWithdrawalQueueItem,
 } from "../types";
+import { DEFAULT_EXCHANGE_ACCOUNT_SLUG } from "../storage/constants";
 
 export type SlowTradingQueueKind = "safe_haven" | "withdrawal";
 
@@ -57,6 +58,8 @@ function normalizeSafeHavenQueueItem(
 
   return {
     id,
+    account:
+      String(raw.account ?? "").trim() || DEFAULT_EXCHANGE_ACCOUNT_SLUG,
     kind: "safe_haven",
     mode:
       raw.mode === "sandbox" || raw.mode === "live"
@@ -102,6 +105,8 @@ function normalizeWithdrawalQueueItem(
 
   return {
     id,
+    account:
+      String(raw.account ?? "").trim() || DEFAULT_EXCHANGE_ACCOUNT_SLUG,
     kind: "withdrawal",
     scheduleId,
     scheduleName:

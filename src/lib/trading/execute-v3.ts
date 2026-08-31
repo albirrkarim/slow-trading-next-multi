@@ -5,6 +5,7 @@ import {
   UnifiedOrderType,
   type UnifiedOrderParams,
 } from "@/lib/exchange";
+import { getCurrentExchangeAccountSlug } from "@/lib/exchange/account-context";
 
 import { fetchKlinesFunction } from "@lib/datasets"; // Fetch historical/live klines
 import {
@@ -37,6 +38,7 @@ function buildV3Position(params: {
     lvl: 0,
   };
   return {
+    account: getCurrentExchangeAccountSlug(),
     symbol: params.symbol.split("_")[0],
     executionMode: params.executionMode,
     tradingMode: params.tradingMode,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -27,6 +27,7 @@ import type {
   SlowTradingDashboardState,
 } from "@/lib/slowTrading";
 import { tradeLog } from "@/lib/trading/helper/log";
+import slowTradingAccountConfig from "@/lib/slowTrading/account-config";
 import { DEFAULT_COLORS } from "@/components/client/constants";
 import HeaderMetrics from "@/components/ui/HeaderMetrics";
 import DurationSharePieChart from "@/components/ui/Chart/DurationSharePieChart";
@@ -197,9 +198,27 @@ export default function QuickBacktest({
   onSimulationSeriesChange,
 }: QuickBacktestProps) {
   const { enqueueSnackbar } = useSnackbar();
-  const [startAmount, setStartAmount] = useState(100);
+  const enabledAccounts = useMemo(
+    () =>
+      dashboardState.runtime.exchangeAccounts.filter(
+        (account) => account.enabled,
+      ),
+    [dashboardState.runtime.exchangeAccounts],
+  );
+  const [startAmounts, setStartAmounts] = useState<Record<string, number>>({});
   const [result, setResult] = useState<SlowQuickBacktestResult | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setStartAmounts((current) =>
+      Object.fromEntries(
+        enabledAccounts.map((account) => [
+          account.slug,
+          current[account.slug] ?? account.sandbox.initialBalanceUSDT,
+        ]),
+      ),
+    );
+  }, [enabledAccounts]);
 
   const rangedVolatilityMap = useMemo(
     () =>
@@ -212,7 +231,7 @@ export default function QuickBacktest({
     [dashboardState.config.symbols, endTime, startTime, volatilityMap],
   );
 
-  const execute = async (amount = startAmount) => {
+  const execute = async () => {
     const hasPoints = Object.values(rangedVolatilityMap).some(
       (points) => points.length > 0,
     );
@@ -228,9 +247,20 @@ export default function QuickBacktest({
         endpoints.slow.prod.quickBacktest,
         {
           config: dashboardState.config,
+          accounts: enabledAccounts.map((account) => ({
+            slug: account.slug,
+            name: account.name,
+            enabled: account.enabled,
+            config: slowTradingAccountConfig.trading.toEffectiveConfig(
+              dashboardState.config,
+              account,
+            ),
+            startAmount:
+              startAmounts[account.slug] ?? account.sandbox.initialBalanceUSDT,
+          })),
           endTime,
           range,
-          startAmount: amount,
+          startAmount: Object.values(startAmounts)[0] ?? 100,
           startTime,
           volume24hBySymbol,
           volatilityMap: rangedVolatilityMap,
@@ -259,9 +289,12 @@ export default function QuickBacktest({
     () =>
       buildTradePnlBalanceSnapshots({
         history: calendarTrades,
-        startingBalanceUSDT: startAmount,
+        startingBalanceUSDT: Object.values(startAmounts).reduce(
+          (total, amount) => total + amount,
+          0,
+        ),
       }),
-    [calendarTrades, startAmount],
+    [calendarTrades, startAmounts],
   );
   const tradeCountBySymbol = useMemo(
     () => buildQuickBacktestTradeCountBySymbol(result?.tradeHistory ?? []),
@@ -288,20 +321,31 @@ export default function QuickBacktest({
                 my: 1.5,
               }}
             >
-              <TextField
-                label="Start amount"
-                size="small"
-                type="number"
-                value={startAmount}
-                onChange={(event) => setStartAmount(Number(event.target.value))}
-                slotProps={{
-                  htmlInput: {
-                    min: 1,
-                    step: 10,
-                  },
-                }}
-                sx={{ width: 150 }}
-              />
+              {enabledAccounts.map((account) => (
+                <TextField
+                  key={account.slug}
+                  label={`${account.name || account.slug} start`}
+                  size="small"
+                  type="number"
+                  value={
+                    startAmounts[account.slug] ??
+                    account.sandbox.initialBalanceUSDT
+                  }
+                  onChange={(event) =>
+                    setStartAmounts((current) => ({
+                      ...current,
+                      [account.slug]: Number(event.target.value),
+                    }))
+                  }
+                  slotProps={{
+                    htmlInput: {
+                      min: 1,
+                      step: 10,
+                    },
+                  }}
+                  sx={{ width: 180 }}
+                />
+              ))}
               <Button
                 disabled={loading}
                 onClick={() => void execute()}
@@ -346,7 +390,10 @@ export default function QuickBacktest({
                   <DailyPnlCalendarDialog
                     balanceSnapshots={quickBacktestBalanceSnapshots}
                     history={calendarTrades}
-                    startingBalanceUSDT={startAmount}
+                    startingBalanceUSDT={Object.values(startAmounts).reduce(
+                      (total, amount) => total + amount,
+                      0,
+                    )}
                     description="Trade PnL and running balance are reconstructed from Quick Backtest closed trade history."
                   />
                 )}

@@ -77,7 +77,7 @@ function dashboardState() {
       autoRemoveSymbolMinMarketCapUSD: 0,
       autoRemoveSymbolMinPrice: 0,
       entrySignalBypass: false,
-      exchangeAccountId: "1",
+      exchangeAccountSlug: "1",
       exchangeAccounts: [
         {
           createdAt: 1,
@@ -162,7 +162,7 @@ function Harness() {
                   pnlHistoryBucketMinutes: 15,
                   averagingRescueProjectionGuardEnabled: false,
                   enableWatchLogic: true,
-                  exchangeAccountId: "1",
+                  exchangeAccountSlug: "1",
                   maxEntryMargin: 20,
                   maxEntryBased24HourVolPct: 0.5,
                   maxEntryMarginPct: 50,
@@ -328,7 +328,7 @@ describe("settings dialog save payload", () => {
         onReinitialize={vi.fn(async () => undefined)}
         reinitializing={false}
         resetSandbox={vi.fn(async () => undefined)}
-        resettingSandbox={false}
+        resettingSandboxAccount={null}
         setConfigDraft={setConfigDraft}
         syncOnlineStorageToLocal={vi.fn(async () => undefined)}
         syncingOnlineStorage={false}
@@ -374,7 +374,7 @@ describe("settings dialog save payload", () => {
         onReinitialize={vi.fn(async () => undefined)}
         reinitializing={false}
         resetSandbox={vi.fn(async () => undefined)}
-        resettingSandbox={false}
+        resettingSandboxAccount={null}
         setConfigDraft={setConfigDraft}
         syncOnlineStorageToLocal={vi.fn(async () => undefined)}
         syncingOnlineStorage={false}
@@ -522,7 +522,7 @@ describe("settings dialog save payload", () => {
         onReinitialize={vi.fn(async () => undefined)}
         reinitializing={false}
         resetSandbox={vi.fn(async () => undefined)}
-        resettingSandbox={false}
+        resettingSandboxAccount={null}
         setConfigDraft={vi.fn()}
         syncOnlineStorageToLocal={syncOnlineStorageToLocal}
         syncingOnlineStorage={false}
@@ -571,7 +571,9 @@ describe("settings dialog save payload", () => {
       );
     });
 
-    const payload = axiosPut.mock.calls[0][1] as any;
+    const payload = axiosPut.mock.calls.find(
+      ([url]) => url === endpoints.slow.prod.storage,
+    )?.[1] as any;
     expect(payload).toMatchObject({
       autoEntryEnabled: true,
       autoExitEnabled: true,
@@ -580,7 +582,7 @@ describe("settings dialog save payload", () => {
       autoRemoveSymbolMinPrice: 0.01,
       autoRemoveSymbolMinVPointPct: 17.5,
       pnlHistoryBucketMinutes: 15,
-      exchangeAccountId: "1",
+      exchangeAccountSlug: "1",
       notification: {
         telegram: {
           enabled: true,

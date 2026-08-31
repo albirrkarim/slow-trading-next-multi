@@ -14,8 +14,9 @@ import {
   Grid,
   IconButton,
   InputAdornment,
-  MenuItem,
+  FormControlLabel,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -24,22 +25,12 @@ import axios from "axios";
 import { endpoints } from "@/components/endpoints";
 import ButtonDialog from "@/components/ui/ButtonDialog";
 import IconButtonTooltip from "@/components/ui/IconButtonTooltip";
-import type {
-  ExchangeAccount,
-  ExchangeAccountType,
-} from "@/lib/exchange/account-context";
+import type { ExchangeAccountType } from "@/lib/exchange/account-context";
+import type { SlowTradingAccount } from "@/lib/slowTrading";
 import type { ConfigDraft, ConfigDraftSetter } from "./types";
 import SettingsInfoField from "./SettingsInfoField";
 import { tradeLog } from "@/lib/trading/helper/log";
-
-const EXCHANGE_ACCOUNT_TYPE_OPTIONS: Array<{
-  value: ExchangeAccountType;
-  label: string;
-}> = [
-  { value: "binance", label: "Binance" },
-  { value: "okx", label: "OKX" },
-  { value: "tokocrypto", label: "Tokocrypto" },
-];
+import { applyAccountProfileToConfigDraft } from "./helpers";
 
 function maskCredentialValue(value: string): string {
   if (!value) {
@@ -56,66 +47,15 @@ function maskCredentialValue(value: string): string {
 export function getExchangeAccountTypeLabel(
   type: ExchangeAccountType,
 ): string {
-  return (
-    EXCHANGE_ACCOUNT_TYPE_OPTIONS.find((option) => option.value === type)
-      ?.label ?? type
-  );
+  return type === "binance" ? "Binance" : type;
 }
 
-export function getExchangeAccountOptionLabel(
-  account: ExchangeAccount,
-): string {
-  return `${account.name || account.id} (${getExchangeAccountTypeLabel(
-    account.type,
-  )})`;
-}
-
-function createEmptyCredentials(
-  type: ExchangeAccountType,
-): ExchangeAccount["credentials"] {
-  if (type === "okx") {
-    return {
-      apiKey: "",
-      apiSecret: "",
-      passphrase: "",
-    };
-  }
-
-  return {
-    apiKey: "",
-    apiSecret: "",
-  };
-}
-
-function changeAccountType(
-  account: ExchangeAccount,
-  type: ExchangeAccountType,
-): ExchangeAccount {
-  const baseCredentials = createEmptyCredentials(type);
-  const credentials = {
-    ...baseCredentials,
-    apiKey: account.credentials.apiKey,
-    apiSecret: account.credentials.apiSecret,
-  };
-
-  if (type === "okx") {
-    return {
-      ...account,
-      type,
-      credentials: {
-        ...credentials,
-        passphrase: account.credentials.passphrase ?? "",
-      },
-      updatedAt: Date.now(),
-    };
-  }
-
-  return {
-    ...account,
-    type,
-    credentials,
-    updatedAt: Date.now(),
-  };
+function slugFromName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "account";
 }
 
 function CredentialSettingsField({
@@ -199,8 +139,8 @@ export default function ExchangeAccountManagerDialog({
   configDraft,
   setConfigDraft,
 }: ExchangeAccountManagerDialogProps) {
-  const [editingExchangeAccountId, setEditingExchangeAccountId] = useState(
-    configDraft.exchangeAccountId,
+  const [editingExchangeAccountSlug, setEditingExchangeAccountSlug] = useState(
+    configDraft.exchangeAccountSlug,
   );
   const [revealedCredentials, setRevealedCredentials] = useState({
     accountId: "",
@@ -213,17 +153,17 @@ export default function ExchangeAccountManagerDialog({
   >("idle");
 
   const effectiveEditingAccountId = configDraft.exchangeAccounts.some(
-    (account) => account.id === editingExchangeAccountId,
+    (account) => account.slug === editingExchangeAccountSlug,
   )
-    ? editingExchangeAccountId
+    ? editingExchangeAccountSlug
     : (configDraft.exchangeAccounts.find(
-        (account) => account.id === configDraft.exchangeAccountId,
-      )?.id ??
-      configDraft.exchangeAccounts[0]?.id ??
-      configDraft.exchangeAccountId);
+        (account) => account.slug === configDraft.exchangeAccountSlug,
+      )?.slug ??
+      configDraft.exchangeAccounts[0]?.slug ??
+      configDraft.exchangeAccountSlug);
   const editingExchangeAccount =
     configDraft.exchangeAccounts.find(
-      (account) => account.id === effectiveEditingAccountId,
+      (account) => account.slug === effectiveEditingAccountId,
     ) ?? configDraft.exchangeAccounts[0];
   const currentRevealedCredentials =
     revealedCredentials.accountId === effectiveEditingAccountId
@@ -252,15 +192,39 @@ export default function ExchangeAccountManagerDialog({
   };
 
   const persistExchangeAccounts = async (
-    accounts: ExchangeAccount[],
-    exchangeAccountId: string,
+    accounts: SlowTradingAccount[],
+    exchangeAccountSlug: string,
   ) => {
     setSaveStatus("saving");
     try {
-      await axios.put(endpoints.slow.prod.exchangeAccounts, {
+      const response = await axios.put<{
+        accounts: SlowTradingAccount[];
+        exchangeAccountSlug: string;
+      }>(endpoints.slow.prod.exchangeAccounts, {
         accounts,
-        exchangeAccountId,
+        exchangeAccountSlug,
       });
+      const savedAccounts = Array.isArray(response.data?.accounts)
+        ? response.data.accounts
+        : accounts;
+      const savedExchangeAccountSlug =
+        typeof response.data?.exchangeAccountSlug === "string"
+          ? response.data.exchangeAccountSlug
+          : exchangeAccountSlug;
+      setConfigDraft((prev) =>
+        prev
+          ? {
+              ...prev,
+              exchangeAccounts: savedAccounts,
+              exchangeAccountSlug: savedExchangeAccountSlug,
+            }
+          : prev,
+      );
+      setEditingExchangeAccountSlug((current) =>
+        savedAccounts.some((account) => account.slug === current)
+          ? current
+          : (savedAccounts.at(-1)?.slug ?? savedExchangeAccountSlug),
+      );
       setSaveStatus("saved");
     } catch (error) {
       tradeLog.error("Failed to save exchange accounts", error);
@@ -290,7 +254,7 @@ export default function ExchangeAccountManagerDialog({
     if (draftToSave) {
       void persistExchangeAccounts(
         draftToSave.exchangeAccounts,
-        draftToSave.exchangeAccountId,
+        draftToSave.exchangeAccountSlug,
       );
     }
   };
@@ -301,17 +265,17 @@ export default function ExchangeAccountManagerDialog({
 
   const updateExchangeAccount = (
     accountId: string,
-    updater: (account: ExchangeAccount) => ExchangeAccount,
+    updater: (account: SlowTradingAccount) => SlowTradingAccount,
   ) => {
     applyAccountDraftUpdate((prev) => {
-      let selectedAccount: ExchangeAccount | undefined;
+      let selectedAccount: SlowTradingAccount | undefined;
       const exchangeAccounts = prev.exchangeAccounts.map((account) => {
-        if (account.id !== accountId) {
+        if (account.slug !== accountId) {
           return account;
         }
 
         const nextAccount = updater(account);
-        if (prev.exchangeAccountId === accountId) {
+        if (prev.exchangeAccountSlug === accountId) {
           selectedAccount = nextAccount;
         }
         return nextAccount;
@@ -325,30 +289,40 @@ export default function ExchangeAccountManagerDialog({
     });
   };
 
-  const createExchangeAccountId = () => {
-    const usedIds = new Set(
-      configDraft.exchangeAccounts
-        .map((account) => Number(account.id))
-        .filter((id) => Number.isInteger(id) && id > 0),
+  const createExchangeAccountSlug = () => {
+    const name = `Binance ${configDraft.exchangeAccounts.length + 1}`;
+    const base = slugFromName(name);
+    const usedSlugs = new Set(
+      configDraft.exchangeAccounts.map((account) => account.slug),
     );
-    let nextId = 1;
-    while (usedIds.has(nextId)) {
-      nextId += 1;
+    let slug = base;
+    let suffix = 2;
+    while (usedSlugs.has(slug)) {
+      slug = `${base}-${suffix}`;
+      suffix += 1;
     }
-    return String(nextId);
+    return slug;
   };
 
   const addExchangeAccount = () => {
     const now = Date.now();
-    const type = configDraft.exchangeType as ExchangeAccountType;
-    const account: ExchangeAccount = {
-      id: createExchangeAccountId(),
-      type,
-      name: `${getExchangeAccountTypeLabel(type)} ${
-        configDraft.exchangeAccounts.length + 1
-      }`,
+    const template =
+      configDraft.exchangeAccounts.find(
+        (candidate) => candidate.slug === configDraft.exchangeAccountSlug,
+      ) ?? configDraft.exchangeAccounts[0];
+    if (!template) return;
+    const account: SlowTradingAccount = {
+      slug: createExchangeAccountSlug(),
+      type: "binance",
+      name: `Binance ${configDraft.exchangeAccounts.length + 1}`,
       description: "",
-      credentials: createEmptyCredentials(type),
+      credentials: { apiKey: "", apiSecret: "" },
+      enabled: true,
+      trading: structuredClone(template.trading),
+      sandbox: {
+        enabled: false,
+        initialBalanceUSDT: template.sandbox.initialBalanceUSDT,
+      },
       createdAt: now,
       updatedAt: now,
     };
@@ -360,7 +334,7 @@ export default function ExchangeAccountManagerDialog({
       }),
       { persist: true },
     );
-    setEditingExchangeAccountId(account.id);
+    setEditingExchangeAccountSlug(account.slug);
   };
 
   const deleteEditingExchangeAccount = () => {
@@ -371,29 +345,32 @@ export default function ExchangeAccountManagerDialog({
     applyAccountDraftUpdate(
       (prev) => {
         const exchangeAccounts = prev.exchangeAccounts.filter(
-          (account) => account.id !== editingExchangeAccount.id,
+          (account) => account.slug !== editingExchangeAccount.slug,
         );
-        const exchangeAccountId =
-          prev.exchangeAccountId === editingExchangeAccount.id
-            ? (exchangeAccounts[0]?.id ?? prev.exchangeAccountId)
-            : prev.exchangeAccountId;
+        const exchangeAccountSlug =
+          prev.exchangeAccountSlug === editingExchangeAccount.slug
+            ? (exchangeAccounts[0]?.slug ?? prev.exchangeAccountSlug)
+            : prev.exchangeAccountSlug;
         const selectedAccount = exchangeAccounts.find(
-          (account) => account.id === exchangeAccountId,
+          (account) => account.slug === exchangeAccountSlug,
         );
 
-        return {
+        const nextDraft = {
           ...prev,
-          exchangeAccountId,
+          exchangeAccountSlug,
           exchangeAccounts,
           exchangeType: selectedAccount?.type ?? prev.exchangeType,
         };
+        return selectedAccount && prev.exchangeAccountSlug !== exchangeAccountSlug
+          ? applyAccountProfileToConfigDraft(nextDraft, selectedAccount)
+          : nextDraft;
       },
       { persist: true },
     );
-    setEditingExchangeAccountId(
+    setEditingExchangeAccountSlug(
       configDraft.exchangeAccounts.find(
-        (account) => account.id !== editingExchangeAccount.id,
-      )?.id ?? configDraft.exchangeAccountId,
+        (account) => account.slug !== editingExchangeAccount.slug,
+      )?.slug ?? configDraft.exchangeAccountSlug,
     );
   };
 
@@ -439,7 +416,8 @@ export default function ExchangeAccountManagerDialog({
                 Saved Accounts
               </Typography>
               <Typography color="text.secondary" variant="caption">
-                Pick one to edit. The trading account is selected in Main.
+                Choose a profile here only to edit its name, credentials, and
+                entry status. Every enabled account runs independently.
               </Typography>
             </Box>
 
@@ -481,14 +459,13 @@ export default function ExchangeAccountManagerDialog({
             <Grid size={{ xs: 12, md: 4 }}>
               <Stack gap={1}>
                 {configDraft.exchangeAccounts.map((account) => {
-                  const selected = account.id === editingExchangeAccount?.id;
-                  const active = account.id === configDraft.exchangeAccountId;
+                  const selected = account.slug === editingExchangeAccount?.slug;
                   return (
                     <Button
-                      key={account.id}
+                      key={account.slug}
                       variant={selected ? "contained" : "outlined"}
                       color={selected ? "primary" : "inherit"}
-                      onClick={() => setEditingExchangeAccountId(account.id)}
+                      onClick={() => setEditingExchangeAccountSlug(account.slug)}
                       sx={{
                         justifyContent: "space-between",
                         minHeight: 44,
@@ -503,7 +480,7 @@ export default function ExchangeAccountManagerDialog({
                           noWrap
                           variant="body2"
                         >
-                          {account.name || account.id}
+                          {account.name || account.slug}
                         </Typography>
                         <Typography
                           component="span"
@@ -535,13 +512,12 @@ export default function ExchangeAccountManagerDialog({
                           </Typography>
                         )}
                       </Box>
-                      {active && (
-                        <Chip
-                          color={selected ? "default" : "primary"}
-                          label="Active"
-                          size="small"
-                        />
-                      )}
+                      <Chip
+                        color={account.enabled ? "success" : "default"}
+                        label={account.enabled ? "Entries on" : "Entries off"}
+                        size="small"
+                        variant={selected ? "filled" : "outlined"}
+                      />
                     </Button>
                   );
                 })}
@@ -561,7 +537,7 @@ export default function ExchangeAccountManagerDialog({
                         onBlur={persistAccountDraft}
                         onChange={(event) =>
                           updateExchangeAccount(
-                            editingExchangeAccount.id,
+                            editingExchangeAccount.slug,
                             (account) => ({
                               ...account,
                               name: event.target.value,
@@ -576,29 +552,34 @@ export default function ExchangeAccountManagerDialog({
                     <Grid size={{ xs: 12, md: 6 }}>
                       <SettingsInfoField
                         label="Account Type"
-                        select
                         size="small"
                         fullWidth
-                        value={editingExchangeAccount.type}
-                        onBlur={persistAccountDraft}
-                        onChange={(event) =>
-                          updateExchangeAccount(
-                            editingExchangeAccount.id,
-                            (account) =>
-                              changeAccountType(
-                                account,
-                                event.target.value as ExchangeAccountType,
-                              ),
-                          )
+                        value="Binance"
+                        slotProps={{ input: { readOnly: true } }}
+                        info="All SLOW accounts use the shared Binance exchange adapter."
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={editingExchangeAccount.enabled}
+                            onChange={(event) => {
+                              updateExchangeAccount(
+                                editingExchangeAccount.slug,
+                                (account) => ({
+                                  ...account,
+                                  enabled: event.target.checked,
+                                  updatedAt: Date.now(),
+                                }),
+                              );
+                            }}
+                            onBlur={persistAccountDraft}
+                          />
                         }
-                        info="Choose which exchange adapter this account's credentials belong to."
-                      >
-                        {EXCHANGE_ACCOUNT_TYPE_OPTIONS.map((option) => (
-                          <MenuItem key={option.value} value={option.value}>
-                            {option.label}
-                          </MenuItem>
-                        ))}
-                      </SettingsInfoField>
+                        label="Enable new entries for this account"
+                      />
                     </Grid>
 
                     <Grid size={{ xs: 12 }}>
@@ -613,7 +594,7 @@ export default function ExchangeAccountManagerDialog({
                         onBlur={persistAccountDraft}
                         onChange={(event) =>
                           updateExchangeAccount(
-                            editingExchangeAccount.id,
+                            editingExchangeAccount.slug,
                             (account) => ({
                               ...account,
                               description: event.target.value,
@@ -638,7 +619,7 @@ export default function ExchangeAccountManagerDialog({
                         onBlur={persistAccountDraft}
                         onChange={(value) =>
                           updateExchangeAccount(
-                            editingExchangeAccount.id,
+                            editingExchangeAccount.slug,
                             (account) => ({
                               ...account,
                               credentials: {
@@ -649,7 +630,7 @@ export default function ExchangeAccountManagerDialog({
                             }),
                           )
                         }
-                        info="Private API key used for balance checks and live orders when this account is selected."
+                        info="Private API key used for this account's balance checks and live orders."
                       />
                     </Grid>
 
@@ -666,7 +647,7 @@ export default function ExchangeAccountManagerDialog({
                         onBlur={persistAccountDraft}
                         onChange={(value) =>
                           updateExchangeAccount(
-                            editingExchangeAccount.id,
+                            editingExchangeAccount.slug,
                             (account) => ({
                               ...account,
                               credentials: {
@@ -681,35 +662,6 @@ export default function ExchangeAccountManagerDialog({
                       />
                     </Grid>
 
-                    {editingExchangeAccount.type === "okx" && (
-                      <Grid size={{ xs: 12 }}>
-                        <CredentialSettingsField
-                          label="OKX API Passphrase"
-                          value={
-                            editingExchangeAccount.credentials.passphrase ?? ""
-                          }
-                          revealed={currentRevealedCredentials.passphrase}
-                          setRevealed={(revealed) =>
-                            setCredentialRevealed("passphrase", revealed)
-                          }
-                          onBlur={persistAccountDraft}
-                          onChange={(value) =>
-                            updateExchangeAccount(
-                              editingExchangeAccount.id,
-                              (account) => ({
-                                ...account,
-                                credentials: {
-                                  ...account.credentials,
-                                  passphrase: value,
-                                },
-                                updatedAt: Date.now(),
-                              }),
-                            )
-                          }
-                          info="Private OKX passphrase saved into the local SLOW config JSON."
-                        />
-                      </Grid>
-                    )}
                   </Grid>
                 </Stack>
               )}

@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import slowTrading from "@/lib/slowTrading";
-import { normalizeExchangeAccountId } from "@/lib/slowTrading/storage/account";
+import { normalizeExchangeAccountSlug } from "@/lib/slowTrading/storage/account";
 import { tradeLog } from "@/lib/trading/helper/log";
 
 export default async function handler(
@@ -15,7 +15,7 @@ export default async function handler(
       const storage = await slowTrading.storage.data.load();
       res.status(200).json({
         accounts,
-        exchangeAccountId: storage.runtime.exchangeAccountId,
+        exchangeAccountSlug: storage.runtime.exchangeAccountSlug,
       });
       return;
     }
@@ -23,30 +23,78 @@ export default async function handler(
     if (req.method === "PUT") {
       const body = (req.body ?? {}) as {
         accounts?: unknown;
-        exchangeAccountId?: unknown;
+        exchangeAccountSlug?: unknown;
       };
+      const storage = await slowTrading.storage.data.load();
+      const currentAccounts = storage.runtime.exchangeAccounts;
+      const requestedSlugs = new Set(
+        (Array.isArray(body.accounts) ? body.accounts : [])
+          .map((account) =>
+            account && typeof account === "object"
+              ? normalizeExchangeAccountSlug(
+                  (account as { slug?: unknown }).slug,
+                )
+              : "",
+          )
+          .filter(Boolean),
+      );
+      const removedAccounts = currentAccounts.filter(
+        (account) => !requestedSlugs.has(account.slug),
+      );
+
+      // PROD:MULTI_ACCOUNT_DELETE_DEPENDENCY_GUARD
+      for (const removed of removedAccounts) {
+        const scoped = await slowTrading.storage.data.load({
+          account: removed.slug,
+          modeScope: "all",
+        });
+        const hasOpenPositions = (["live", "sandbox"] as const).some(
+          (mode) => slowTrading.storage.history.getOpen(scoped, mode).length > 0,
+        );
+        const hasWithdrawalSchedule = storage.runtime.withdrawal.schedules.some(
+          (schedule) => schedule.account === removed.slug,
+        );
+        if (hasOpenPositions || hasWithdrawalSchedule) {
+          res.status(409).json({
+            error:
+              `Cannot delete account ${removed.slug}: resolve its ` +
+              [
+                hasOpenPositions ? "open positions" : "",
+                hasWithdrawalSchedule ? "withdrawal schedules" : "",
+              ]
+                .filter(Boolean)
+                .join(" and ") +
+              " first.",
+          });
+          return;
+        }
+      }
+
       const accounts = await slowTrading.storage.account.saveAccounts(
         body.accounts,
+        storage.sharedConfig,
       );
-      const storage = await slowTrading.storage.data.load();
+      for (const removed of removedAccounts) {
+        await slowTrading.storage.account.deleteState(removed.slug);
+      }
       const requestedAccountId =
-        body.exchangeAccountId !== undefined
-          ? normalizeExchangeAccountId(body.exchangeAccountId)
-          : storage.runtime.exchangeAccountId;
+        body.exchangeAccountSlug !== undefined
+          ? normalizeExchangeAccountSlug(body.exchangeAccountSlug)
+          : storage.runtime.exchangeAccountSlug;
       const accountExists = accounts.some(
-        (account) => account.id === requestedAccountId,
+        (account) => account.slug === requestedAccountId,
       );
-      const exchangeAccountId = accountExists
+      const exchangeAccountSlug = accountExists
         ? requestedAccountId
-        : (accounts[0]?.id ?? storage.runtime.exchangeAccountId);
+        : (accounts[0]?.slug ?? storage.runtime.exchangeAccountSlug);
 
-      if (exchangeAccountId !== storage.runtime.exchangeAccountId) {
-        await slowTrading.storage.data.update({ exchangeAccountId });
+      if (exchangeAccountSlug !== storage.runtime.exchangeAccountSlug) {
+        await slowTrading.storage.data.update({ exchangeAccountSlug });
       }
 
       res.status(200).json({
         accounts,
-        exchangeAccountId,
+        exchangeAccountSlug,
       });
       return;
     }

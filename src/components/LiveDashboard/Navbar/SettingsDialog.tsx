@@ -13,7 +13,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import SettingsIcon from "@mui/icons-material/Settings";
 import ShieldOutlinedIcon from "@mui/icons-material/ShieldOutlined";
 import TuneIcon from "@mui/icons-material/Tune";
-import { Box, Button, IconButton, Tab, Tabs } from "@mui/material";
+import { Box, Button, IconButton, MenuItem, Tab, Tabs } from "@mui/material";
 import SettingsDialogRuntimeTab from "./SettingsDialogRuntimeTab";
 import SettingsDialogBackupTab from "./SettingsDialogBackupTab";
 import SettingsDialogBlackSwanTab from "./SettingsDialogBlackSwanTab";
@@ -22,6 +22,8 @@ import SettingsDialogMcpTab from "./SettingsDialogMcpTab";
 import SettingsDialogNotificationTab from "./SettingsDialogNotificationTab";
 import SettingsDialogTradingTab from "./SettingsDialogTradingTab";
 import SettingsDialogWithdrawTab from "./SettingsDialogWithdrawTab";
+import SettingsInfoField from "./SettingsInfoField";
+import { applyAccountProfileToConfigDraft } from "./helpers";
 import type { ConfigDraft, ConfigDraftSetter, DashboardState } from "./types";
 
 export const SETTINGS_TABS = [
@@ -69,8 +71,8 @@ export default function SettingsDialog(props: {
   onOpenDialog: () => void;
   onReinitialize: () => Promise<void>;
   reinitializing: boolean;
-  resetSandbox: () => Promise<void>;
-  resettingSandbox: boolean;
+  resetSandbox: (accountSlug: string) => Promise<void>;
+  resettingSandboxAccount: string | null;
   saveConfig: (handleClose?: () => void) => Promise<void>;
   savingConfig: boolean;
   setConfigDraft: ConfigDraftSetter;
@@ -88,7 +90,7 @@ export default function SettingsDialog(props: {
     onReinitialize,
     reinitializing,
     resetSandbox,
-    resettingSandbox,
+    resettingSandboxAccount,
     saveConfig,
     savingConfig,
     setConfigDraft,
@@ -119,43 +121,81 @@ export default function SettingsDialog(props: {
     >
       {(handleClose) => (
         <Box sx={{ p: 1 }}>
-          <Tabs
-            value={activeTab}
-            onChange={(_, value: SettingsTab) => {
-              setActiveTab(value);
-            }}
-            variant="scrollable"
-            scrollButtons="auto"
+          <Box
             sx={{
+              alignItems: "flex-start",
+              display: "flex",
+              gap: 1.5,
               mb: 1.5,
-              minHeight: 34,
-              "& .MuiTabs-indicator": {
-                height: 2,
-              },
-              "& .MuiTab-root": {
-                fontSize: "0.74rem",
-                fontWeight: 700,
-                minHeight: 34,
-                minWidth: 0,
-                px: 1.25,
-                py: 0.5,
-              },
-              "& .MuiTab-iconWrapper": {
-                fontSize: "1rem",
-                mr: 0.75,
-              },
+              flexDirection: { xs: "column", md: "row" },
             }}
           >
-            {SETTINGS_TABS.map((tab) => (
-              <Tab
-                icon={<SettingsTabIcon tab={tab.value} />}
-                iconPosition="start"
-                key={tab.value}
-                label={tab.label}
-                value={tab.value}
-              />
-            ))}
-          </Tabs>
+            <Tabs
+              value={activeTab}
+              onChange={(_, value: SettingsTab) => {
+                setActiveTab(value);
+              }}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{
+                flex: 1,
+                maxWidth: "100%",
+                minHeight: 34,
+                "& .MuiTabs-indicator": {
+                  height: 2,
+                },
+                "& .MuiTab-root": {
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  minHeight: 34,
+                  minWidth: 0,
+                  px: 1.25,
+                  py: 0.5,
+                },
+                "& .MuiTab-iconWrapper": {
+                  fontSize: "1rem",
+                  mr: 0.75,
+                },
+              }}
+            >
+              {SETTINGS_TABS.map((tab) => (
+                <Tab
+                  icon={<SettingsTabIcon tab={tab.value} />}
+                  iconPosition="start"
+                  key={tab.value}
+                  label={tab.label}
+                  value={tab.value}
+                />
+              ))}
+            </Tabs>
+
+            {activeTab === "trading" && (
+              <SettingsInfoField
+                info="Chooses which account's Trading configuration is shown in this editor. It does not control which accounts execute."
+                label="Editing Account"
+                onChange={(event) => {
+                  const account = configDraft.exchangeAccounts.find(
+                    (candidate) => candidate.slug === event.target.value,
+                  );
+                  setConfigDraft((current) =>
+                    current && account
+                      ? applyAccountProfileToConfigDraft(current, account)
+                      : current,
+                  );
+                }}
+                select
+                size="small"
+                sx={{ minWidth: { xs: "100%", md: 240 } }}
+                value={configDraft.exchangeAccountSlug}
+              >
+                {configDraft.exchangeAccounts.map((account) => (
+                  <MenuItem key={account.slug} value={account.slug}>
+                    {account.name} · {account.enabled ? "enabled" : "paused"}
+                  </MenuItem>
+                ))}
+              </SettingsInfoField>
+            )}
+          </Box>
 
           <Box sx={{ minHeight: 420 }}>
             {activeTab === "runtime" ? (
@@ -164,7 +204,7 @@ export default function SettingsDialog(props: {
                 onReinitialize={onReinitialize}
                 reinitializing={reinitializing}
                 resetSandbox={resetSandbox}
-                resettingSandbox={resettingSandbox}
+                resettingSandboxAccount={resettingSandboxAccount}
                 setConfigDraft={setConfigDraft}
                 syncOnlineStorageToLocal={syncOnlineStorageToLocal}
                 syncingOnlineStorage={syncingOnlineStorage}

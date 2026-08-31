@@ -63,8 +63,10 @@ function getWithdrawalTarget(
  */
 export async function synchronizeSlowTradingQueues(
   currentTimeMs = Date.now(),
+  account?: string,
 ) {
   const storage = await slowTradingStorage.data.load({
+    account,
     modeScope: "active",
   });
   const activeMode = slowTradingStorage.mode.getActive(storage);
@@ -87,6 +89,7 @@ export async function synchronizeSlowTradingQueues(
         (schedule) =>
           !initialQueues.safeHaven.some(
             (item) =>
+              item.account === storage.account.slug &&
               item.mode === activeMode && item.scheduleId === schedule.id,
           ) &&
           slowTradingSafeHavenSchedule.timing.isDue(
@@ -112,6 +115,7 @@ export async function synchronizeSlowTradingQueues(
       for (const schedule of storage.runtime.safeHaven.schedules) {
         const existing = queues.safeHaven.find(
           (item) =>
+            item.account === storage.account.slug &&
             item.mode === activeMode &&
             (item.scheduleId === schedule.id ||
               (!item.scheduleId && schedule.id === "legacy-safe-haven")),
@@ -164,6 +168,7 @@ export async function synchronizeSlowTradingQueues(
 
         if (amountUSDT > 0) {
           const item: SlowTradingSafeHavenQueueItem = {
+            account: storage.account.slug,
             id: `safe-haven-${activeMode}-${schedule.id}-${currentTimeMs}`,
             kind: "safe_haven",
             mode: activeMode,
@@ -182,10 +187,12 @@ export async function synchronizeSlowTradingQueues(
 
       // PROD:WITHDRAW_QUEUE
       const scheduleById = new Map(
-        storage.runtime.withdrawal.schedules.map((schedule) => [
+        storage.runtime.withdrawal.schedules
+          .filter((schedule) => schedule.account === storage.account.slug)
+          .map((schedule) => [
           schedule.id,
           schedule,
-        ]),
+          ]),
       );
 
       for (const item of queues.withdrawals) {
@@ -213,8 +220,11 @@ export async function synchronizeSlowTradingQueues(
         storage.runtime.withdrawal.autoEnabled
       ) {
         for (const schedule of storage.runtime.withdrawal.schedules) {
+          if (schedule.account !== storage.account.slug) continue;
           const alreadyQueued = queues.withdrawals.some(
-            (item) => item.scheduleId === schedule.id,
+            (item) =>
+              item.account === storage.account.slug &&
+              item.scheduleId === schedule.id,
           );
           if (
             alreadyQueued ||
@@ -234,6 +244,7 @@ export async function synchronizeSlowTradingQueues(
           const target = getWithdrawalTarget(schedule, storage);
           const id = `withdrawal-${schedule.id}-${currentTimeMs}`;
           queues.withdrawals.push({
+            account: storage.account.slug,
             id,
             kind: "withdrawal",
             scheduleId: schedule.id,
@@ -261,7 +272,8 @@ export async function synchronizeSlowTradingQueues(
   if (Object.keys(synchronization.safeHavenQueuedAt).length > 0) {
     const latestQueues = await loadSlowTradingQueues(queueLoadOptions);
     const activeItems = latestQueues.safeHaven.filter(
-      (item) => item.mode === activeMode,
+      (item) =>
+        item.account === storage.account.slug && item.mode === activeMode,
     );
     modeState.dynamicTradeMemory.lastSafeHavenRequest = Math.max(
       currentTimeMs,
@@ -270,8 +282,11 @@ export async function synchronizeSlowTradingQueues(
     modeState.dynamicTradeMemory.safeHavenRequest = roundUSDT(
       activeItems.reduce((total, item) => total + item.remainingUSDT, 0),
     );
-    await slowTradingStorage.mode.saveState(activeMode, modeState);
+    await slowTradingStorage.mode.saveState(activeMode, modeState, {
+      account: storage.account.slug,
+    });
     await slowTradingStorage.data.update({
+      exchangeAccountSlug: storage.account.slug,
       safeHaven: {
         schedules: storage.runtime.safeHaven.schedules.map((schedule) => ({
           ...schedule,
@@ -291,6 +306,7 @@ export async function synchronizeSlowTradingQueues(
 
   if (Object.keys(synchronization.withdrawalQueuedAt).length > 0) {
     await slowTradingStorage.data.update({
+      exchangeAccountSlug: storage.account.slug,
       withdrawal: {
         schedules: storage.runtime.withdrawal.schedules.map((schedule) => ({
           ...schedule,

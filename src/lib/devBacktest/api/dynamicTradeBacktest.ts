@@ -22,8 +22,11 @@ import {
 } from "@/components/LiveDashboard/converter";
 import { FOLDER } from "@/components/storage";
 import { timeMsToReadable } from "@/lib/datasets/utils";
-import type { VolatilityPoint } from "@/lib/dynamic";
+import type { BacktestReturnDynamic, VolatilityPoint } from "@/lib/dynamic";
 import { isDevBacktestEnabled } from "@/lib/env/devBacktest";
+import { runWithExchangeAccount } from "@/lib/exchange/account-context";
+import slowTradingAccountConfig from "@/lib/slowTrading/account-config";
+import slowTradingStorage from "@/lib/slowTrading/storage";
 import { tradeLog } from "@/lib/trading";
 import fs from "fs-extra";
 import md5 from "md5";
@@ -61,6 +64,7 @@ async function dynamicTradeBacktest(req: NextApiRequest, res: NextApiResponse) {
     decisionEngineVersion = "decision.v7",
 
     verbose = true,
+    multiAccount = false,
   } = params as DynamicTradeBacktestInput;
 
   let { range, startTime, endTime } = params as DynamicTradeBacktestInput;
@@ -117,6 +121,13 @@ async function dynamicTradeBacktest(req: NextApiRequest, res: NextApiResponse) {
     symbols.sort((a, b) => a.localeCompare(b));
 
     // B. Dynamic backtest
+    const enabledAccounts = multiAccount
+      ? (await slowTradingStorage.data.load({ modeScope: "active" })).runtime
+          .exchangeAccounts.filter((account) => account.enabled)
+      : [];
+    if (multiAccount && enabledAccounts.length === 0) {
+      throw new Error("Enable at least one SLOW account before backtesting.");
+    }
     const id = deepCopy({
       algorithm,
       symbols,
@@ -126,6 +137,12 @@ async function dynamicTradeBacktest(req: NextApiRequest, res: NextApiResponse) {
       config,
       mode,
       decisionEngineVersion,
+      multiAccount,
+      accountSignature: enabledAccounts.map((account) => ({
+        slug: account.slug,
+        trading: account.trading,
+        startingBalanceUSDT: account.sandbox.initialBalanceUSDT,
+      })),
     });
 
     let cached = await saveOrGetBacktestResult({
@@ -136,11 +153,38 @@ async function dynamicTradeBacktest(req: NextApiRequest, res: NextApiResponse) {
       tradeLog.log("Cached runBacktestDynamic");
     } else {
       tradeLog.log("New runBacktestDynamic");
-      const result = await runBacktestVolatilityDynamic({
-        ...id,
-        decisionEngine: DECISION_ENGINE_MAP[decisionEngineVersion as string],
-        useVolatilityCache: !upToDateKlines,
-      });
+      let result: BacktestReturnDynamic;
+      if (enabledAccounts.length > 0) {
+        const accountResults: BacktestReturnDynamic[] = [];
+        // BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST
+        for (const account of enabledAccounts) {
+          const effectiveConfig = {
+            ...slowTradingAccountConfig.trading.toEffectiveConfig(
+              id.config as any,
+              account,
+            ),
+            startingBalanceUSDT: account.sandbox.initialBalanceUSDT,
+          } as typeof id.config;
+          accountResults.push(
+            await runWithExchangeAccount(account, () =>
+              runBacktestVolatilityDynamic({
+                ...id,
+                config: effectiveConfig,
+                decisionEngine:
+                  DECISION_ENGINE_MAP[decisionEngineVersion as string],
+                useVolatilityCache: !upToDateKlines,
+              }),
+            ),
+          );
+        }
+        result = combineAccountBacktests(accountResults);
+      } else {
+        result = await runBacktestVolatilityDynamic({
+          ...id,
+          decisionEngine: DECISION_ENGINE_MAP[decisionEngineVersion as string],
+          useVolatilityCache: !upToDateKlines,
+        });
+      }
 
       await saveOrGetBacktestResult({ id, res: result });
       cached = result;
@@ -718,6 +762,7 @@ async function dynamicTradeBacktest(req: NextApiRequest, res: NextApiResponse) {
       tradeCountMap[symbol] = cached.backtestPack.tradeHistoryMap[symbol].length;
       tradeHistory.push(
         ...closedPositions.map((position) => ({
+          account: position.account,
           symbol: position.symbol ?? symbol,
           entryTime: position.opened.t,
           exitTime: position.closed?.t,
@@ -757,4 +802,83 @@ async function dynamicTradeBacktest(req: NextApiRequest, res: NextApiResponse) {
   } finally {
     tradeLog.endSession(tradeLogSession);
   }
+}
+
+/** Combines independent account simulations without merging their capital. */
+function combineAccountBacktests(
+  results: BacktestReturnDynamic[],
+): BacktestReturnDynamic {
+  const first = deepCopy(results[0]);
+  if (!first) throw new Error("No enabled SLOW accounts are available.");
+
+  first.startingBalanceUSDT = results.reduce(
+    (total, result) => total + result.startingBalanceUSDT,
+    0,
+  );
+  first.finalBalance = results.reduce(
+    (total, result) => total + result.finalBalance,
+    0,
+  );
+  first.totalTrades = results.reduce(
+    (total, result) => total + result.totalTrades,
+    0,
+  );
+  first.config.startingBalanceUSDT = first.startingBalanceUSDT;
+  first.dynamicTradeMemory.startingBalanceUSDT = first.startingBalanceUSDT;
+  first.dynamicTradeMemory.quoteAsset = results.reduce(
+    (total, result) => total + result.dynamicTradeMemory.quoteAsset,
+    0,
+  );
+  first.dynamicTradeMemory.safeHaven = results.reduce(
+    (total, result) => total + (result.dynamicTradeMemory.safeHaven ?? 0),
+    0,
+  );
+  first.dynamicTradeMemory.reservedQuoteAsset = results.reduce(
+    (total, result) =>
+      total + (result.dynamicTradeMemory.reservedQuoteAsset ?? 0),
+    0,
+  );
+
+  for (const symbol of first.symbols) {
+    const memories = results
+      .map((result) => result.backtestPack.modelMemoryMap[symbol])
+      .filter(Boolean);
+    if (memories.length === 0) continue;
+    first.backtestPack.modelMemoryMap[symbol] = {
+      ...deepCopy(memories[0]),
+      positions: memories.flatMap((memory) => memory.positions ?? []),
+      positionsSell: memories.flatMap((memory) => memory.positionsSell ?? []),
+    };
+    first.backtestPack.tradeHistoryMap[symbol] = results.flatMap(
+      (result) => result.backtestPack.tradeHistoryMap[symbol] ?? [],
+    );
+  }
+
+  const growthByTime = new Map<
+    number,
+    BacktestReturnDynamic["backtestPack"]["growthOvertime"][number]
+  >();
+  for (const result of results) {
+    for (const point of result.backtestPack.growthOvertime) {
+      const current = growthByTime.get(point.timeMs);
+      if (!current) {
+        growthByTime.set(point.timeMs, deepCopy(point));
+        continue;
+      }
+      current.currentAsset += point.currentAsset;
+      current.currentAssetFloating += point.currentAssetFloating;
+      current.currentBaseAsset += point.currentBaseAsset;
+      current.currentSafeHaven += point.currentSafeHaven;
+      for (const [label, value] of Object.entries(
+        point.currentBaseAssetLabeled,
+      )) {
+        current.currentBaseAssetLabeled[label] =
+          (current.currentBaseAssetLabeled[label] ?? 0) + value;
+      }
+    }
+  }
+  first.backtestPack.growthOvertime = [...growthByTime.values()].sort(
+    (left, right) => left.timeMs - right.timeMs,
+  );
+  return first;
 }

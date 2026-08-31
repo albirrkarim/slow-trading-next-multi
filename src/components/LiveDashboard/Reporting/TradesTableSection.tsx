@@ -513,6 +513,7 @@ export function TradesTableSection({
         state?: SlowTradingDashboardState;
       }>(endpoints.slow.prod.history, {
         data: {
+          account: row.account,
           mode,
           symbol: row.symbol,
           entryId: row.opened.vPoint.id,
@@ -675,6 +676,14 @@ export function TradesTableSection({
                           }}
                         />
                       ) : null}
+                    </Typography>
+
+                    <Typography
+                      color="text.secondary"
+                      display="block"
+                      variant="caption"
+                    >
+                      Account: {row.account}
                     </Typography>
 
                     <CoinTagsInline

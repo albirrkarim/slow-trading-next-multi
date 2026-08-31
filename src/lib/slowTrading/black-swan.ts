@@ -165,10 +165,15 @@ function markEmergencyExits(params: {
 }
 
 /** Evaluates and persists one independent Risk Sentinel pass. */
-async function runSlowTradingBlackSwan(): Promise<SlowTradingBlackSwanRunResult> {
+async function runSlowTradingBlackSwan(
+  account?: string,
+): Promise<SlowTradingBlackSwanRunResult> {
   const runStartedAt = Date.now();
   const currentTimeMs = Date.now();
-  const initial = await slowTradingStorage.data.load({ modeScope: "active" });
+  const initial = await slowTradingStorage.data.load({
+    account,
+    modeScope: "active",
+  });
   const mode = slowTradingStorage.mode.getActive(initial);
   const config = blackSwan.config.normalize(initial.config.blackSwan);
   const previous = blackSwan.state.normalize(initial.modes[mode].blackSwan);
@@ -204,7 +209,10 @@ async function runSlowTradingBlackSwan(): Promise<SlowTradingBlackSwanRunResult>
       : undefined;
 
   const committed = await slowTradingMutationQueue.runExclusive(async () => {
-    const latest = await slowTradingStorage.data.load({ modeScope: "active" });
+    const latest = await slowTradingStorage.data.load({
+      account: initial.account.slug,
+      modeScope: "active",
+    });
     const latestMode = slowTradingStorage.mode.getActive(latest);
     const latestPrevious = blackSwan.state.normalize(
       latest.modes[latestMode].blackSwan,
@@ -249,6 +257,7 @@ async function runSlowTradingBlackSwan(): Promise<SlowTradingBlackSwanRunResult>
     await slowTradingStorage.mode.saveState(
       latestMode,
       latest.modes[latestMode],
+      { account: latest.account.slug },
     );
     return {
       forceExitSymbols,
@@ -280,7 +289,9 @@ async function acknowledgeSlowTradingBlackSwanRecovery() {
       throw new Error("Black Swan protection is not in RECOVERY.");
     }
     storage.modes[mode].blackSwan = blackSwan.state.acknowledge(state);
-    await slowTradingStorage.mode.saveState(mode, storage.modes[mode]);
+    await slowTradingStorage.mode.saveState(mode, storage.modes[mode], {
+      account: storage.account.slug,
+    });
     return storage.modes[mode].blackSwan;
   });
 }

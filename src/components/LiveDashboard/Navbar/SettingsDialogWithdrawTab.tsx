@@ -236,6 +236,7 @@ export default function SettingsDialogWithdrawTab({
               </Box>
 
               <WithdrawalScheduleCreateDialog
+                accounts={configDraft.exchangeAccounts}
                 onCreate={addSchedule}
                 scheduleCount={configDraft.withdrawalSchedules.length}
                 walletBook={configDraft.withdrawalWalletBook}
@@ -243,6 +244,7 @@ export default function SettingsDialogWithdrawTab({
             </Stack>
 
             <WithdrawalScheduleTable
+              accounts={configDraft.exchangeAccounts}
               onDelete={deleteSchedule}
               onTest={tryWithdrawNow}
               onUpdate={updateSchedule}

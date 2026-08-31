@@ -1,0 +1,199 @@
+import fs from "fs-extra";
+import os from "os";
+import path from "path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createTestPosition } from "../fixtures/position";
+
+let tmpRoot: string | null = null;
+
+describe("SLOW multi-account specs", () => {
+  beforeEach(async () => {
+    tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "slow-multi-account-"));
+    process.env.PERSISTENT_STORAGE_ROOT = tmpRoot;
+    vi.resetModules();
+  });
+
+  afterEach(async () => {
+    if (tmpRoot) await fs.remove(tmpRoot);
+    delete process.env.PERSISTENT_STORAGE_ROOT;
+    vi.resetModules();
+  });
+
+  it("creates immutable unique slugs and never reuses a retired slug", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const defaults = slowTrading.storage.data.createDefault();
+    const template = defaults.runtime.exchangeAccounts[0];
+    const first = {
+      ...template,
+      slug: "main-account",
+      name: "Renamed Main",
+    };
+    const second = {
+      ...template,
+      slug: "reserve",
+      name: "Reserve",
+    };
+    await slowTrading.storage.account.saveAccounts(
+      [first, second],
+      defaults.sharedConfig,
+    );
+    await slowTrading.storage.account.saveAccounts(
+      [second],
+      defaults.sharedConfig,
+    );
+    const saved = await slowTrading.storage.account.saveAccounts(
+      [second, { ...template, slug: "main-account", name: "Main Account" }],
+      defaults.sharedConfig,
+    );
+
+    // PROD:MULTI_ACCOUNT_IMMUTABLE_SLUG
+    expect(saved.map((account) => account.slug)).toEqual([
+      "reserve",
+      "main-account-2",
+    ]);
+  });
+
+  it("keeps live and sandbox memory isolated by account slug", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const defaults = slowTrading.storage.data.createDefault();
+    const template = defaults.runtime.exchangeAccounts[0];
+    await slowTrading.storage.data.save(defaults);
+    await slowTrading.storage.account.saveAccounts(
+      [
+        { ...template, slug: "alpha", name: "Alpha" },
+        {
+          ...template,
+          slug: "beta",
+          name: "Beta",
+          sandbox: { enabled: true, initialBalanceUSDT: 900 },
+        },
+      ],
+      defaults.sharedConfig,
+    );
+
+    const alpha = await slowTrading.storage.data.load({ account: "alpha" });
+    const beta = await slowTrading.storage.data.load({ account: "beta" });
+    alpha.modes.live.dynamicTradeMemory.quoteAsset = 111;
+    beta.modes.live.dynamicTradeMemory.quoteAsset = 222;
+    await slowTrading.storage.mode.saveState("live", alpha.modes.live, {
+      account: "alpha",
+    });
+    await slowTrading.storage.mode.saveState("live", beta.modes.live, {
+      account: "beta",
+    });
+
+    const loadedAlpha = await slowTrading.storage.data.load({ account: "alpha" });
+    const loadedBeta = await slowTrading.storage.data.load({ account: "beta" });
+    // PROD:MULTI_ACCOUNT_STATE_ISOLATION
+    expect(loadedAlpha.modes.live.dynamicTradeMemory.quoteAsset).toBe(111);
+    expect(loadedBeta.modes.live.dynamicTradeMemory.quoteAsset).toBe(222);
+    // PROD:MULTI_ACCOUNT_SANDBOX_ISOLATION
+    expect(loadedAlpha.runtime.sandboxEnabled).toBe(false);
+    expect(loadedBeta.runtime.sandboxEnabled).toBe(true);
+    expect(loadedBeta.runtime.sandboxInitialBalanceUSDT).toBe(900);
+  });
+
+  it("binds production and backtest positions to the scoped account", async () => {
+    const context = await import("@/lib/exchange/account-context");
+    const [productionSource, backtestSource] = await Promise.all([
+      fs.readFile("src/lib/trading/execute/execute-entry.ts", "utf8"),
+      fs.readFile("src/lib/dynamic/backtest-volatility/trading.ts", "utf8"),
+    ]);
+
+    await context.runWithExchangeAccount("account-blue", async () => {
+      expect(context.getCurrentExchangeAccountSlug()).toBe("account-blue");
+    });
+    // BOTH:MULTI_ACCOUNT_POSITION_OWNER
+    expect(productionSource).toContain("BOTH:MULTI_ACCOUNT_POSITION_OWNER");
+    // BOTH:MULTI_ACCOUNT_POSITION_OWNER
+    expect(backtestSource).toContain("BOTH:MULTI_ACCOUNT_POSITION_OWNER");
+  });
+
+  it("deduplicates and hydrates shared history by account owner", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const defaults = slowTrading.storage.data.createDefault();
+    const template = defaults.runtime.exchangeAccounts[0];
+    await slowTrading.storage.data.save(defaults);
+    await slowTrading.storage.account.saveAccounts(
+      [
+        { ...template, slug: "alpha", name: "Alpha" },
+        { ...template, slug: "beta", name: "Beta" },
+      ],
+      defaults.sharedConfig,
+    );
+
+    for (const account of ["alpha", "beta"]) {
+      const storage = await slowTrading.storage.data.load({ account });
+      storage.modes.live.tradeSettings[0].model_memory.positionsSell = [
+        createTestPosition({
+          account,
+          executionMode: "live",
+          entryId: "shared-identity",
+          entryTime: 100,
+          closed: { t: 200, price: 11, feeUsdt: 0, reason: "TAKE_PROFIT" },
+        }),
+      ];
+      await slowTrading.storage.mode.saveState("live", storage.modes.live, {
+        account,
+      });
+    }
+
+    const alpha = await slowTrading.storage.data.load({
+      account: "alpha",
+      includeHistory: true,
+    });
+    const beta = await slowTrading.storage.data.load({
+      account: "beta",
+      includeHistory: true,
+    });
+    // BOTH:MULTI_ACCOUNT_HISTORY_OWNER
+    expect(slowTrading.storage.history.getClosed(alpha, "live")).toEqual([
+      expect.objectContaining({ account: "alpha" }),
+    ]);
+    // BOTH:MULTI_ACCOUNT_HISTORY_OWNER
+    expect(slowTrading.storage.history.getClosed(beta, "live")).toEqual([
+      expect.objectContaining({ account: "beta" }),
+    ]);
+  });
+
+  it("documents executable guards for sequencing and account dependencies", async () => {
+    const [
+      cycle,
+      accountApi,
+      quickBacktest,
+      withdrawal,
+      dashboard,
+      history,
+      standardBacktest,
+    ] = await Promise.all([
+      fs.readFile("src/lib/slowTrading/cycle.ts", "utf8"),
+      fs.readFile("src/pages/api/slow-trading/exchange-accounts.ts", "utf8"),
+      fs.readFile("src/lib/slowTrading/quick-backtest.ts", "utf8"),
+      fs.readFile("src/lib/slowTrading/withdrawal.ts", "utf8"),
+      fs.readFile("src/lib/slowTrading/storage/dashboard.ts", "utf8"),
+      fs.readFile("src/lib/slowTrading/storage/history-files.ts", "utf8"),
+      fs.readFile("src/lib/devBacktest/api/dynamicTradeBacktest.ts", "utf8"),
+    ]);
+
+    // PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE
+    expect(cycle).toContain("PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE");
+    // PROD:MULTI_ACCOUNT_FAILURE_ISOLATION
+    expect(cycle).toContain("PROD:MULTI_ACCOUNT_FAILURE_ISOLATION");
+    // PROD:MULTI_ACCOUNT_DISABLED_ENTRY_ONLY
+    expect(cycle).toContain("PROD:MULTI_ACCOUNT_DISABLED_ENTRY_ONLY");
+    // PROD:MULTI_ACCOUNT_DELETE_DEPENDENCY_GUARD
+    expect(accountApi).toContain("PROD:MULTI_ACCOUNT_DELETE_DEPENDENCY_GUARD");
+    // BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST
+    expect(quickBacktest).toContain("BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST");
+    // BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST
+    expect(standardBacktest).toContain("BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST");
+    // PROD:MULTI_ACCOUNT_WITHDRAWAL_OWNER
+    expect(withdrawal).toContain("PROD:MULTI_ACCOUNT_WITHDRAWAL_OWNER");
+    // PROD:MULTI_ACCOUNT_COMBINED_DAILY_PNL
+    expect(cycle).toContain("PROD:MULTI_ACCOUNT_COMBINED_DAILY_PNL");
+    // PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD
+    expect(dashboard).toContain("PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD");
+    // BOTH:MULTI_ACCOUNT_HISTORY_OWNER
+    expect(history).toContain("BOTH:MULTI_ACCOUNT_HISTORY_OWNER");
+  });
+});

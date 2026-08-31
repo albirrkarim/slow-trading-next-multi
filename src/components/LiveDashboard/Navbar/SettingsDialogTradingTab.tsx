@@ -9,6 +9,7 @@ import SettingsGroup from "./SettingsGroup";
 import SettingsInfoField from "./SettingsInfoField";
 import TradingSettingsPreview from "./TradingSettingsPreview";
 import type { ConfigDraft, ConfigDraftSetter, DashboardState } from "./types";
+import { updateAccountSettingsInConfigDraft } from "./helpers";
 
 interface SettingsDialogTradingTabProps {
   configDraft: ConfigDraft;
@@ -16,7 +17,7 @@ interface SettingsDialogTradingTabProps {
   setConfigDraft: ConfigDraftSetter;
 }
 
-export default function SettingsDialogTradingTab({
+function TradingAccountSettings({
   configDraft,
   dashboardState,
   setConfigDraft,
@@ -425,5 +426,37 @@ export default function SettingsDialogTradingTab({
         />
       </Grid>
     </Grid>
+  );
+}
+
+export default function SettingsDialogTradingTab({
+  configDraft,
+  dashboardState,
+  setConfigDraft,
+}: SettingsDialogTradingTabProps) {
+  const setSelectedAccountDraft: ConfigDraftSetter = (value) => {
+    setConfigDraft((current) => {
+      if (!current || current.exchangeAccounts.length === 0) {
+        return typeof value === "function" ? value(current) : value;
+      }
+
+      return updateAccountSettingsInConfigDraft(
+        current,
+        current.exchangeAccountSlug,
+        (currentAccountDraft) => {
+          const next =
+            typeof value === "function" ? value(currentAccountDraft) : value;
+          return next ?? currentAccountDraft;
+        },
+      );
+    });
+  };
+
+  return (
+    <TradingAccountSettings
+      configDraft={configDraft}
+      dashboardState={dashboardState}
+      setConfigDraft={setSelectedAccountDraft}
+    />
   );
 }

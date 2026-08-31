@@ -52,21 +52,24 @@ async function evaluateCurrentDailyPnlLimit(params: {
   const period = slowTradingDailyPnlLimit.period.getCurrentUtc(
     params.currentTimeMs,
   );
-  let pnlUsdt =
-    params.modeState.dailyPnlLimitState?.d === period.day
-      ? params.modeState.dailyPnlLimitState.usdt
-      : null;
-  if (pnlUsdt === null) {
-    const archived = await slowTradingStorage.history.readRange({
-      endTime: period.endTime,
-      mode: params.mode,
-      startTime: period.startTime,
-    });
-    pnlUsdt = slowTradingDailyPnlLimit.pnl.sumForUtcDay(
-      archived,
-      period.day,
-    );
-  }
+  // PROD:MULTI_ACCOUNT_COMBINED_DAILY_PNL
+  // History files are shared, so always recompute from every account instead of
+  // trusting an account-scoped cache from a previous cycle.
+  const archived = (
+    await Promise.all(
+      (["live", "sandbox"] as const).map((mode) =>
+        slowTradingStorage.history.readRange({
+          endTime: period.endTime,
+          mode,
+          startTime: period.startTime,
+        }),
+      ),
+    )
+  ).flat();
+  let pnlUsdt = slowTradingDailyPnlLimit.pnl.sumForUtcDay(
+    archived,
+    period.day,
+  );
 
   if (params.includePendingArchive) {
     const pendingArchive = params.modeState.tradeSettings.flatMap(
@@ -86,6 +89,8 @@ async function evaluateCurrentDailyPnlLimit(params: {
 }
 
 interface RunSlowTradingCycleParams {
+  /** Immutable account slug. Omit to run every eligible account sequentially. */
+  account?: string;
   bypass?: boolean;
   ignoreRunnerEnabled?: boolean;
   forceExitSymbols?: string[];
@@ -95,8 +100,23 @@ interface RunSlowTradingCycleParams {
   performance?: SlowTradingCyclePerformanceObserver;
 }
 
+interface SlowTradingCycleResult {
+  mode: SlowTradingMode;
+  stage?: SlowTradingStage;
+  symbols: string[];
+  reports: TradingReturn[];
+  executedEntrySignals: number;
+  skippedEntrySignals: SlowTradingSkippedEntrySignal[];
+  availableQuoteAsset: number;
+  lastRunAt?: number;
+  lastRunDurationMs?: number;
+  skipped?: boolean;
+}
+
 /** Execute one serialized SLOW cycle and persist its active-mode result. */
-async function executeSlowTradingCycle(params?: RunSlowTradingCycleParams) {
+async function executeSlowTradingCycle(
+  params?: RunSlowTradingCycleParams,
+): Promise<SlowTradingCycleResult> {
   // A. Load the current active mode and runtime controls.
   const cycleStartedAt = Date.now();
   const performanceEntries: SlowTradingCyclePerformanceEntry[] = [];
@@ -110,6 +130,7 @@ async function executeSlowTradingCycle(params?: RunSlowTradingCycleParams) {
   // PROD:CYCLE_PERFORMANCE_SECTION_DURATION
   const storage = await profiler.time("storage.load", () =>
     slowTradingStorage.data.load({
+      account: params?.account,
       modeScope: "active",
     }),
   );
@@ -266,6 +287,7 @@ async function executeSlowTradingCycle(params?: RunSlowTradingCycleParams) {
         });
       }
       const shouldAutoEnter =
+        storage.account.enabled &&
         !blackSwanProtectionActive &&
         (stage === "capture-entry" && stageSymbols?.length === 0
           ? false
@@ -301,7 +323,9 @@ async function executeSlowTradingCycle(params?: RunSlowTradingCycleParams) {
         storage.modes[activeMode] = modeState;
         // Empty heartbeats use one memory write and intentionally do not time
         // that write, avoiding recursive persistence just to record its duration.
-        await slowTradingStorage.mode.saveState(activeMode, modeState);
+        await slowTradingStorage.mode.saveState(activeMode, modeState, {
+          account: storage.account.slug,
+        });
 
         return {
           mode: activeMode as SlowTradingMode,
@@ -1238,7 +1262,9 @@ async function executeSlowTradingCycle(params?: RunSlowTradingCycleParams) {
       );
       storage.modes[activeMode] = modeState;
       await profiler.time("cycle.modeStatePersist", () =>
-        slowTradingStorage.mode.saveState(activeMode, modeState),
+        slowTradingStorage.mode.saveState(activeMode, modeState, {
+          account: storage.account.slug,
+        }),
       );
 
       // Report the previous fully closed UTC day after its trades are archived.
@@ -1260,7 +1286,9 @@ async function executeSlowTradingCycle(params?: RunSlowTradingCycleParams) {
         symbols: symbols.length,
       });
       storage.modes[activeMode] = modeState;
-      await slowTradingStorage.mode.saveState(activeMode, modeState);
+      await slowTradingStorage.mode.saveState(activeMode, modeState, {
+        account: storage.account.slug,
+      });
 
       // H.2 Calculate total asset and capture daily snapshot.
       let totalLockedQuoteAsset = 0;
@@ -1301,13 +1329,93 @@ async function executeSlowTradingCycle(params?: RunSlowTradingCycleParams) {
   );
 }
 
+/** Runs enabled accounts plus disabled accounts that still own open positions. */
+async function executeAllSlowTradingAccounts(
+  params?: RunSlowTradingCycleParams,
+): Promise<SlowTradingCycleResult> {
+  const catalog = await slowTradingStorage.data.load({ modeScope: "active" });
+  const results: SlowTradingCycleResult[] = [];
+
+  // PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE
+  for (const account of catalog.runtime.exchangeAccounts) {
+    try {
+      const scopedStorage = await slowTradingStorage.data.load({
+        account: account.slug,
+        modeScope: "active",
+      });
+      const activeMode = slowTradingStorage.mode.getActive(scopedStorage);
+      const hasOpenPositions = scopedStorage.modes[
+        activeMode
+      ].tradeSettings.some((tradeSetting) =>
+        (tradeSetting.model_memory.positions ?? []).some(
+          (position) => !position.closed,
+        ),
+      );
+      if (!account.enabled && !hasOpenPositions) continue;
+
+      // PROD:MULTI_ACCOUNT_DISABLED_ENTRY_ONLY
+      results.push(
+        await executeSlowTradingCycle({
+          ...params,
+          account: account.slug,
+          disableAutoEntry: params?.disableAutoEntry || !account.enabled,
+        }),
+      );
+    } catch (error) {
+      // PROD:MULTI_ACCOUNT_FAILURE_ISOLATION
+      tradeLog.error(`account cycle failed | account=${account.slug}`, error);
+      await slowTradingNotifications.operationalError.notify({
+        source: `cycle.account.${account.slug}`,
+        error,
+      });
+    }
+  }
+
+  const first = results[0];
+  if (!first) {
+    const activeMode = slowTradingStorage.mode.getActive(catalog);
+    const modeState = catalog.modes[activeMode];
+    return {
+      mode: activeMode,
+      stage: params?.stage,
+      symbols: [],
+      reports: [],
+      executedEntrySignals: 0,
+      skippedEntrySignals: [],
+      availableQuoteAsset: 0,
+      lastRunAt: modeState.lastRunAt,
+      skipped: true,
+    };
+  }
+
+  return {
+    ...first,
+    symbols: Array.from(new Set(results.flatMap((result) => result.symbols))),
+    reports: results.flatMap((result) => result.reports),
+    executedEntrySignals: results.reduce(
+      (total, result) => total + result.executedEntrySignals,
+      0,
+    ),
+    skippedEntrySignals: results.flatMap(
+      (result) => result.skippedEntrySignals,
+    ),
+    availableQuoteAsset: results.reduce(
+      (total, result) => total + result.availableQuoteAsset,
+      0,
+    ),
+    lastRunAt: Math.max(...results.map((result) => result.lastRunAt ?? 0)),
+  };
+}
+
 /**
  * Queues a SLOW cycle so runner and manual API mutations cannot overwrite each
  * other's balance, position, cache, or mode-state persistence.
  */
 export function runSlowTradingCycle(params?: RunSlowTradingCycleParams) {
   return slowTradingMutationQueue.runExclusive(() =>
-    executeSlowTradingCycle(params),
+    params?.account
+      ? executeSlowTradingCycle(params)
+      : executeAllSlowTradingAccounts(params),
   );
 }
 

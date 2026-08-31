@@ -51,7 +51,9 @@ async function cancelSlowTradingQueueItem(
         total + (item.mode === mode ? item.remainingUSDT : 0),
       0,
     );
-  await slowTradingStorage.mode.saveState(mode, storage.modes[mode]);
+  await slowTradingStorage.mode.saveState(mode, storage.modes[mode], {
+    account: storage.account.slug,
+  });
   return true;
 }
 

@@ -1,101 +1,129 @@
+import { FILES } from "@/components/storage";
+import { DEFAULT_DYNAMIC_TRADE_CONFIG_PRODUCTION } from "@/lib/dynamic";
 import {
   runWithExchangeAccount,
   type ExchangeAccount,
-  type ExchangeAccountId,
-  type ExchangeAccountType,
+  type ExchangeAccountSlug,
 } from "@/lib/exchange/account-context";
-import { FILES } from "@/components/storage";
 import fs from "fs-extra";
-import { DEFAULT_EXCHANGE_ACCOUNT_ID } from "./constants";
+import slowTradingAccountConfig from "../account-config";
+import type { SlowTradingAccount, SlowTradingStorageData } from "../types";
+import { DEFAULT_SANDBOX_INITIAL_BALANCE } from "./constants";
 import type { SlowTradingAccountsFileData } from "./internal-types";
 import slowTradingJsonFile from "./json-file";
-import type { SlowTradingStorageData } from "../types";
 
 function getString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function hasAnyCredential(...values: string[]): boolean {
-  return values.some(Boolean);
+/** Converts a user-facing account name into its stable slug representation. */
+export function normalizeExchangeAccountSlug(
+  value: unknown,
+): ExchangeAccountSlug {
+  return getString(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
 }
 
-function normalizeExchangeAccountType(value: unknown): ExchangeAccountType {
-  if (value === "okx" || value === "tokocrypto" || value === "binance") {
-    return value;
+/** Allocates a unique immutable slug without reusing deleted account slugs. */
+export function createUniqueExchangeAccountSlug(params: {
+  name: unknown;
+  reservedSlugs: Iterable<string>;
+}): ExchangeAccountSlug {
+  // PROD:MULTI_ACCOUNT_IMMUTABLE_SLUG
+  const reserved = new Set(
+    Array.from(params.reservedSlugs, normalizeExchangeAccountSlug).filter(
+      Boolean,
+    ),
+  );
+  const base = normalizeExchangeAccountSlug(params.name) || "account";
+  let slug = base;
+  let suffix = 2;
+
+  while (reserved.has(slug)) {
+    slug = `${base}-${suffix}`;
+    suffix += 1;
   }
 
-  return "binance";
+  return slug;
 }
 
-function normalizeExchangeAccountCredentials(
-  type: ExchangeAccountType,
-  credentials: Record<string, unknown>,
+function normalizeCredentials(
+  credentials: unknown,
 ): ExchangeAccount["credentials"] {
-  if (type === "okx") {
-    return {
-      apiKey: getString(credentials.apiKey),
-      apiSecret: getString(credentials.apiSecret),
-      passphrase: getString(credentials.passphrase),
-    };
-  }
+  const record =
+    credentials && typeof credentials === "object"
+      ? (credentials as Record<string, unknown>)
+      : {};
 
   return {
-    apiKey: getString(credentials.apiKey),
-    apiSecret: getString(credentials.apiSecret),
+    apiKey: getString(record.apiKey),
+    apiSecret: getString(record.apiSecret),
   };
 }
 
-function createExchangeAccount(params: {
-  id: string;
-  type: ExchangeAccountType;
-  name: string;
-  description?: string;
-  credentials: Record<string, unknown>;
-  createdAt: number;
-  updatedAt: number;
-}): ExchangeAccount {
-  return {
-    ...params,
-    description: params.description ?? "",
-    credentials: normalizeExchangeAccountCredentials(
-      params.type,
-      params.credentials,
-    ),
-  } as ExchangeAccount;
-}
-
-/**
- * Normalizes exchange account id into the shape expected by SLOW.
- */
-export function normalizeExchangeAccountId(value: unknown): ExchangeAccountId {
-  const id =
-    typeof value === "number" || typeof value === "string"
-      ? String(value).trim()
-      : "";
-  return id || DEFAULT_EXCHANGE_ACCOUNT_ID;
-}
-
-/**
- * Gets slow trading exchange account id from SLOW state or storage.
- */
-export function getSlowTradingExchangeAccountId(
-  storage: SlowTradingStorageData,
-): ExchangeAccountId {
-  return normalizeExchangeAccountId(storage.runtime.exchangeAccountId);
-}
-
-/**
- * Creates default exchange accounts from existing environment credentials.
- */
-export function createDefaultExchangeAccounts(): ExchangeAccount[] {
+function createAccount(params: {
+  credentials?: unknown;
+  createdAt?: number;
+  description?: unknown;
+  enabled?: unknown;
+  name: unknown;
+  sandbox?: unknown;
+  sharedConfig?: SlowTradingStorageData["config"];
+  slug: string;
+  trading?: unknown;
+  updatedAt?: number;
+}): SlowTradingAccount {
   const now = Date.now();
-  const account1 = createExchangeAccount({
-    id: DEFAULT_EXCHANGE_ACCOUNT_ID,
+  const sharedConfig =
+    params.sharedConfig ?? DEFAULT_DYNAMIC_TRADE_CONFIG_PRODUCTION;
+  const sandbox =
+    params.sandbox && typeof params.sandbox === "object"
+      ? (params.sandbox as Record<string, unknown>)
+      : {};
+  const trading =
+    params.trading && typeof params.trading === "object"
+      ? params.trading
+      : slowTradingAccountConfig.trading.fromEffectiveConfig(sharedConfig);
+
+  return {
+    slug: normalizeExchangeAccountSlug(params.slug),
     type: "binance",
-    name: "Binance 1",
-    credentials: {
-      apiKey:
-        process.env.BINANCE_1_API_KEY ?? process.env.BINANCE_API_KEY ?? "",
+    name: getString(params.name) || "Binance Account",
+    description: getString(params.description),
+    credentials: normalizeCredentials(params.credentials),
+    enabled: params.enabled !== false,
+    trading: slowTradingAccountConfig.trading.fromEffectiveConfig(
+      slowTradingAccountConfig.trading.toEffectiveConfig(sharedConfig, {
+        trading: trading as SlowTradingAccount["trading"],
+      }),
+    ),
+    sandbox: {
+      enabled: sandbox.enabled === true,
+      initialBalanceUSDT: Math.max(
+        0,
+        Number(sandbox.initialBalanceUSDT ?? DEFAULT_SANDBOX_INITIAL_BALANCE) ||
+          0,
+      ),
+    },
+    createdAt:
+      typeof params.createdAt === "number" ? params.createdAt : now,
+    updatedAt:
+      typeof params.updatedAt === "number" ? params.updatedAt : now,
+  };
+}
+
+/** Creates the initial Binance account profiles from environment credentials. */
+export function createDefaultSlowTradingAccounts(
+  sharedConfig: SlowTradingStorageData["config"] =
+    DEFAULT_DYNAMIC_TRADE_CONFIG_PRODUCTION,
+): SlowTradingAccount[] {
+  const now = Date.now();
+  const credentials = [
+    {
+      apiKey: process.env.BINANCE_1_API_KEY ?? process.env.BINANCE_API_KEY ?? "",
       apiSecret:
         process.env.BINANCE_1_API_SECRET ??
         process.env.BINANCE_1_SECRET_KEY ??
@@ -103,180 +131,161 @@ export function createDefaultExchangeAccounts(): ExchangeAccount[] {
         process.env.BINANCE_API_SECRET ??
         "",
     },
-    createdAt: now,
-    updatedAt: now,
+    {
+      apiKey: process.env.BINANCE_2_API_KEY ?? "",
+      apiSecret:
+        process.env.BINANCE_2_API_SECRET ??
+        process.env.BINANCE_2_SECRET_KEY ??
+        "",
+    },
+  ];
+
+  return credentials
+    .map((item, index) => ({ item, index }))
+    .filter(({ item, index }) => index === 0 || item.apiKey || item.apiSecret)
+    .map(({ item, index }) =>
+      createAccount({
+        slug: `binance-${index + 1}`,
+        name: `Binance ${index + 1}`,
+        credentials: item,
+        sharedConfig,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
+}
+
+/** Normalizes account profiles while preserving stable unique slugs. */
+export function normalizeSlowTradingAccounts(params: {
+  accounts: unknown;
+  retiredSlugs?: unknown;
+  sharedConfig?: SlowTradingStorageData["config"];
+}): SlowTradingAccount[] {
+  const items = Array.isArray(params.accounts) ? params.accounts : [];
+  const reserved = new Set(
+    (Array.isArray(params.retiredSlugs) ? params.retiredSlugs : [])
+      .map(normalizeExchangeAccountSlug)
+      .filter(Boolean),
+  );
+  const accounts: SlowTradingAccount[] = [];
+
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Partial<SlowTradingAccount> & { id?: unknown };
+    const requestedSlug = normalizeExchangeAccountSlug(
+      record.slug ?? record.id,
+    );
+    const slug =
+      requestedSlug && !reserved.has(requestedSlug)
+        ? requestedSlug
+        : createUniqueExchangeAccountSlug({
+            name: record.name,
+            reservedSlugs: reserved,
+          });
+    reserved.add(slug);
+    accounts.push(
+      createAccount({
+        slug,
+        name: record.name,
+        description: record.description,
+        credentials: record.credentials,
+        enabled: record.enabled,
+        trading: record.trading,
+        sandbox: record.sandbox,
+        sharedConfig: params.sharedConfig,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+      }),
+    );
+  }
+
+  return accounts.length > 0
+    ? accounts
+    : createDefaultSlowTradingAccounts(params.sharedConfig);
+}
+
+async function readAccountsFile(): Promise<Partial<SlowTradingAccountsFileData>> {
+  if (!(await fs.pathExists(FILES.slow.accounts))) return {};
+  return (await fs.readJSON(
+    FILES.slow.accounts,
+  )) as Partial<SlowTradingAccountsFileData>;
+}
+
+/** Loads all account profiles from their dedicated compact JSON file. */
+export async function loadSlowTradingExchangeAccounts(
+  sharedConfig?: SlowTradingStorageData["config"],
+): Promise<SlowTradingAccount[]> {
+  const raw = await readAccountsFile();
+  const accounts = normalizeSlowTradingAccounts({
+    accounts: raw.accounts,
+    retiredSlugs: raw.retiredSlugs,
+    sharedConfig,
   });
 
-  const account2ApiKey = process.env.BINANCE_2_API_KEY ?? "";
-  const account2ApiSecret =
-    process.env.BINANCE_2_API_SECRET ??
-    process.env.BINANCE_2_SECRET_KEY ??
-    "";
-  const okxApiKey = process.env.OKX_1_API_KEY ?? process.env.OKX_API_KEY ?? "";
-  const okxApiSecret =
-    process.env.OKX_1_API_SECRET ?? process.env.OKX_API_SECRET ?? "";
-  const okxPassphrase =
-    process.env.OKX_1_API_PASSPHRASE ?? process.env.OKX_API_PASSPHRASE ?? "";
-  const tokocryptoApiKey =
-    process.env.TOKOCRYPTO_1_API_KEY ?? process.env.TOKOCRYPTO_API_KEY ?? "";
-  const tokocryptoApiSecret =
-    process.env.TOKOCRYPTO_1_API_SECRET ??
-    process.env.TOKOCRYPTO_API_SECRET ??
-    "";
-
-  const accounts: ExchangeAccount[] = [account1];
-
-  if (hasAnyCredential(account2ApiKey, account2ApiSecret)) {
-    accounts.push(
-      createExchangeAccount({
-        id: "2",
-        type: "binance",
-        name: "Binance 2",
-        credentials: {
-          apiKey: account2ApiKey,
-          apiSecret: account2ApiSecret,
-        },
-        createdAt: now,
-        updatedAt: now,
-      }),
-    );
+  if (!Array.isArray(raw.accounts)) {
+    await saveSlowTradingExchangeAccounts(accounts, sharedConfig);
   }
-
-  if (hasAnyCredential(okxApiKey, okxApiSecret, okxPassphrase)) {
-    accounts.push(
-      createExchangeAccount({
-        id: "okx-1",
-        type: "okx",
-        name: "OKX 1",
-        credentials: {
-          apiKey: okxApiKey,
-          apiSecret: okxApiSecret,
-          passphrase: okxPassphrase,
-        },
-        createdAt: now,
-        updatedAt: now,
-      }),
-    );
-  }
-
-  if (hasAnyCredential(tokocryptoApiKey, tokocryptoApiSecret)) {
-    accounts.push(
-      createExchangeAccount({
-        id: "tokocrypto-1",
-        type: "tokocrypto",
-        name: "Tokocrypto 1",
-        credentials: {
-          apiKey: tokocryptoApiKey,
-          apiSecret: tokocryptoApiSecret,
-        },
-        createdAt: now,
-        updatedAt: now,
-      }),
-    );
-  }
-
   return accounts;
 }
 
-/**
- * Normalizes stored exchange accounts and keeps ids stable for selection.
- */
-export function normalizeExchangeAccounts(value: unknown): ExchangeAccount[] {
-  const items = Array.isArray(value) ? value : [];
-  const seen = new Set<string>();
-  const now = Date.now();
-
-  const accounts = items
-    .map((item, index): ExchangeAccount | null => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
-
-      const record = item as Partial<ExchangeAccount>;
-      const id = normalizeExchangeAccountId(record.id ?? index + 1);
-      if (seen.has(id)) {
-        return null;
-      }
-      seen.add(id);
-
-      const credentials =
-        record.credentials && typeof record.credentials === "object"
-          ? (record.credentials as unknown as Record<string, unknown>)
-          : {};
-
-      const type = normalizeExchangeAccountType(record.type);
-
-      return createExchangeAccount({
-        id,
-        type,
-        name: getString(record.name) || `${type.toUpperCase()} ${index + 1}`,
-        description: getString(record.description),
-        credentials,
-        createdAt:
-          typeof record.createdAt === "number" ? record.createdAt : now,
-        updatedAt:
-          typeof record.updatedAt === "number" ? record.updatedAt : now,
-      });
-    })
-    .filter((account): account is ExchangeAccount => Boolean(account));
-
-  return accounts.length > 0 ? accounts : createDefaultExchangeAccounts();
-}
-
-/**
- * Loads saved exchange accounts from the split accounts file.
- */
-export async function loadSlowTradingExchangeAccounts(
-  fallback?: unknown,
-): Promise<ExchangeAccount[]> {
-  if (await fs.pathExists(FILES.slow.accounts)) {
-    const raw = (await fs.readJSON(
-      FILES.slow.accounts,
-    )) as Partial<SlowTradingAccountsFileData>;
-    return normalizeExchangeAccounts(raw.accounts);
-  }
-
-  const accounts = normalizeExchangeAccounts(fallback);
-  await saveSlowTradingExchangeAccounts(accounts);
-  return accounts;
-}
-
-/**
- * Saves exchange account credentials into the split accounts file.
- */
+/** Saves account profiles and permanently reserves removed account slugs. */
 export async function saveSlowTradingExchangeAccounts(
   accounts: unknown,
-): Promise<ExchangeAccount[]> {
-  const normalized = normalizeExchangeAccounts(accounts);
+  sharedConfig?: SlowTradingStorageData["config"],
+): Promise<SlowTradingAccount[]> {
+  const previous = await readAccountsFile();
+  const previousAccounts = Array.isArray(previous.accounts)
+    ? previous.accounts
+    : [];
+  const requestedSlugs = new Set(
+    (Array.isArray(accounts) ? accounts : [])
+      .map((item) =>
+        item && typeof item === "object"
+          ? normalizeExchangeAccountSlug(
+              (item as { slug?: unknown; id?: unknown }).slug ??
+                (item as { id?: unknown }).id,
+            )
+          : "",
+      )
+      .filter(Boolean),
+  );
+  const retiredSlugs = new Set(
+    (previous.retiredSlugs ?? []).map(normalizeExchangeAccountSlug),
+  );
+
+  for (const account of previousAccounts) {
+    const slug = normalizeExchangeAccountSlug(
+      (account as { slug?: unknown; id?: unknown }).slug ??
+        (account as { id?: unknown }).id,
+    );
+    if (slug && !requestedSlugs.has(slug)) retiredSlugs.add(slug);
+  }
+
+  const normalized = normalizeSlowTradingAccounts({
+    accounts,
+    retiredSlugs: [...retiredSlugs],
+    sharedConfig,
+  });
   const payload: SlowTradingAccountsFileData = {
     accounts: normalized,
+    retiredSlugs: [...retiredSlugs].sort(),
     updatedAt: Date.now(),
   };
-
   await slowTradingJsonFile.write.atomic(FILES.slow.accounts, payload);
-
   return normalized;
 }
 
-/**
- * Gets the selected persisted exchange account when one exists.
- */
+/** Gets the selected account profile from one scoped SLOW storage snapshot. */
 export function getSlowTradingExchangeAccount(
   storage: SlowTradingStorageData,
-): ExchangeAccount | undefined {
-  const accountId = getSlowTradingExchangeAccountId(storage);
-  return storage.runtime.exchangeAccounts.find((item) => item.id === accountId);
+): SlowTradingAccount {
+  return storage.account;
 }
 
-/**
- * Runs with slow trading exchange account using the selected SLOW mode state.
- */
+/** Runs exchange calls with the credentials belonging to the scoped account. */
 export async function runWithSlowTradingExchangeAccount<T>(
   storage: SlowTradingStorageData,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const account =
-    getSlowTradingExchangeAccount(storage) ??
-    getSlowTradingExchangeAccountId(storage);
-  return runWithExchangeAccount(account, fn);
+  return runWithExchangeAccount(storage.account, fn);
 }

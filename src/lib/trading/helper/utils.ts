@@ -6,6 +6,7 @@ import { calculateTradingFee, OrderSide, tokocrypto } from "@lib/exchange/platfo
 import { tradeLog } from "./log";
 import { TRADE_MESSAGE } from "../message";
 import { TradingMode, getExchange, type ExchangeType } from "@/lib/exchange";
+import { getCurrentExchangeAccountSlug } from "@/lib/exchange/account-context";
 
 
 
@@ -46,6 +47,7 @@ export async function getLastPosition({
 
   // Recreate position from last executed order
   currentPosition = {
+    account: getCurrentExchangeAccountSlug(),
     symbol: symbol.split("_")[0],
     executionMode: "live",
     tradingMode: TradingMode.SPOT,

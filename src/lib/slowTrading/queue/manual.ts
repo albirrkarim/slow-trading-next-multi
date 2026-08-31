@@ -44,6 +44,7 @@ export async function createManualSlowTradingQueueItem(
         if (
           queues.safeHaven.some(
             (candidate) =>
+              candidate.account === storage.account.slug &&
               candidate.mode === activeMode && !candidate.scheduleId,
           )
         ) {
@@ -53,6 +54,7 @@ export async function createManualSlowTradingQueueItem(
         }
 
         const created: SlowTradingSafeHavenQueueItem = {
+          account: storage.account.slug,
           id: `safe-haven-manual-${activeMode}-${currentTimeMs}`,
           kind: "safe_haven",
           mode: activeMode,
@@ -76,12 +78,16 @@ export async function createManualSlowTradingQueueItem(
       queues.safeHaven.reduce(
         (total, candidate) =>
           total +
-          (candidate.mode === activeMode ? candidate.remainingUSDT : 0),
+          (candidate.account === storage.account.slug &&
+          candidate.mode === activeMode
+            ? candidate.remainingUSDT
+            : 0),
         0,
       );
     await slowTradingStorage.mode.saveState(
       activeMode,
       storage.modes[activeMode],
+      { account: storage.account.slug },
     );
     return item;
   }
@@ -123,6 +129,7 @@ export async function createManualSlowTradingQueueItem(
       }
 
       const created: SlowTradingWithdrawalQueueItem = {
+        account: schedule.account,
         id: `withdrawal-manual-${schedule.id}-${currentTimeMs}`,
         kind: "withdrawal",
         scheduleId: schedule.id,
@@ -142,6 +149,7 @@ export async function createManualSlowTradingQueueItem(
   );
 
   await slowTradingStorage.data.update({
+    exchangeAccountSlug: schedule.account,
     withdrawal: {
       schedules: storage.runtime.withdrawal.schedules.map((candidate) =>
         candidate.id === schedule.id

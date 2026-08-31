@@ -26,17 +26,17 @@ function updateAttempt(
 
 /** Processes due Safe Haven items before external withdrawals. */
 async function processSafeHavenQueues(currentTimeMs: number): Promise<number> {
-  const storage = await slowTradingStorage.data.load({
-    modeScope: "active",
-  });
-  const activeMode = slowTradingStorage.mode.getActive(storage);
-
   return mutateSlowTradingQueues(
     async (queues) => {
       let processed = 0;
 
       for (let index = queues.safeHaven.length - 1; index >= 0; index -= 1) {
         const item = queues.safeHaven[index];
+        const storage = await slowTradingStorage.data.load({
+          account: item.account,
+          modeScope: "active",
+        });
+        const activeMode = slowTradingStorage.mode.getActive(storage);
         if (
           item.mode !== activeMode ||
           item.nextAttemptAt > currentTimeMs
@@ -98,8 +98,11 @@ async function processSafeHavenQueues(currentTimeMs: number): Promise<number> {
             0,
           ),
         );
-        await slowTradingStorage.mode.saveState(activeMode, modeState);
+        await slowTradingStorage.mode.saveState(activeMode, modeState, {
+          account: storage.account.slug,
+        });
         await slowTradingStorage.logs.appendSafeHaven({
+          account: storage.account.slug,
           mode: activeMode,
           previousUSDT,
           nextUSDT,
@@ -123,9 +126,7 @@ async function processSafeHavenQueues(currentTimeMs: number): Promise<number> {
 
       return processed;
     },
-    {
-      legacySafeHavenMode: activeMode,
-    },
+    {},
   );
 }
 
@@ -142,6 +143,7 @@ async function writeChangedWithdrawalFailure(params: {
   }
 
   await slowTradingStorage.logs.appendWithdrawal({
+    account: params.item.account,
     trigger: "automatic",
     status: "failed",
     mode: "live",
@@ -172,6 +174,7 @@ async function processWithdrawalQueues(
       processed += 1;
       const previousMessage = item.lastMessage;
       const storage = await slowTradingStorage.data.load({
+        account: item.account,
         modeScope: "active",
       });
       const activeMode = slowTradingStorage.mode.getActive(storage);
@@ -241,6 +244,7 @@ async function processWithdrawalQueues(
         });
 
         await slowTradingStorage.logs.appendWithdrawal({
+          account: item.account,
           trigger: "automatic",
           status: "executed",
           mode: "live",

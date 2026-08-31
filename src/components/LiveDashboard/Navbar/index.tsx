@@ -24,7 +24,6 @@ export default function LiveDashboardNavbar({
   tagDescriptions,
 }: LiveDashboardNavbarProps) {
   const {
-    balanceSummary,
     configDraft,
     dayPreview,
     isActive,
@@ -32,7 +31,7 @@ export default function LiveDashboardNavbar({
     closeSettingsDialog,
     openSettingsDialog,
     resetSandbox,
-    resettingSandbox,
+    resettingSandboxAccount,
     runCycle,
     runningCycle,
     saveConfig,
@@ -80,7 +79,6 @@ export default function LiveDashboardNavbar({
     >
 
       <NavbarIdentitySection
-        balanceSummary={balanceSummary}
         configDraft={configDraft}
         dashboardState={dashboardState}
       />
@@ -101,7 +99,7 @@ export default function LiveDashboardNavbar({
         onSettingsDialogClose={closeSettingsDialog}
         onSettingsDialogOpen={openSettingsDialog}
         resetSandbox={resetSandbox}
-        resettingSandbox={resettingSandbox}
+        resettingSandboxAccount={resettingSandboxAccount}
         runCycle={runCycle}
         runningCycle={runningCycle}
         saveConfig={saveConfig}

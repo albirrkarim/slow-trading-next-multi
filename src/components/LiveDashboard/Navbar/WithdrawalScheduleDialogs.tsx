@@ -29,9 +29,13 @@ function createScheduleId(): string {
   return `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function createDefaultSchedule(index: number): WithdrawalScheduleDraft {
+function createDefaultSchedule(
+  index: number,
+  account: string,
+): WithdrawalScheduleDraft {
   return {
     id: "",
+    account,
     name: `Schedule ${index + 1}`,
     enabled: true,
     amountUSDT: "3",
@@ -43,13 +47,14 @@ function createDefaultSchedule(index: number): WithdrawalScheduleDraft {
 }
 
 function WithdrawalScheduleForm(props: {
+  accounts: Array<{ name: string; slug: string }>;
   initialSchedule: WithdrawalScheduleDraft;
   onClose: () => void;
   onSubmit: (schedule: WithdrawalScheduleDraft) => void;
   submitLabel: string;
   walletBook: WithdrawalWalletDraft[];
 }) {
-  const { initialSchedule, onClose, onSubmit, submitLabel, walletBook } = props;
+  const { accounts, initialSchedule, onClose, onSubmit, submitLabel, walletBook } = props;
   const [schedule, setSchedule] = useState<WithdrawalScheduleDraft>({
     ...initialSchedule,
   });
@@ -74,6 +79,7 @@ function WithdrawalScheduleForm(props: {
   const amountUSDT = Number(schedule.amountUSDT);
   const dayOfMonth = Number(schedule.dayOfMonth);
   const canSubmit =
+    schedule.account.length > 0 &&
     schedule.name.trim().length > 0 &&
     amountUSDT > 0 &&
     Number.isInteger(dayOfMonth) &&
@@ -104,6 +110,22 @@ function WithdrawalScheduleForm(props: {
         onChange={(event) => patchSchedule({ name: event.target.value })}
         info="Friendly name, for example Railway Hosting Monthly."
       />
+
+      <SettingsInfoField
+        label="Account"
+        select
+        size="small"
+        fullWidth
+        value={schedule.account}
+        onChange={(event) => patchSchedule({ account: event.target.value })}
+        info="The immutable account whose Safe Haven funds this schedule withdraws."
+      >
+        {accounts.map((account) => (
+          <MenuItem key={account.slug} value={account.slug}>
+            {account.name} ({account.slug})
+          </MenuItem>
+        ))}
+      </SettingsInfoField>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6 }}>
@@ -205,11 +227,12 @@ function WithdrawalScheduleForm(props: {
 }
 
 export function WithdrawalScheduleCreateDialog(props: {
+  accounts: Array<{ name: string; slug: string }>;
   scheduleCount: number;
   walletBook: WithdrawalWalletDraft[];
   onCreate: (schedule: WithdrawalScheduleDraft) => void;
 }) {
-  const { onCreate, scheduleCount, walletBook } = props;
+  const { accounts, onCreate, scheduleCount, walletBook } = props;
 
   return (
     <ButtonDialog
@@ -220,7 +243,11 @@ export function WithdrawalScheduleCreateDialog(props: {
     >
       {(handleClose) => (
         <WithdrawalScheduleForm
-          initialSchedule={createDefaultSchedule(scheduleCount)}
+          accounts={accounts}
+          initialSchedule={createDefaultSchedule(
+            scheduleCount,
+            accounts[0]?.slug ?? "",
+          )}
           onClose={handleClose}
           onSubmit={onCreate}
           submitLabel="Add Schedule"
@@ -232,11 +259,12 @@ export function WithdrawalScheduleCreateDialog(props: {
 }
 
 export function WithdrawalScheduleUpdateDialog(props: {
+  accounts: Array<{ name: string; slug: string }>;
   schedule: WithdrawalScheduleDraft;
   walletBook: WithdrawalWalletDraft[];
   onUpdate: (schedule: WithdrawalScheduleDraft) => void;
 }) {
-  const { onUpdate, schedule, walletBook } = props;
+  const { accounts, onUpdate, schedule, walletBook } = props;
 
   return (
     <ButtonDialog
@@ -254,6 +282,7 @@ export function WithdrawalScheduleUpdateDialog(props: {
     >
       {(handleClose) => (
         <WithdrawalScheduleForm
+          accounts={accounts}
           initialSchedule={schedule}
           onClose={handleClose}
           onSubmit={onUpdate}

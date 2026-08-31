@@ -117,6 +117,7 @@ function position(params: {
   const notionalUsdt = params.averaging ? 300 : 100;
   const marginUsdt = params.averaging ? 60 : 20;
   return {
+    account: "test-account",
     closed: {
       feeUsdt: quantity * (params.closePrice ?? 80) * 0.001,
       message: "normal backtest exit",

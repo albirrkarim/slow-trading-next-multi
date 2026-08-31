@@ -3,22 +3,22 @@ import type { ExchangeType } from "./types";
 import {
   getCurrentExchangeAccount,
   type BinanceCredentials,
-  type ExchangeAccountId,
+  type ExchangeAccountSlug,
   type OKXCredentials,
   type TokocryptoCredentials,
 } from "./account-context";
 
 dotenv.config();
 
-function getAccountEnvName(prefix: string, accountId: ExchangeAccountId) {
-  return `${prefix}_${accountId}`;
+function getAccountEnvName(prefix: string, accountSlug: ExchangeAccountSlug) {
+  return `${prefix}_${accountSlug.replace(/[^a-z0-9]+/gi, "_").toUpperCase()}`;
 }
 
 export function getOKXCredentials(
-  accountId: ExchangeAccountId,
+  accountSlug: ExchangeAccountSlug,
 ): OKXCredentials {
   const account = getCurrentExchangeAccount();
-  if (account?.id === accountId && account.type === "okx") {
+  if (account?.slug === accountSlug && account.type === "okx") {
     return {
       apiKey: account.credentials.apiKey,
       apiSecret: account.credentials.apiSecret,
@@ -26,7 +26,7 @@ export function getOKXCredentials(
     };
   }
 
-  const prefix = getAccountEnvName("OKX", accountId);
+  const prefix = getAccountEnvName("OKX", accountSlug);
 
   const apiKey =
     process.env[`${prefix}_API_KEY`] ?? process.env.OKX_API_KEY ?? "";
@@ -41,17 +41,17 @@ export function getOKXCredentials(
 }
 
 export function getBinanceCredentials(
-  accountId: ExchangeAccountId,
+  accountSlug: ExchangeAccountSlug,
 ): BinanceCredentials {
   const account = getCurrentExchangeAccount();
-  if (account?.id === accountId && account.type === "binance") {
+  if (account?.slug === accountSlug && account.type === "binance") {
     return {
       apiKey: account.credentials.apiKey,
       apiSecret: account.credentials.apiSecret,
     };
   }
 
-  const prefix = getAccountEnvName("BINANCE", accountId);
+  const prefix = getAccountEnvName("BINANCE", accountSlug);
 
   const apiKey =
     process.env[`${prefix}_API_KEY`] ?? process.env.BINANCE_API_KEY ?? "";
@@ -66,17 +66,17 @@ export function getBinanceCredentials(
 }
 
 export function getTokocryptoCredentials(
-  accountId: ExchangeAccountId,
+  accountSlug: ExchangeAccountSlug,
 ): TokocryptoCredentials {
   const account = getCurrentExchangeAccount();
-  if (account?.id === accountId && account.type === "tokocrypto") {
+  if (account?.slug === accountSlug && account.type === "tokocrypto") {
     return {
       apiKey: account.credentials.apiKey,
       apiSecret: account.credentials.apiSecret,
     };
   }
 
-  const prefix = getAccountEnvName("TOKOCRYPTO", accountId);
+  const prefix = getAccountEnvName("TOKOCRYPTO", accountSlug);
 
   const apiKey =
     process.env[`${prefix}_API_KEY`] ?? process.env.TOKOCRYPTO_API_KEY ?? "";
@@ -91,9 +91,9 @@ export function getTokocryptoCredentials(
 
 export function getExchangeCredentials(
   exchangeType: ExchangeType,
-  accountId: ExchangeAccountId,
+  accountSlug: ExchangeAccountSlug,
 ): OKXCredentials | BinanceCredentials | TokocryptoCredentials {
-  if (exchangeType === "okx") return getOKXCredentials(accountId);
-  if (exchangeType === "tokocrypto") return getTokocryptoCredentials(accountId);
-  return getBinanceCredentials(accountId);
+  if (exchangeType === "okx") return getOKXCredentials(accountSlug);
+  if (exchangeType === "tokocrypto") return getTokocryptoCredentials(accountSlug);
+  return getBinanceCredentials(accountSlug);
 }

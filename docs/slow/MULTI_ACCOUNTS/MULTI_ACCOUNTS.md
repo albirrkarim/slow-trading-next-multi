@@ -152,3 +152,73 @@ yes
 I strongly recommend combining accounts within the same mode only—sandbox profit/loss should never stop live entries.
 
 No dont over think it. it will never hapens. just combine it
+
+## E. Persistence and Runtime Contract
+
+Accounts are stored as profiles keyed by an immutable slug. The profile owns
+credentials, the enabled flag, Trading-tab configuration, and Sandbox controls:
+
+```typescript
+interface SlowTradingAccount {
+  slug: string;
+  type: "binance";
+  name: string;
+  description: string;
+  credentials: BinanceCredentials;
+  enabled: boolean;
+  trading: SlowTradingAccountTradingConfig;
+  sandbox: {
+    enabled: boolean;
+    initialBalanceUSDT: number;
+  };
+}
+```
+
+The shared config remains stored once. Live and sandbox memory are stored under
+the account slug, while history remains shared:
+
+```typescript
+interface SlowTradingMemoryFile {
+  accounts: Record<
+    string,
+    {
+      live: SlowTradingModeState;
+      sandbox: SlowTradingModeState;
+    }
+  >;
+}
+```
+
+Every enabled account executes sequentially. A disabled account does not open
+new positions, but it is still executed while it owns an open position so exits,
+averaging, monitoring, and protection continue. An error for one account is
+logged and does not stop later accounts.
+
+Standard Backtest and Quick Backtest execute every enabled account with that
+account's Trading configuration. Each account has its own starting balance and
+simulation memory. The final report combines all closed positions into one
+`positions[]`; every position keeps its account slug and the history table shows
+it. Quick Backtest exposes one starting-balance input per enabled account.
+
+The dashboard loads all accounts and combines balances, open positions, and
+history by default. Trade history provides an account filter. Shared Daily PnL
+uses the combined shared history.
+
+## F. Required Test Codes (TC)
+
+Following `docs/slow/SPECS/_SPECS.md`, the implementation and its tests must use
+these exact TC comments:
+
+- `PROD:MULTI_ACCOUNT_IMMUTABLE_SLUG`
+- `PROD:MULTI_ACCOUNT_STATE_ISOLATION`
+- `PROD:MULTI_ACCOUNT_SANDBOX_ISOLATION`
+- `BOTH:MULTI_ACCOUNT_POSITION_OWNER`
+- `BOTH:MULTI_ACCOUNT_HISTORY_OWNER`
+- `PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE`
+- `PROD:MULTI_ACCOUNT_FAILURE_ISOLATION`
+- `PROD:MULTI_ACCOUNT_DISABLED_ENTRY_ONLY`
+- `PROD:MULTI_ACCOUNT_DELETE_DEPENDENCY_GUARD`
+- `PROD:MULTI_ACCOUNT_WITHDRAWAL_OWNER`
+- `PROD:MULTI_ACCOUNT_COMBINED_DAILY_PNL`
+- `PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD`
+- `BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST`

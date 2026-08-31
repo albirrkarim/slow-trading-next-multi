@@ -21,9 +21,16 @@ export default async function handler(
     }
 
     const currentStorage = await slowTrading.storage.data.load({
+      account: String(req.body?.account || "").trim() || undefined,
       modeScope: "active",
     });
     const activeMode = currentStorage.runtime.sandboxEnabled ? "sandbox" : "live";
+    if (!currentStorage.account.enabled) {
+      res.status(409).json({
+        error: `Account ${currentStorage.account.slug} is disabled for new entries`,
+      });
+      return;
+    }
     const protectionState = currentStorage.modes[activeMode].blackSwan;
     if (blackSwan.state.isProtective(protectionState)) {
       res.status(423).json({
@@ -45,6 +52,7 @@ export default async function handler(
     }
 
     const result = await slowTrading.service.runSlowTradingCycle({
+      account: currentStorage.account.slug,
       ignoreRunnerEnabled: true,
       forceEntrySymbols: [symbol],
     });

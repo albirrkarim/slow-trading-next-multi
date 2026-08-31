@@ -2,10 +2,12 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import type { AdaptiveAveragingConfig } from "@/lib/dynamic";
-import type { ExchangeAccount } from "@/lib/exchange/account-context";
 import type { ExchangeType, TradingMode } from "@/lib/exchange/types";
 import type { DashboardNotificationConfig } from "@/lib/notification/config";
-import type { SlowTradingDashboardState } from "@/lib/slowTrading";
+import type {
+  SlowTradingAccount,
+  SlowTradingDashboardState,
+} from "@/lib/slowTrading";
 import type { TradingModelConfig } from "@/lib/trading/models";
 import type { BlackSwanConfig } from "@/lib/trading/black-swan";
 
@@ -20,6 +22,7 @@ export interface WithdrawalWalletDraft {
 
 export interface WithdrawalScheduleDraft {
   id: string;
+  account: string;
   name: string;
   enabled: boolean;
   amountUSDT: string;
@@ -47,8 +50,8 @@ export interface ConfigDraft {
   name: string;
   description: string;
   decisionEngineVersion: string;
-  exchangeAccountId: string;
-  exchangeAccounts: ExchangeAccount[];
+  exchangeAccountSlug: string;
+  exchangeAccounts: SlowTradingAccount[];
   exchangeType: ExchangeType;
   tradingMode: TradingMode;
   symbolsText: string;

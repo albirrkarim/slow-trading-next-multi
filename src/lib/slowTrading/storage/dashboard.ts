@@ -186,6 +186,76 @@ function toDashboardRuntime(
   };
 }
 
+/** Combines account-scoped dashboard snapshots without mixing persisted state. */
+export async function buildCombinedSlowTradingDashboardStateRealtime(
+  storages: SlowTradingStorageData[],
+): Promise<SlowTradingDashboardState> {
+  if (storages.length === 0) {
+    throw new Error("Cannot build a combined dashboard without accounts.");
+  }
+
+  const states: SlowTradingDashboardState[] = [];
+  for (const storage of storages) {
+    states.push(await buildSlowTradingDashboardStateRealtime(storage));
+  }
+  const primary = states[0];
+  // PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD
+  const history = states
+    .flatMap((state) => state.history)
+    .sort((left, right) => (right.closed?.t ?? 0) - (left.closed?.t ?? 0));
+  const openPositions = states
+    .flatMap((state) => state.openPositions)
+    .sort((left, right) => left.opened.t - right.opened.t);
+  const latestState = states.reduce((latest, state) =>
+    (state.stats.lastRunAt ?? 0) > (latest.stats.lastRunAt ?? 0)
+      ? state
+      : latest,
+  );
+
+  return {
+    ...primary,
+    accountFilter: null,
+    accountSummaries: states.flatMap((state) => state.accountSummaries),
+    balances: {
+      availableQuoteAsset: states.reduce(
+        (total, state) => total + state.balances.availableQuoteAsset,
+        0,
+      ),
+      reservedQuoteAsset: states.reduce(
+        (total, state) => total + state.balances.reservedQuoteAsset,
+        0,
+      ),
+      spendableQuoteAsset: states.reduce(
+        (total, state) => total + state.balances.spendableQuoteAsset,
+        0,
+      ),
+      safeHaven: states.reduce(
+        (total, state) => total + state.balances.safeHaven,
+        0,
+      ),
+      lockedQuoteAsset: states.reduce(
+        (total, state) => total + state.balances.lockedQuoteAsset,
+        0,
+      ),
+      startingBalanceUSDT: states.reduce(
+        (total, state) => total + state.balances.startingBalanceUSDT,
+        0,
+      ),
+    },
+    history,
+    openPositions,
+    stats: {
+      ...latestState.stats,
+      closedTrades: history.length,
+      openPositions: openPositions.length,
+      safeHavenLastScheduledAt: Math.max(
+        0,
+        ...states.map((state) => state.stats.safeHavenLastScheduledAt ?? 0),
+      ),
+    },
+  };
+}
+
 /**
  * Convert persisted storage into the dashboard response model.
  *
@@ -215,6 +285,29 @@ export function buildSlowTradingDashboardState(
   });
 
   return {
+    accountFilter: storage.account.slug,
+    accountSummaries: [
+      {
+        slug: storage.account.slug,
+        name: storage.account.name,
+        enabled: storage.account.enabled,
+        activeMode,
+        balances: {
+          availableQuoteAsset,
+          reservedQuoteAsset,
+          spendableQuoteAsset:
+            slowTradingWatchReserve.balance.getSpendableQuoteAssetValue({
+              quoteAsset: availableQuoteAsset,
+              reservedQuoteAsset,
+              safeHaven,
+            }),
+          safeHaven,
+          lockedQuoteAsset,
+          startingBalanceUSDT:
+            modeState.dynamicTradeMemory.startingBalanceUSDT ?? 0,
+        },
+      },
+    ],
     activeMode,
     globalConfig: {
       volatilityThresholdPct: VOLATILITY_THRESHOLD,
@@ -272,6 +365,25 @@ export async function buildSlowTradingDashboardStateRealtime(
       const reservedQuoteAsset = snapshot.balances.reservedQuoteAsset;
       snapshot = {
         ...snapshot,
+        accountSummaries: snapshot.accountSummaries.map((summary) =>
+          summary.slug === storage.account.slug
+            ? {
+                ...summary,
+                balances: {
+                  ...summary.balances,
+                  availableQuoteAsset: liveQuoteBalance,
+                  spendableQuoteAsset:
+                    slowTradingWatchReserve.balance.getSpendableQuoteAssetValue(
+                      {
+                        quoteAsset: liveQuoteBalance,
+                        reservedQuoteAsset,
+                        safeHaven,
+                      },
+                    ),
+                },
+              }
+            : summary,
+        ),
         balances: {
           ...snapshot.balances,
           availableQuoteAsset: liveQuoteBalance,

@@ -13,6 +13,7 @@ import type {
 } from "@/lib/trading/models";
 import type { VolatilityPoint } from "@/lib/dynamic";
 import { TradingMode } from "@/lib/exchange";
+import { DEFAULT_EXCHANGE_ACCOUNT_SLUG } from "@/lib/exchange/account-context";
 import tradingPosition from "@/lib/trading/position";
 import fs from "fs-extra";
 import type { NextApiRequest, NextApiResponse } from "next";
@@ -399,6 +400,7 @@ export function migrateLegacyPosition(
         : context.defaultExecutionMode;
 
   const position: Position = {
+    account: String(value.account ?? DEFAULT_EXCHANGE_ACCOUNT_SLUG),
     symbol: String(value.symbol),
     executionMode: mode,
     tradingMode: resolveTradingMode(value.tradingMode),

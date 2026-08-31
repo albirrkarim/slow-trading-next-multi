@@ -412,6 +412,8 @@ export interface PositionLastMonitoringStage {
 
 /** Canonical position persisted by production, sandbox, and backtest flows. */
 export interface Position<TFeature = unknown> {
+  /** Immutable SLOW account slug that owns this position. */
+  account: string;
   symbol: string;
   executionMode: PositionExecutionMode;
   tradingMode: TradingMode;

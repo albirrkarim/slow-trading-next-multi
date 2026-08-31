@@ -1,4 +1,5 @@
 import type { ExchangeType, UnifiedOrderParams } from "@/lib/exchange";
+import { getCurrentExchangeAccountSlug } from "@/lib/exchange/account-context";
 import {
   getExchange,
   TradingMode,
@@ -450,6 +451,8 @@ export async function executeEntry({
     // Update position (sandbox simulation)
     if (isTest) {
       modelMemory.positions.push({
+        // BOTH:MULTI_ACCOUNT_POSITION_OWNER
+        account: getCurrentExchangeAccountSlug(),
         symbol,
         executionMode,
         tradingMode,
@@ -616,6 +619,8 @@ export async function executeEntry({
         `;
 
         modelMemory.positions.push({
+          // BOTH:MULTI_ACCOUNT_POSITION_OWNER
+          account: getCurrentExchangeAccountSlug(),
           symbol,
           executionMode,
           tradingMode,

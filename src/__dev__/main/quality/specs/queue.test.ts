@@ -267,6 +267,7 @@ describe("slow specs persistent queues", () => {
       walletBook: [],
       schedules: [
         {
+          account: storage.account.slug,
           id: "monthly",
           name: "Monthly",
           enabled: true,
@@ -324,6 +325,7 @@ describe("slow specs persistent queues", () => {
       walletBook: [],
       schedules: [
         {
+          account: storage.account.slug,
           id: "month-end",
           name: "Month End",
           enabled: true,
@@ -366,6 +368,7 @@ describe("slow specs persistent queues", () => {
       walletBook: [],
       schedules: [
         {
+          account: storage.account.slug,
           id: "hosting",
           name: "Hosting",
           enabled: true,
@@ -462,6 +465,7 @@ describe("slow specs persistent queues", () => {
       ],
       schedules: [
         {
+          account: storage.account.slug,
           id: "schedule-1",
           name: "Monthly",
           enabled: true,

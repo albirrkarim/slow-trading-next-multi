@@ -1,7 +1,7 @@
 import axios, { type AxiosRequestConfig } from "axios";
 import crypto from "crypto";
 import { BASE_URL } from "./config";
-import { getCurrentExchangeAccountId } from "@/lib/exchange/account-context";
+import { getCurrentExchangeAccountSlug } from "@/lib/exchange/account-context";
 import { getOKXCredentials } from "@/lib/exchange/credentials";
 import { tradeLog } from "@/lib/trading/helper/log";
 
@@ -66,8 +66,8 @@ export async function requestPrivate<T>(
   const url = `${domain}${endpoint}`;
   const body = method === "POST" ? JSON.stringify(params) : "";
 
-  const accountId = getCurrentExchangeAccountId();
-  const creds = getOKXCredentials(accountId);
+  const accountSlug = getCurrentExchangeAccountSlug();
+  const creds = getOKXCredentials(accountSlug);
 
   try {
     const timestamp = getTimestamp();

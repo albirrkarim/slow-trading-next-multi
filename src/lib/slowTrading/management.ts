@@ -220,7 +220,9 @@ async function run(params?: RunSlowTradingManagementParams) {
       summary,
       symbols: prepared.symbols.length,
     });
-    await slowTradingStorage.mode.saveState(activeMode, modeState);
+    await slowTradingStorage.mode.saveState(activeMode, modeState, {
+      account: updatedStorage.account.slug,
+    });
 
     const removedByAbsLevelSet = new Set(removedByAbsLevel);
     const removedByMarketCapSet = new Set(removedByMarketCap);

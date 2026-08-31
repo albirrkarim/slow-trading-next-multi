@@ -40,7 +40,7 @@ const configDraft = {
   enableWatchLogic: true,
   entrySignalBypass: false,
   exactLeverage: 2,
-  exchangeAccountId: "1",
+  exchangeAccountSlug: "1",
   exchangeAccounts: [],
   exchangeType: "binance",
   exitSidewaysToFreeWorkersForStrongCandidates: false,

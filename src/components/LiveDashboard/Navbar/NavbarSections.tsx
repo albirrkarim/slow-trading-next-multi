@@ -25,13 +25,15 @@ import SidebarButton from "@/components/ui/SidebarButton";
 
 import UtcClock from "../Feature/UtcClock";
 import SlowTradingReporting from "../Reporting";
-import { getPnlPercentBg } from "./helpers";
+import {
+  computeBalanceSummaryFromBalances,
+  getPnlPercentBg,
+} from "./helpers";
 import NavbarBalanceSummary from "./NavbarBalanceSummary";
 import NavbarStageRuns from "./NavbarStageRuns";
 import NavbarVolatilityThreshold from "./NavbarVolatilityThreshold";
 import SettingsDialog from "./SettingsDialog";
 import type {
-  BalanceSummary,
   ConfigDraft,
   DashboardState,
   DayPreviewSummary,
@@ -40,7 +42,6 @@ import type {
 } from "./types";
 
 interface NavbarIdentitySectionProps {
-  balanceSummary: BalanceSummary;
   configDraft: ConfigDraft | null;
   dashboardState: DashboardState | null;
 }
@@ -101,21 +102,31 @@ function BalanceTooltipText({
 }
 
 export function NavbarIdentitySection({
-  balanceSummary,
   configDraft,
   dashboardState,
 }: NavbarIdentitySectionProps) {
-  const exchangeAccountId =
-    configDraft?.exchangeAccountId ??
-    dashboardState?.runtime.exchangeAccountId ??
-    "1";
-  const exchangeAccountName =
-    configDraft?.exchangeAccounts.find((account) => account.id === exchangeAccountId)
-      ?.name ??
-    dashboardState?.runtime.exchangeAccounts?.find(
-      (account) => account.id === exchangeAccountId,
-    )?.name ??
-    exchangeAccountId;
+  const accountSummaries = dashboardState
+    ? (dashboardState.accountSummaries ?? [
+        {
+          slug: dashboardState.runtime.exchangeAccountSlug,
+          name:
+            dashboardState.runtime.exchangeAccounts.find(
+              (account) =>
+                account.slug === dashboardState.runtime.exchangeAccountSlug,
+            )?.name ?? dashboardState.runtime.exchangeAccountSlug,
+          enabled: true,
+          activeMode: dashboardState.activeMode,
+          balances: dashboardState.balances,
+        },
+      ]).filter((account) => account.enabled)
+    : [];
+  const activeModes = new Set(
+    accountSummaries.map((account) => account.activeMode),
+  );
+  const modeLabel =
+    activeModes.size === 1
+      ? accountSummaries[0]?.activeMode.toUpperCase()
+      : "MULTI MODE";
 
   return (
     <Box
@@ -158,18 +169,9 @@ export function NavbarIdentitySection({
                 configDraft.decisionEngineVersion ||
                 dashboardState.config.decisionEngineVersion ||
                 "decision.v14"
-              ).replace("decision.", "")}{" - "}
-              {dashboardState.activeMode.toUpperCase()}
+              ).replace("decision.", "")}
+              {modeLabel && ` - ${modeLabel}`}
             </Typography>
-            <Chip
-              size="small"
-              icon={<AccountCircleIcon fontSize="small" />}
-              label={exchangeAccountName}
-              variant="outlined"
-              color="default"
-              sx={{ maxWidth: "100%" }}
-              title={`Exchange account ID: ${exchangeAccountId}`}
-            />
             <NavbarVolatilityThreshold
               volatilityThresholdPct={
                 dashboardState.globalConfig.volatilityThresholdPct
@@ -180,7 +182,46 @@ export function NavbarIdentitySection({
         </Box>
       ) : null}
 
-      {dashboardState && <NavbarBalanceSummary balanceSummary={balanceSummary} />}
+      {dashboardState && (
+        <Box
+          sx={{
+            alignItems: "stretch",
+            display: "flex",
+            flex: "1 1 auto",
+            flexWrap: "wrap",
+            gap: 0.75,
+            minWidth: 0,
+          }}
+        >
+          {accountSummaries.map((account) => (
+            <Box
+              key={account.slug}
+              sx={{
+                alignItems: "center",
+                display: "flex",
+                flex: "1 1 220px",
+                gap: 0.5,
+                minWidth: 0,
+              }}
+            >
+              <Chip
+                size="small"
+                icon={<AccountCircleIcon fontSize="small" />}
+                label={`${account.name} · ${account.activeMode.toUpperCase()}`}
+                variant="outlined"
+                color="default"
+                sx={{ maxWidth: 150 }}
+                title={`Account slug: ${account.slug}`}
+              />
+              <NavbarBalanceSummary
+                balanceSummary={computeBalanceSummaryFromBalances(
+                  account.balances,
+                )}
+              />
+            </Box>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -316,8 +357,8 @@ interface NavbarActionsSectionProps {
   onSettingsDialogClose: () => void;
   onSettingsDialogOpen: () => void;
   reinitializing: boolean;
-  resetSandbox: () => Promise<void>;
-  resettingSandbox: boolean;
+  resetSandbox: (accountSlug: string) => Promise<void>;
+  resettingSandboxAccount: string | null;
   runCycle: () => Promise<void>;
   runningCycle: boolean;
   saveConfig: (handleClose?: () => void) => Promise<void>;
@@ -341,7 +382,7 @@ export function NavbarActionsSection({
   onSettingsDialogOpen,
   reinitializing,
   resetSandbox,
-  resettingSandbox,
+  resettingSandboxAccount,
   runCycle,
   runningCycle,
   saveConfig,
@@ -450,7 +491,7 @@ export function NavbarActionsSection({
             onReinitialize={onReinitialize}
             reinitializing={reinitializing}
             resetSandbox={resetSandbox}
-            resettingSandbox={resettingSandbox}
+            resettingSandboxAccount={resettingSandboxAccount}
             saveConfig={saveConfig}
             savingConfig={savingConfig}
             setConfigDraft={setConfigDraft}

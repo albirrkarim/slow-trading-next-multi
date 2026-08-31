@@ -11,6 +11,7 @@ function createPosition(): Position {
     pctAlloc: 2,
   });
   return {
+    account: "test-account",
     symbol: "SUI",
     executionMode: "sandbox",
     tradingMode: TradingMode.FUTURES,
