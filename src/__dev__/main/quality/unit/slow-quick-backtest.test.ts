@@ -7,6 +7,7 @@ import { createTestPosition } from "../fixtures/position";
 
 const slowQuickBacktest = slowTrading.quickBacktest;
 const {
+  combineQuickGrowthSeries,
   combineQuickSimulationSeries,
   calculateQuickPositionMetrics,
   calculateQuickSharpeRatio,
@@ -138,6 +139,40 @@ describe("slow quick backtest report helpers", () => {
     );
   });
 
+  it("combines sparse account growth without duplicate-time spikes", () => {
+    const makeResult = (series: Array<{ time: number; level: number }>) => ({
+      growthOvertimeSeries: {
+        names: ["Current Asset"],
+        series: [series],
+      },
+    });
+    const result = combineQuickGrowthSeries([
+      {
+        result: makeResult([
+          { time: 1, level: 100 },
+          { time: 2, level: 80 },
+          { time: 2, level: 90 },
+          { time: 4, level: 110 },
+        ]),
+      },
+      {
+        result: makeResult([
+          { time: 1, level: 200 },
+          { time: 3, level: 210 },
+          { time: 4, level: 220 },
+        ]),
+      },
+    ]);
+
+    // BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST
+    expect(result.series[0]).toEqual([
+      { time: 1, level: 300 },
+      { time: 2, level: 290 },
+      { time: 3, level: 300 },
+      { time: 4, level: 330 },
+    ]);
+  });
+
   it("converts simulated closed positions into read-only quick trade history rows", () => {
     const result = positionsToQuickTradeHistory({
       INJ: [
@@ -195,6 +230,9 @@ describe("slow quick backtest report helpers", () => {
   it("exposes the grouped quick backtest API", () => {
     // PROD:QUICK_BACKTEST_VISIBLE_VPOINTS
     expect(slowQuickBacktest.run).toBeTypeOf("function");
+    expect(slowQuickBacktest.report.combineQuickGrowthSeries).toBe(
+      combineQuickGrowthSeries,
+    );
     expect(slowQuickBacktest.report.combineQuickSimulationSeries).toBe(
       combineQuickSimulationSeries,
     );

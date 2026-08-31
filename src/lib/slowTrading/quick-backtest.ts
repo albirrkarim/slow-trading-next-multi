@@ -680,25 +680,60 @@ function minPositive(values: number[]) {
   return positive.length > 0 ? Math.min(...positive) : 0;
 }
 
-function combineQuickGrowthSeries(
-  accountResults: Array<{ result: SlowQuickBacktestResult }>,
+/**
+ * Combines sparse account growth series using the latest value per timestamp.
+ * Each account's last known value is carried forward until its next snapshot.
+ */
+export function combineQuickGrowthSeries(
+  accountResults: Array<{
+    result: Pick<SlowQuickBacktestResult, "growthOvertimeSeries">;
+  }>,
 ): SlowQuickBacktestResult["growthOvertimeSeries"] {
   const names = accountResults[0]?.result.growthOvertimeSeries.names ?? [];
   return {
     names,
     series: names.map((_, seriesIndex) => {
-      const byTime = new Map<number, LeveledMarkers>();
-      for (const account of accountResults) {
+      const pointsByAccount = accountResults.map((account) => {
+        const latestByTime = new Map<number, LeveledMarkers>();
         for (const point of
           account.result.growthOvertimeSeries.series[seriesIndex] ?? []) {
-          const current = byTime.get(point.time);
-          byTime.set(point.time, {
-            ...point,
-            level: (current?.level ?? 0) + point.level,
-          });
+          if (Number.isFinite(point.time) && Number.isFinite(point.level)) {
+            latestByTime.set(point.time, point);
+          }
         }
-      }
-      return [...byTime.values()].sort((left, right) => left.time - right.time);
+
+        return [...latestByTime.values()].sort(
+          (left, right) => left.time - right.time,
+        );
+      });
+      const times = [
+        ...new Set(
+          pointsByAccount.flatMap((points) =>
+            points.map((point) => point.time),
+          ),
+        ),
+      ].sort((left, right) => left - right);
+      const cursors = pointsByAccount.map(() => 0);
+      const latestLevels = pointsByAccount.map(() => 0);
+
+      // BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST
+      return times.map((time) => {
+        pointsByAccount.forEach((points, accountIndex) => {
+          while (
+            cursors[accountIndex] < points.length &&
+            points[cursors[accountIndex]].time <= time
+          ) {
+            latestLevels[accountIndex] =
+              points[cursors[accountIndex]].level;
+            cursors[accountIndex] += 1;
+          }
+        });
+
+        return {
+          time,
+          level: latestLevels.reduce((total, level) => total + level, 0),
+        };
+      });
     }),
   };
 }
@@ -873,6 +908,7 @@ async function run(
 const slowQuickBacktest = {
   run,
   report: {
+    combineQuickGrowthSeries,
     combineQuickSimulationSeries,
     growthOvertimeToQuickSeries,
     calculatePositionDrawdownPct,

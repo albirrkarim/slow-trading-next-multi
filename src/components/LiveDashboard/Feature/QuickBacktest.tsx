@@ -18,7 +18,6 @@ import { useSnackbar } from "notistack";
 
 import type { LeveledMarkers } from "@/components/LiveDashboard/converter";
 import { endpoints } from "@/components/endpoints";
-import { TradesTableSection } from "@/components/LiveDashboard/Reporting/TradesTableSection";
 import MultiLineTimelined from "@/components/ui/Chart/MultiLineTimelined";
 import ButtonDialog from "@/components/ui/ButtonDialog";
 import type { VolatilityPoint } from "@/lib/dynamic";
@@ -37,6 +36,7 @@ import DailyPnlCalendarDialog, {
   type DailyPnlCalendarTrade,
 } from "../Shared/DailyPnlCalendarDialog";
 import { buildQuickBacktestTradeCountBySymbol } from "./quick-backtest-trade-count";
+import QuickBacktestTradeHistory from "./QuickBacktestTradeHistory";
 import {
   Cell,
   Pie,
@@ -365,15 +365,11 @@ export default function QuickBacktest({
                 variant="outlined"
               >
                 {() => (
-                  <Box sx={{ p: 1 }}>
-                    <TradesTableSection
-                      exchangeType={dashboardState.config.exchangeType}
-                      history={result?.tradeHistory ?? []}
-                      mode="sandbox"
-                      onHistoryChange={() => undefined}
-                      readOnly
-                    />
-                  </Box>
+                  <QuickBacktestTradeHistory
+                    accounts={enabledAccounts}
+                    exchangeType={dashboardState.config.exchangeType}
+                    history={result?.tradeHistory ?? []}
+                  />
                 )}
               </ButtonDialog>
               <ButtonDialog

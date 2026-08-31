@@ -68,7 +68,7 @@ const metricTooltipSlotProps = {
 };
 
 const TRADE_TIME_FORMAT = "DD MMM YYYY HH:mm";
-const TRADE_TIME_SAME_MONTH_FORMAT = "DD HH:mm";
+const TRADE_TIME_SAME_MONTH_FORMAT = "DD MMM HH:mm";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOLD_DURATION_COLOR_RANGES: RangedValueColorRange[] = [
   {
