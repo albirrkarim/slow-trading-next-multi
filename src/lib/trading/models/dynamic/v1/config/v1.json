@@ -1,0 +1,25 @@
+{
+  "symbols": [
+    "SUI",
+    "SOL",
+    "HBAR"
+  ],
+  "range": "2year",
+  "config": {
+    "symbols": [
+      "SUI",
+      "SOL",
+      "HBAR"
+    ],
+    "range": "2year",
+    "upToDateKlines": false,
+    "upToDateDecisionBacktest": false,
+    "name": "SLOW Trade",
+    "description": "",
+    "startingBalanceUSDT": 600,
+    "modelConfig": {
+      "takeProfitPercent": 5,
+      "useStopLossPlus": false
+    }
+  }
+}

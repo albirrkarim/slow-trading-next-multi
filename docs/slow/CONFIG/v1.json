@@ -1,0 +1,200 @@
+{
+  "name": "Seasonal Trade",
+  "description": "Designed to be high speed making money, just for short term staying\n\nInclude at least 12 & 6 month yo coins (New coin allowed), max level 5, dying is okay, maximize movement Speed Tier 1, 2, no meme",
+  "decisionEngineVersion": "decision.v20",
+  "exchangeAccountId": "1",
+  "exchangeAccounts": [
+    {
+      "id": "1",
+      "type": "binance",
+      "name": "Account 2",
+      "description": "Medium Money, Medium Risk\nalbirkarim2@gmail.com",
+      "credentials": {
+        "apiKey": "DNlPVJWrl8WtLRrCNW0YpQqMWO6Gv1wwzXGG8WwopYr7AgcBJcxY14kkFLlboyQ4",
+        "apiSecret": "k3y7JeI87XY7y5tKW07SyOYcYyZiebOHJuUUrF9I73SKRoTNOS4XhGfJZdCgeQSb"
+      },
+      "createdAt": 1785026268901,
+      "updatedAt": 1785031093050
+    },
+    {
+      "id": "2",
+      "type": "binance",
+      "name": "Main Account 1",
+      "description": "Big money, it can withdraw\nalbirkarim1@gmail.com",
+      "credentials": {
+        "apiKey": "l8hFA7TQ0volxtyl919ZzKLJb7aTh5pnleGizTAuL7rKQTUzHA5yFztLJRcewYYy",
+        "apiSecret": "VlEKgikBT4M9h8ZmcWFFQebfztcWhGCUJhKKdKielfQQiCJ8lLNLRpcb5aSYf3is"
+      },
+      "createdAt": 1785031105966,
+      "updatedAt": 1785031127936
+    },
+    {
+      "id": "3",
+      "type": "binance",
+      "name": "Account 3",
+      "description": "Account for experiment, small money\nalbirrkarim@gmai.com",
+      "credentials": {
+        "apiKey": "x8C4ROchzi93oCR7QKnfWNoXvSH2LjZuASx1Q22tvfyvQspEkRXstiWn63o3QWVz",
+        "apiSecret": "GGkJRUECecBakRdryJhma4AcsP4zMUN8EDg2GOIk5pWfgSoMfLjB9RcvnZBpYyYo"
+      },
+      "createdAt": 1785031133182,
+      "updatedAt": 1785031163253
+    }
+  ],
+  "exchangeType": "binance",
+  "tradingMode": "futures",
+  "symbolsText": "AAVE, AGLD, APT, ARB, C, COMP, FIDA, FLUID, FOLKS, IOTX, KITE, LIT, MET, MON, MOVR, PARTI, PROVE, Q, SPX, STORJ, TRUST, TURTLE, USUAL, W, WAL, ZRO",
+  "modelConfig": {
+    "takeProfitPercent": 2,
+    "stopLossPercent": 15,
+    "volatilityTargetStopLossPercent": 1,
+    "useStopLossPlus": true,
+    "stopLossPlusTrigger": 0.5,
+    "safeUSDTPerMonth": 10,
+    "safePercentPerMonth": 0,
+    "minimalAssetOnTrade": 600
+  },
+  "runnerEnabled": true,
+  "autoEntryEnabled": true,
+  "autoExitEnabled": true,
+  "entrySignalBypass": false,
+  "autoRemoveSymbolAbsLevel": 6,
+  "autoRemoveSymbolMinMarketCapUSD": 0,
+  "autoRemoveSymbolMinPrice": 0,
+  "autoRemoveSymbolMinVPointPct": 15,
+  "pnlHistoryBucketMinutes": 30,
+  "speedupStageIntervalMinutes": 1,
+  "speedupStagePositivePnlThresholdPct": 1.5,
+  "speedupStageNegativePnlThresholdPct": 1.5,
+  "speedupStageTakeProfitOffsetPct": 0.5,
+  "standardMonitoringStageIntervalMinutes": 5,
+  "managementStageIntervalMinutes": 5,
+  "captureEntryStageIntervalMinutes": 5,
+  "notification": {
+    "telegram": {
+      "enabled": true,
+      "types": [
+        {
+          "id": "NOTIF_HIGH_VOLATILITY",
+          "params": {
+            "level": 4
+          }
+        },
+        {
+          "id": "NOTIF_ENTRY_FAILED"
+        },
+        {
+          "id": "NOTIF_EXIT_FAILED"
+        },
+        {
+          "id": "NOTIF_AVERAGE_FAILED"
+        },
+        {
+          "id": "NOTIF_ERROR"
+        },
+        {
+          "id": "NOTIF_MANAGEMENT_ACTION",
+          "params": {
+            "add": true,
+            "remove": true
+          }
+        },
+        {
+          "id": "NOTIF_STALE_POSITION",
+          "params": {
+            "hour": 1
+          }
+        }
+      ]
+    },
+    "email": {
+      "enabled": true,
+      "types": [
+        {
+          "id": "NOTIF_ENTRY_FAILED"
+        },
+        {
+          "id": "NOTIF_EXIT_FAILED"
+        },
+        {
+          "id": "NOTIF_AVERAGE_FAILED"
+        },
+        {
+          "id": "NOTIF_ERROR"
+        },
+        {
+          "id": "NOTIF_MANAGEMENT_ACTION",
+          "params": {
+            "add": true,
+            "remove": true
+          }
+        },
+        {
+          "id": "NOTIF_STALE_POSITION",
+          "params": {
+            "hour": 1
+          }
+        }
+      ]
+    }
+  },
+  "sandboxEnabled": true,
+  "sandboxInitialBalanceUSDT": "400",
+  "safeHavenUSDT": "0",
+  "withdrawalAutoEnabled": true,
+  "withdrawalSchedules": [
+    {
+      "id": "schedule-1783859333738-e2cc5f",
+      "name": "Railway hosting",
+      "enabled": true,
+      "amountUSDT": "10",
+      "dayOfMonth": "9",
+      "walletId": "wallet-1783859265569-c5w3fb",
+      "targetNetwork": "BSC",
+      "targetWalletAddress": "0xacb220DAd53F7B69F2051718c0ef4EcFEA32deA4",
+      "lastQueuedAt": 1784207163017
+    },
+    {
+      "id": "schedule-1784207789459-lq1uzn",
+      "name": "Gajian",
+      "enabled": true,
+      "amountUSDT": "5",
+      "dayOfMonth": "25",
+      "walletId": "wallet-1784207134207-h0c4aw",
+      "targetNetwork": "BSC",
+      "targetWalletAddress": "0xe4e5a67982bf2845db830c76b479acfd288321d4"
+    }
+  ],
+  "withdrawalWalletBook": [
+    {
+      "id": "wallet-1783859265569-c5w3fb",
+      "name": "Redotpay",
+      "network": "BSC",
+      "address": "0xacb220DAd53F7B69F2051718c0ef4EcFEA32deA4"
+    },
+    {
+      "id": "wallet-1784207134207-h0c4aw",
+      "name": "Tokocrypto",
+      "network": "BSC",
+      "address": "0xe4e5a67982bf2845db830c76b479acfd288321d4"
+    }
+  ],
+  "enableWatchLogic": true,
+  "watchReserveLevels": 1,
+  "watchMaxNextAveragingLevels": 3,
+  "watchReservePctAlloc": 2,
+  "adaptiveAveraging": {
+    "enabled": false,
+    "maxMultiplier": 5,
+    "minProjectedProfitPct": 2
+  },
+  "averagingRescueProjectionGuardEnabled": false,
+  "exitSidewaysToFreeWorkersForStrongCandidates": true,
+  "maxEntryBased24HourVolPct": 0.2,
+  "maxEntryMarginPct": 0,
+  "maxEntryMargin": 6,
+  "maxOpenPositions": 0,
+  "minActionableAbsoluteLevel": 1,
+  "maxLeverage": 3,
+  "exactLeverage": 5
+}

@@ -1,0 +1,35 @@
+{
+  "assetDrawdown": {
+    "avg": 0.03628851858002302,
+    "max": 0.24695277133230023
+  },
+  "bearMarketProofRatio": 98.98866814778343,
+  "gainPercent": 267826.8797317467,
+  "avgMonthlyProfitRatio": 45.394386395211306,
+  "emptyBalance": {
+    "min": 300000,
+    "minHuman": "5 minutes",
+    "avg": 205636363.63636363,
+    "avgHuman": "2 days",
+    "max": 1426500000,
+    "maxHuman": "17 days"
+  },
+  "balanceTradesScore": 0.6655146218004299,
+  "capitalEfficiency": {
+    "hrTimeWeighted": 0.1624122580159924,
+    "turnoverPerDay": 0.10266793291346661,
+    "hrScore": 0.8375877419840076,
+    "trScore": 0.10266793291346661,
+    "score": 0.47012783744873715,
+    "meta": {
+      "totalTimeMs": 152617500000,
+      "avgTradableAsset": 160758.16208988274,
+      "samples": 621
+    }
+  },
+  "monthlyGain": {
+    "min": 0.9235156094473136,
+    "avg": 14.773035637187903,
+    "max": 55.7197264268811
+  }
+}
