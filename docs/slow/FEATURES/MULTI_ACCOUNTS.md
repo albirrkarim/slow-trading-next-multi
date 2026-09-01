@@ -198,10 +198,44 @@ interface SlowTradingMemoryFile {
 }
 ```
 
-Every enabled account executes sequentially. A disabled account does not open
-new positions, but it is still executed while it owns an open position so exits,
-averaging, monitoring, and protection continue. An error for one account is
-logged and does not stop later accounts.
+Production uses one Binance market, one trading mode, and one configured coin
+list. A cycle therefore has exactly two scopes; there are no separate market
+groups:
+
+```text
+BEGIN CYCLE
+
+prepare shared Binance public market data once
+
+for each eligible account sequentially
+  apply account guards and decisions
+  refresh private balance and positions
+  execute account orders
+  persist isolated account state
+
+END CYCLE
+```
+
+The shared phase owns account-independent public inputs such as volatility,
+market-time klines, price normalization, prices, funding rates, and 24-hour
+volume. Volatility symbols remain sequential inside this single shared phase to
+limit Binance request pressure. The optimization removes duplicate work across
+accounts; it does not replace controlled requests with a parallel burst.
+
+Every enabled account executes in deterministic sequential order after shared
+preparation. A disabled account does not open new positions, but it is still
+executed while it owns an open position so exits, averaging, monitoring, and
+protection continue. An account error is logged and does not stop later
+accounts. Empty monitoring stages perform no public or private exchange I/O
+when no eligible account owns an applicable open position.
+
+Black Swan follows the same boundary: BTC and market-breadth evidence is
+captured once, then applied sequentially to each eligible account. Application
+remains per account because Black Swan state, recovery acknowledgement,
+positions, emergency exits, and notifications are independently persisted.
+
+See [`docs/slow/SPECS/CYCLE.md`](../SPECS/CYCLE.md) for the detailed production
+cycle architecture and execution boundaries.
 
 Standard Backtest and Quick Backtest execute every enabled account with that
 account's Trading configuration. Each account has its own starting balance and
@@ -237,8 +271,14 @@ these exact TC comments:
 - `BOTH:MULTI_ACCOUNT_POSITION_OWNER`
 - `BOTH:MULTI_ACCOUNT_HISTORY_OWNER`
 - `PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE`
+- `PROD:MULTI_ACCOUNT_SHARED_MARKET_PREPARATION`
+- `PROD:MULTI_ACCOUNT_SEQUENTIAL_ACCOUNT_EXECUTION`
+- `PROD:MULTI_ACCOUNT_PRIVATE_STATE_ISOLATION`
 - `PROD:MULTI_ACCOUNT_FAILURE_ISOLATION`
 - `PROD:MULTI_ACCOUNT_DISABLED_ENTRY_ONLY`
+- `PROD:EMPTY_MONITORING_NO_MARKET_IO`
+- `PROD:BLACK_SWAN_SHARED_EVIDENCE`
+- `PROD:BLACK_SWAN_ACCOUNT_STATE_FAN_OUT`
 - `PROD:MULTI_ACCOUNT_DELETE_DEPENDENCY_GUARD`
 - `PROD:MULTI_ACCOUNT_WITHDRAWAL_OWNER`
 - `PROD:MULTI_ACCOUNT_COMBINED_DAILY_PNL`
