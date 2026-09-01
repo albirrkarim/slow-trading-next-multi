@@ -208,7 +208,8 @@ describe("SLOW multi-account specs", () => {
 
   it("documents executable guards for sequencing and account dependencies", async () => {
     const [
-      cycle,
+      cycleAccounts,
+      cycleDailyPnl,
       accountApi,
       quickBacktest,
       withdrawal,
@@ -216,7 +217,8 @@ describe("SLOW multi-account specs", () => {
       history,
       standardBacktest,
     ] = await Promise.all([
-      fs.readFile("src/lib/slowTrading/cycle.ts", "utf8"),
+      fs.readFile("src/lib/slowTrading/cycle/accounts.ts", "utf8"),
+      fs.readFile("src/lib/slowTrading/cycle/daily-pnl.ts", "utf8"),
       fs.readFile("src/pages/api/slow-trading/exchange-accounts.ts", "utf8"),
       fs.readFile("src/lib/slowTrading/quick-backtest.ts", "utf8"),
       fs.readFile("src/lib/slowTrading/withdrawal.ts", "utf8"),
@@ -226,11 +228,11 @@ describe("SLOW multi-account specs", () => {
     ]);
 
     // PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE
-    expect(cycle).toContain("PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE");
+    expect(cycleAccounts).toContain("PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE");
     // PROD:MULTI_ACCOUNT_FAILURE_ISOLATION
-    expect(cycle).toContain("PROD:MULTI_ACCOUNT_FAILURE_ISOLATION");
+    expect(cycleAccounts).toContain("PROD:MULTI_ACCOUNT_FAILURE_ISOLATION");
     // PROD:MULTI_ACCOUNT_DISABLED_ENTRY_ONLY
-    expect(cycle).toContain("PROD:MULTI_ACCOUNT_DISABLED_ENTRY_ONLY");
+    expect(cycleAccounts).toContain("PROD:MULTI_ACCOUNT_DISABLED_ENTRY_ONLY");
     // PROD:MULTI_ACCOUNT_DELETE_DEPENDENCY_GUARD
     expect(accountApi).toContain("PROD:MULTI_ACCOUNT_DELETE_DEPENDENCY_GUARD");
     // BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST
@@ -240,7 +242,7 @@ describe("SLOW multi-account specs", () => {
     // PROD:MULTI_ACCOUNT_WITHDRAWAL_OWNER
     expect(withdrawal).toContain("PROD:MULTI_ACCOUNT_WITHDRAWAL_OWNER");
     // PROD:MULTI_ACCOUNT_COMBINED_DAILY_PNL
-    expect(cycle).toContain("PROD:MULTI_ACCOUNT_COMBINED_DAILY_PNL");
+    expect(cycleDailyPnl).toContain("PROD:MULTI_ACCOUNT_COMBINED_DAILY_PNL");
     // PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD
     expect(dashboard).toContain("PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD");
     // BOTH:MULTI_ACCOUNT_HISTORY_OWNER

@@ -78,7 +78,7 @@ describe("slow specs notification", () => {
       // PROD:NOTIF_DAILY_PNL_LIMIT
       'key: "NOTIF_DAILY_PNL_LIMIT"',
     ]);
-    await expectSourceContains("src/lib/slowTrading/cycle.ts", [
+    await expectSourceContains("src/lib/slowTrading/cycle/finalize.ts", [
       "dailyPerformance.notify",
     ]);
   });
