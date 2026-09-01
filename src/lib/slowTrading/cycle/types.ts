@@ -2,7 +2,10 @@ import type { TradeSettings } from "@/components/api/dynamic";
 import type { EntryRecommendation } from "@/lib/brain";
 import type { DynamicTradeMemory, VolatilityPoint } from "@/lib/dynamic";
 import type { ExchangeType, getExchange, TradingMode } from "@/lib/exchange";
-import type { TradingModelConfig, TradingModelMemory } from "@/lib/trading/models";
+import type {
+  TradingModelConfig,
+  TradingModelMemory,
+} from "@/lib/trading/models";
 import type { TradingReturn } from "@/lib/trading";
 import type { DailyPnlLimitEvaluation } from "../daily-pnl-limit";
 import type {
@@ -17,6 +20,7 @@ import type {
   SlowTradingStage,
   SlowTradingStorageData,
 } from "../types";
+import type { SlowTradingSharedMarketSnapshot } from "./shared-market";
 
 export interface RunSlowTradingCycleParams {
   /** Immutable account slug. Omit to run every eligible account sequentially. */
@@ -76,6 +80,7 @@ export interface SlowTradingCycleRuntime extends SlowTradingCyclePlan {
   performanceEntries: SlowTradingCyclePerformanceEntry[];
   profiler: SlowTradingCycleProfiler;
   reports: TradingReturn[];
+  sharedMarket: SlowTradingSharedMarketSnapshot;
   skippedEntrySignals: SlowTradingSkippedEntrySignal[];
   storage: SlowTradingStorageData;
   symbols: string[];

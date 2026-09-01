@@ -36,6 +36,9 @@ import type {
 } from "./types";
 import slowTradingWatchReserve from "./watch-reserve";
 import slowTradingDailyPnlLimit from "./daily-pnl-limit";
+import slowTradingCycleSharedMarket, {
+  type SlowTradingSharedMarketSnapshot,
+} from "./cycle/shared-market";
 
 /**
  * Remove entry signals for symbols that already have open positions.
@@ -211,6 +214,7 @@ export async function buildSlowTradingSignals(params?: {
   storage?: SlowTradingStorageData;
   bypass?: boolean;
   forceEntrySymbols?: string[];
+  marketSnapshot?: SlowTradingSharedMarketSnapshot;
   symbols?: string[];
   performance?: SlowTradingCycleProfiler;
 }) {
@@ -236,7 +240,11 @@ export async function buildSlowTradingSignals(params?: {
       const requestedSymbols = params?.symbols
         ? new Set(
             params.symbols
-              .map((symbol) => String(symbol || "").trim().toUpperCase())
+              .map((symbol) =>
+                String(symbol || "")
+                  .trim()
+                  .toUpperCase(),
+              )
               .filter(Boolean),
           )
         : null;
@@ -269,15 +277,23 @@ export async function buildSlowTradingSignals(params?: {
         throw new Error(modelMemoryRes.error);
       }
 
-      await profiler.time("signals.assignVolatility", () =>
-        assignVolatility(
+      if (params?.marketSnapshot) {
+        slowTradingCycleSharedMarket.memory.attachVolatility({
           modelMemoryMap,
+          snapshot: params.marketSnapshot,
           symbols,
-          exchangeType,
-          tradingMode,
-          storage.config.minActionableAbsoluteLevel,
-        ),
-      );
+        });
+      } else {
+        await profiler.time("signals.assignVolatility", () =>
+          assignVolatility(
+            modelMemoryMap,
+            symbols,
+            exchangeType,
+            tradingMode,
+            storage.config.minActionableAbsoluteLevel,
+          ),
+        );
+      }
 
       for (const symbol of forcedEntrySymbols) {
         if (modelMemoryMap[symbol]) {
@@ -289,13 +305,12 @@ export async function buildSlowTradingSignals(params?: {
         let entrySignals = getManualEntrySignal(
           modelMemoryMap,
           storage.config.minActionableAbsoluteLevel,
-        ).filter(
-          (signal) =>
-            forcedEntrySymbols.has(
-              String(signal.symbol || "")
-                .trim()
-                .toUpperCase(),
-            ),
+        ).filter((signal) =>
+          forcedEntrySymbols.has(
+            String(signal.symbol || "")
+              .trim()
+              .toUpperCase(),
+          ),
         );
 
         entrySignals = filterSignalsWithoutOpenPositions(
@@ -321,7 +336,7 @@ export async function buildSlowTradingSignals(params?: {
         return {
           storage,
           activeMode,
-          currentTimeMs: Date.now(),
+          currentTimeMs: params?.marketSnapshot?.currentTimeMs ?? Date.now(),
           entrySignals,
           modelMemoryMap,
           symbols,
@@ -338,18 +353,19 @@ export async function buildSlowTradingSignals(params?: {
         defaultTradingMode: tradingMode,
       });
 
-      let currentTimeMs = Date.now();
+      let currentTimeMs = params?.marketSnapshot?.currentTimeMs ?? Date.now();
       const firstSymbol = symbols[0];
-      const klines = firstSymbol
-        ? await profiler.time("signals.currentTimeKlines", () =>
-            exchange.getKlines({
-              symbol: `${firstSymbol}_USDT`,
-              interval: "5m",
-              marketType,
-              simpleTime: "10minute",
-            }),
-          )
-        : [];
+      const klines =
+        firstSymbol && !params?.marketSnapshot
+          ? await profiler.time("signals.currentTimeKlines", () =>
+              exchange.getKlines({
+                symbol: `${firstSymbol}_USDT`,
+                interval: "5m",
+                marketType,
+                simpleTime: "10minute",
+              }),
+            )
+          : [];
 
       const currentKline = klines.at(-1);
       if (currentKline) {
@@ -380,45 +396,53 @@ export async function buildSlowTradingSignals(params?: {
           modelMemoryMap[symbol].volatility?.lastVolatility ?? [];
       }
 
-      await profiler.time("signals.priceNorm", () =>
-        dynamic.priceNorm.generateInitial({
+      if (params?.marketSnapshot) {
+        dynamicTradeMemory.priceNormMapOverTime = slowTradingShared.clone(
+          params.marketSnapshot.priceNormMapOverTime,
+        );
+      } else {
+        await profiler.time("signals.priceNorm", () =>
+          dynamic.priceNorm.generateInitial({
+            currentTimeMs,
+            symbols,
+            startTime: currentTimeMs,
+            dynamicTradeMemory,
+            useCache: true,
+            exchangeType,
+            volatilityMap: volatilityPointsMap,
+          }),
+        );
+
+        brain.algorithms.runtime.updatePriceNorm({
           currentTimeMs,
-          symbols,
-          startTime: currentTimeMs,
-          dynamicTradeMemory,
-          useCache: true,
-          exchangeType,
-          volatilityMap: volatilityPointsMap,
-        }),
-      );
+          dynamicTradeMemory: {
+            priceNormMapOverTime: dynamicTradeMemory.priceNormMapOverTime,
+          },
+          volatilityPointsMap,
+        });
 
-      brain.algorithms.runtime.updatePriceNorm({
-        currentTimeMs,
-        dynamicTradeMemory: {
-          priceNormMapOverTime: dynamicTradeMemory.priceNormMapOverTime,
-        },
-        volatilityPointsMap,
-      });
-
-      await profiler.time("signals.writePriceNorm", () =>
-        fs.writeJSON(
-          FILES.slow.priceNormMapOverTime(exchangeType),
-          dynamicTradeMemory.priceNormMapOverTime,
-        ),
-      );
+        await profiler.time("signals.writePriceNorm", () =>
+          fs.writeJSON(
+            FILES.slow.priceNormMapOverTime(exchangeType),
+            dynamicTradeMemory.priceNormMapOverTime,
+          ),
+        );
+      }
 
       const evaluation = await profiler.time("signals.recommendations", () =>
         brain.algorithms.recommendations.evaluate({
           decisionEngineVersion:
             storage.config.decisionEngineVersion ?? "decision.v14",
           exchange,
+          latestKlineBySymbol: params?.marketSnapshot
+            ? slowTradingShared.clone(params.marketSnapshot.latestKlineBySymbol)
+            : undefined,
           marketType,
           volatilityPointsMap: slowTradingShared.clone(volatilityPointsMap),
           priceNormMapOverTime: dynamicTradeMemory.priceNormMapOverTime,
           modelMemoryMap,
           bypass,
-          minActionableAbsoluteLevel:
-            storage.config.minActionableAbsoluteLevel,
+          minActionableAbsoluteLevel: storage.config.minActionableAbsoluteLevel,
         }),
       );
       let entrySignals = evaluation.recommendations;
@@ -440,9 +464,8 @@ export async function buildSlowTradingSignals(params?: {
         const manualEntrySignals = getManualEntrySignal(
           modelMemoryMap,
           storage.config.minActionableAbsoluteLevel,
-        ).filter(
-          (signal) =>
-            forcedEntrySymbols.has(String(signal.symbol || "").toUpperCase()),
+        ).filter((signal) =>
+          forcedEntrySymbols.has(String(signal.symbol || "").toUpperCase()),
         );
 
         if (manualEntrySignals.length > 0) {
@@ -509,9 +532,8 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
   const { storage, activeMode, modelMemoryMap } = result;
   const modeState = storage.modes[activeMode];
   const diagnosticTimeMs = result.currentTimeMs ?? Date.now();
-  const dailyPnlPeriod = slowTradingDailyPnlLimit.period.getCurrentUtc(
-    diagnosticTimeMs,
-  );
+  const dailyPnlPeriod =
+    slowTradingDailyPnlLimit.period.getCurrentUtc(diagnosticTimeMs);
   const runtimeControlBlock = !storage.runtime.runnerEnabled
     ? {
         code: "RUNNER_DISABLED",
@@ -583,57 +605,56 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
   const marketType = resolveMarketTypeForTradingMode(
     storage.config.tradingMode,
   );
-  const marketContext =
-    await slowTradingStorage.account.runWithExchangeAccount(
-      storage,
-      async () => {
-        const exchange = getExchange(storage.config.exchangeType, {
-          defaultTradingMode: storage.config.tradingMode,
-        });
-        const feeRate =
-          exchange.getFees().getTotalFeePercent({
-            side: "buy",
-            currency: "USDT",
-            type: modelConfig.orderType ?? "taker",
-          }) / 100;
-        const [entries, volumeSnapshot] = await Promise.all([
-          Promise.all(
-            [...signalSymbols].map(async (symbol) => {
-              try {
-                const kline = await entryMarket.currentKline.getLatest({
-                  exchange,
-                  symbol,
-                  tradingMode: storage.config.tradingMode,
-                });
-                return [symbol, kline] as const;
-              } catch {
-                return [symbol, undefined] as const;
-              }
-            }),
-          ),
-          (storage.config.maxEntryBased24HourVolPct ?? 0.2) > 0
-            ? slowTradingMarketVolume.snapshot
-                .refresh({
-                  exchangeType: storage.config.exchangeType,
+  const marketContext = await slowTradingStorage.account.runWithExchangeAccount(
+    storage,
+    async () => {
+      const exchange = getExchange(storage.config.exchangeType, {
+        defaultTradingMode: storage.config.tradingMode,
+      });
+      const feeRate =
+        exchange.getFees().getTotalFeePercent({
+          side: "buy",
+          currency: "USDT",
+          type: modelConfig.orderType ?? "taker",
+        }) / 100;
+      const [entries, volumeSnapshot] = await Promise.all([
+        Promise.all(
+          [...signalSymbols].map(async (symbol) => {
+            try {
+              const kline = await entryMarket.currentKline.getLatest({
+                exchange,
+                symbol,
+                tradingMode: storage.config.tradingMode,
+              });
+              return [symbol, kline] as const;
+            } catch {
+              return [symbol, undefined] as const;
+            }
+          }),
+        ),
+        (storage.config.maxEntryBased24HourVolPct ?? 0.2) > 0
+          ? slowTradingMarketVolume.snapshot
+              .refresh({
+                exchangeType: storage.config.exchangeType,
+                marketType,
+                symbols: result.symbols,
+              })
+              .catch(() =>
+                slowTradingMarketVolume.snapshot.read(
+                  storage.config.exchangeType,
                   marketType,
-                  symbols: result.symbols,
-                })
-                .catch(() =>
-                  slowTradingMarketVolume.snapshot.read(
-                    storage.config.exchangeType,
-                    marketType,
-                  ),
-                )
-            : Promise.resolve(null),
-        ]);
+                ),
+              )
+          : Promise.resolve(null),
+      ]);
 
-        return {
-          feeRate,
-          latestEntryKlineBySymbol: new Map(entries),
-          volume24hBySymbol: volumeSnapshot?.volumes ?? {},
-        };
-      },
-    );
+      return {
+        feeRate,
+        latestEntryKlineBySymbol: new Map(entries),
+        volume24hBySymbol: volumeSnapshot?.volumes ?? {},
+      };
+    },
+  );
   const activePositions = modeState.tradeSettings.flatMap(
     (item) => item.model_memory.positions ?? [],
   );
@@ -670,8 +691,7 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
   const autoRemovableSymbols = new Set(
     slowTradingAutoRemoveSymbols.find.byAbsLevel({
       configuredSymbols: storage.config.symbols,
-      thresholdAbsLevel:
-        storage.runtime.autoRemoveSymbolAbsLevel ?? 0,
+      thresholdAbsLevel: storage.runtime.autoRemoveSymbolAbsLevel ?? 0,
       modelMemoryMap,
     }),
   );
@@ -721,8 +741,7 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
       const preExecutionReason = getEntryPreExecutionBlockReason({
         symbol,
         configuredSymbols: storage.config.symbols,
-        minActionableAbsoluteLevel:
-          storage.config.minActionableAbsoluteLevel,
+        minActionableAbsoluteLevel: storage.config.minActionableAbsoluteLevel,
         modeState,
         modelMemoryMap,
       });
@@ -747,8 +766,7 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
           `${storage.runtime.autoRemoveSymbolAbsLevel}).`;
         status = "blocked";
       } else if (signalSymbols.has(symbol)) {
-        const currentKline =
-          marketContext.latestEntryKlineBySymbol.get(symbol);
+        const currentKline = marketContext.latestEntryKlineBySymbol.get(symbol);
         const entrySignal = entrySignalBySymbol.get(symbol);
         const currentPrice = Number.parseFloat(currentKline?.[4] ?? "");
         if (!currentKline || !Number.isFinite(currentPrice)) {
@@ -786,14 +804,13 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
             reason = lateEntryGuard.reason!;
             status = "blocked";
           } else {
-            const requestedMarginUsdt =
-              entryFunding.requestedMargin.resolve({
-                bypass: storage.runtime.entrySignalBypass,
-                exchangeType: storage.config.exchangeType,
-                investAmount,
-                maxUsdtEntry: entrySignal.maxUsdtEntry,
-                probability: entrySignal.amountProbab,
-              });
+            const requestedMarginUsdt = entryFunding.requestedMargin.resolve({
+              bypass: storage.runtime.entrySignalBypass,
+              exchangeType: storage.config.exchangeType,
+              investAmount,
+              maxUsdtEntry: entrySignal.maxUsdtEntry,
+              probability: entrySignal.amountProbab,
+            });
 
             if (
               !storage.runtime.entrySignalBypass &&
@@ -819,13 +836,10 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
                 feeRate: marketContext.feeRate,
                 leverage,
                 requestedMarginUsdt,
-                reservedQuoteAsset:
-                  dynamicTradeMemory.reservedQuoteAsset ?? 0,
-                spendableQuoteAsset:
-                  dynamicTradeMemory.quoteAsset ?? 0,
+                reservedQuoteAsset: dynamicTradeMemory.reservedQuoteAsset ?? 0,
+                spendableQuoteAsset: dynamicTradeMemory.quoteAsset ?? 0,
                 tradingMode: storage.config.tradingMode,
-                volume24h:
-                  marketContext.volume24hBySymbol[symbol],
+                volume24h: marketContext.volume24hBySymbol[symbol],
               });
 
               if (fundingPlan.blockReason) {
@@ -833,8 +847,7 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
                 reason = fundingPlan.blockReason;
                 status = "blocked";
               } else {
-                code =
-                  engineDiagnosticBySymbol.get(symbol)?.code ?? "READY";
+                code = engineDiagnosticBySymbol.get(symbol)?.code ?? "READY";
                 const engineReason =
                   engineDiagnosticBySymbol.get(symbol)?.reason ??
                   "Ready: selected by the decision engine for entry.";

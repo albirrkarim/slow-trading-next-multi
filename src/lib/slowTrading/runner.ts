@@ -121,10 +121,16 @@ export class SlowTradingRunner {
       tradeLog.debug(
         `starting risk sentinel | mode=${snapshot.activeMode} exchange=${snapshot.config.exchangeType}`,
       );
+      // PROD:BLACK_SWAN_SHARED_EVIDENCE
+      const evidence = await slowTradingBlackSwan.evidence.capture({ storage });
       // PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE
       for (const account of storage.runtime.exchangeAccounts) {
         try {
-          const result = await slowTradingBlackSwan.production.run(account.slug);
+          // PROD:BLACK_SWAN_ACCOUNT_STATE_FAN_OUT
+          const result = await slowTradingBlackSwan.account.apply({
+            account: account.slug,
+            evidence,
+          });
           if (result.forceExitSymbols.length > 0) {
             await this.enqueue(() =>
               slowTradingCycle.run({
@@ -164,7 +170,10 @@ export class SlowTradingRunner {
     if (stage === "capture-entry") {
       for (const account of storage.runtime.exchangeAccounts) {
         try {
-          await slowTradingQueue.scheduler.synchronize(Date.now(), account.slug);
+          await slowTradingQueue.scheduler.synchronize(
+            Date.now(),
+            account.slug,
+          );
         } catch (error) {
           // PROD:MULTI_ACCOUNT_FAILURE_ISOLATION
           tradeLog.error(

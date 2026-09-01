@@ -1,7 +1,6 @@
 # Production Cycle Architecture
 
-Status: target architecture. The current production cycle does not yet fully
-implement every requirement in this document.
+Status: implemented production architecture.
 
 This document defines how SLOW production stages should share public market
 work across accounts while preserving account isolation for balances,
@@ -31,6 +30,18 @@ END CYCLE
 
 Public market analysis is shared. Private account decisions, exchange calls,
 orders, and persistence remain isolated and sequential.
+
+The implementation is organized under `src/lib/slowTrading/cycle/`:
+
+- `coordinator.ts` owns shared preparation and sequential account iteration.
+- `index.ts` executes one account against the prepared shared snapshot and
+  exposes the queued public cycle API.
+- `shared-market.ts` owns the per-cycle public market snapshot and lazy shared
+  price, funding-rate, and 24-hour-volume loaders.
+- `accounts.ts` loads eligible account scopes and combines their results.
+- `planning.ts`, `entry.ts`, `monitoring.ts`, and `finalize.ts` retain focused
+  account-stage responsibilities.
+- `types.ts` defines the plan, runtime, request, and result boundaries.
 
 ## 1. Design Principle
 
@@ -63,9 +74,9 @@ for each eligible account in deterministic order
 end stage cycle
 ```
 
-Planned TC: `PROD:MULTI_ACCOUNT_SHARED_MARKET_PREPARATION`
+TC: `PROD:MULTI_ACCOUNT_SHARED_MARKET_PREPARATION`
 
-Planned TC: `PROD:MULTI_ACCOUNT_SEQUENTIAL_ACCOUNT_EXECUTION`
+TC: `PROD:MULTI_ACCOUNT_SEQUENTIAL_ACCOUNT_EXECUTION`
 
 ## 2. One Shared Market Context
 
@@ -101,6 +112,11 @@ The shared snapshot must be immutable after publication. Account processing
 must not mutate the snapshot or attach account-owned state to it. Mutable model
 memory must be cloned or built per account.
 
+Volatility assignment remains sequential inside the one shared preparation.
+That deliberate sequencing limits Binance request pressure; the efficiency gain
+comes from removing duplicate account-wide runs, not from bursting symbol
+requests in parallel.
+
 ## 4. Account-Specific Execution
 
 The account phase owns:
@@ -125,7 +141,7 @@ parallelizing private trading calls.
 Exit must retain priority over averaging. An account must never average a
 position that the same pass just closed.
 
-Planned TC: `PROD:MULTI_ACCOUNT_PRIVATE_STATE_ISOLATION`
+TC: `PROD:MULTI_ACCOUNT_PRIVATE_STATE_ISOLATION`
 
 ## 5. Stage Eligibility Before Market I/O
 
@@ -141,7 +157,7 @@ When no eligible account owns an open position for the stage:
 - Persist the required compact successful empty-stage statistics for each
   account whose stage pass must be recorded.
 
-Planned TC: `PROD:EMPTY_MONITORING_NO_MARKET_IO`
+TC: `PROD:EMPTY_MONITORING_NO_MARKET_IO`
 
 ### 5.2 Capture Entry
 
@@ -190,9 +206,9 @@ blackSwan.evidence.capture(...)
 blackSwan.account.apply(...)
 ```
 
-Planned TC: `PROD:BLACK_SWAN_SHARED_EVIDENCE`
+TC: `PROD:BLACK_SWAN_SHARED_EVIDENCE`
 
-Planned TC: `PROD:BLACK_SWAN_ACCOUNT_STATE_FAN_OUT`
+TC: `PROD:BLACK_SWAN_ACCOUNT_STATE_FAN_OUT`
 
 ## 7. Freshness and Execution Boundaries
 

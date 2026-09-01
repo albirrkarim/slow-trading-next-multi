@@ -8,7 +8,6 @@ import slowTradingBalance from "../balance";
 import slowTradingBlackSwan from "../black-swan";
 import slowTradingDailyPnlLimit from "../daily-pnl-limit";
 import slowTradingMarket from "../market";
-import slowTradingMarketVolume from "../market-volume";
 import slowTradingNotifications from "../notifications";
 import slowTradingShared from "../shared";
 import slowTradingSignals from "../signals";
@@ -37,9 +36,9 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
     profiler,
     reports,
     shouldAutoEnter,
+    sharedMarket,
     skippedEntrySignals,
     storage,
-    symbols,
     tradeSettings,
     tradingMode,
     volatilityPointsMap,
@@ -97,15 +96,13 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
     if (forcedEntrySymbols.size === 0) {
       dailyPnlLimitThresholdUsdt =
         latestEntryGuardStorage.runtime.autoEntryDailyPnlLimitUSDT;
-      dailyPnlLimitEvaluation = await profiler.time(
-        "cycle.dailyPnlLimit",
-        () =>
-          slowTradingCycleDailyPnl.evaluateCurrent({
-            currentTimeMs: Date.now(),
-            mode: activeMode,
-            modeState,
-            thresholdUsdt: dailyPnlLimitThresholdUsdt,
-          }),
+      dailyPnlLimitEvaluation = await profiler.time("cycle.dailyPnlLimit", () =>
+        slowTradingCycleDailyPnl.evaluateCurrent({
+          currentTimeMs: Date.now(),
+          mode: activeMode,
+          modeState,
+          thresholdUsdt: dailyPnlLimitThresholdUsdt,
+        }),
       );
       modeState.dailyPnlLimitState = {
         d: dailyPnlLimitEvaluation.day,
@@ -117,8 +114,9 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
             symbol: String(entrySignal.symbol || "")
               .trim()
               .toUpperCase(),
-            reason:
-              slowTradingDailyPnlLimit.guard.describe(dailyPnlLimitEvaluation),
+            reason: slowTradingDailyPnlLimit.guard.describe(
+              dailyPnlLimitEvaluation,
+            ),
           });
         }
         entrySignals = [];
@@ -156,22 +154,9 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
     entrySignals.length > 0 &&
     (storage.config.maxEntryBased24HourVolPct ?? 0.2) > 0
   ) {
-    try {
-      const snapshot = await profiler.time("cycle.volume24hRefresh", () =>
-        slowTradingMarketVolume.snapshot.refresh({
-          exchangeType,
-          marketType,
-          symbols,
-        }),
-      );
-      volume24hBySymbol = snapshot.volumes;
-    } catch (error) {
-      tradeLog.error("[slow-trading] failed to refresh 24h volume", error);
-      const snapshot = await profiler.time("cycle.volume24hRead", () =>
-        slowTradingMarketVolume.snapshot.read(exchangeType, marketType),
-      );
-      volume24hBySymbol = snapshot?.volumes ?? {};
-    }
+    volume24hBySymbol = await profiler.time("cycle.volume24hRefresh", () =>
+      sharedMarket.volume24h.get(),
+    );
   }
 
   if (forcedEntrySymbols.size > 0) {

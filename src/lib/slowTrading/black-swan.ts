@@ -27,6 +27,12 @@ export interface SlowTradingBlackSwanRunResult {
   previous: BlackSwanState;
 }
 
+export interface SlowTradingBlackSwanEvidence {
+  breadthCandlesBySymbol?: Record<string, UnifiedKline[]>;
+  btcCandles: UnifiedKline[];
+  capturedAtMs: number;
+}
+
 function normalizeSymbol(value: unknown): string {
   return String(value ?? "")
     .trim()
@@ -164,24 +170,25 @@ function markEmergencyExits(params: {
   return Array.from(symbols).filter(Boolean);
 }
 
-/** Evaluates and persists one independent Risk Sentinel pass. */
-async function runSlowTradingBlackSwan(
-  account?: string,
-): Promise<SlowTradingBlackSwanRunResult> {
-  const runStartedAt = Date.now();
+/** Captures market-wide BTC and breadth evidence once for all accounts. */
+async function captureEvidence(params: {
+  storage: SlowTradingStorageData;
+}): Promise<SlowTradingBlackSwanEvidence> {
   const currentTimeMs = Date.now();
-  const initial = await slowTradingStorage.data.load({
-    account,
-    modeScope: "active",
-  });
-  const mode = slowTradingStorage.mode.getActive(initial);
-  const config = blackSwan.config.normalize(initial.config.blackSwan);
-  const previous = blackSwan.state.normalize(initial.modes[mode].blackSwan);
+  const mode = slowTradingStorage.mode.getActive(params.storage);
+  const config = blackSwan.config.normalize(params.storage.config.blackSwan);
+  const previous = blackSwan.state.normalize(
+    params.storage.modes[mode].blackSwan,
+  );
 
   let btcCandles: UnifiedKline[] = [];
   try {
     btcCandles = config.enabled
-      ? await getCandles({ currentTimeMs, storage: initial, symbol: "BTC" })
+      ? await getCandles({
+          currentTimeMs,
+          storage: params.storage,
+          symbol: "BTC",
+        })
       : [];
   } catch {
     // The pure detector converts unavailable/stale BTC data into fail-closed WATCH.
@@ -194,23 +201,37 @@ async function runSlowTradingBlackSwan(
     btcCandles,
     mode,
   });
+  const breadthCandlesBySymbol =
+    config.enabled && isBtcWarning(firstPass, params.storage)
+      ? await getBreadthCandles({
+          currentTimeMs,
+          storage: params.storage,
+          symbols: params.storage.config.symbols,
+        })
+      : undefined;
+
   if (blackSwan.state.isProtective(firstPass)) {
     protectiveModes.add(mode);
   } else {
     protectiveModes.delete(mode);
   }
-  const breadthCandlesBySymbol =
-    config.enabled && isBtcWarning(firstPass, initial)
-      ? await getBreadthCandles({
-          currentTimeMs,
-          storage: initial,
-          symbols: initial.config.symbols,
-        })
-      : undefined;
 
+  return {
+    breadthCandlesBySymbol,
+    btcCandles,
+    capturedAtMs: currentTimeMs,
+  };
+}
+
+/** Applies shared evidence to one account's independent state and positions. */
+async function applyEvidence(params: {
+  account: string;
+  evidence: SlowTradingBlackSwanEvidence;
+}): Promise<SlowTradingBlackSwanRunResult> {
+  const applyStartedAtMs = Date.now();
   const committed = await slowTradingMutationQueue.runExclusive(async () => {
     const latest = await slowTradingStorage.data.load({
-      account: initial.account.slug,
+      account: params.account,
       modeScope: "active",
     });
     const latestMode = slowTradingStorage.mode.getActive(latest);
@@ -220,9 +241,9 @@ async function runSlowTradingBlackSwan(
     const latestNext = blackSwan.detector.evaluate({
       config: blackSwan.config.normalize(latest.config.blackSwan),
       previous: latestPrevious,
-      currentTimeMs,
-      btcCandles,
-      breadthCandlesBySymbol,
+      currentTimeMs: params.evidence.capturedAtMs,
+      btcCandles: params.evidence.btcCandles,
+      breadthCandlesBySymbol: params.evidence.breadthCandlesBySymbol,
       mode: latestMode,
     });
     latest.modes[latestMode].blackSwan = latestNext;
@@ -232,7 +253,7 @@ async function runSlowTradingBlackSwan(
       state: latestNext,
     });
     const completedAt = Date.now();
-    const durationMs = Math.max(0, completedAt - runStartedAt);
+    const durationMs = Math.max(0, completedAt - applyStartedAtMs);
     const summary =
       `${latestMode} risk sentinel ${latestNext.status} (${latestNext.reason})` +
       ` | emergency exits ${forceExitSymbols.length}`;
@@ -248,7 +269,8 @@ async function runSlowTradingBlackSwan(
       "risk-sentinel": {
         t: completedAt,
         ms: durationMs,
-        symbols: 1 + Object.keys(breadthCandlesBySymbol ?? {}).length,
+        symbols:
+          1 + Object.keys(params.evidence.breadthCandlesBySymbol ?? {}).length,
         reports: forceExitSymbols.length,
         summary,
         performance: latest.modes[latestMode].lastRunPerformance,
@@ -263,20 +285,29 @@ async function runSlowTradingBlackSwan(
       forceExitSymbols,
       mode: latestMode,
       next: latestNext,
+      notification: latest.runtime.notification,
       previous: latestPrevious,
     };
   });
 
+  const { notification, ...result } = committed;
   await slowTradingNotifications.blackSwanAction.notify({
-    ...committed,
-    notification: initial.runtime.notification,
+    ...result,
+    notification,
   });
-  if (blackSwan.state.isProtective(committed.next)) {
-    protectiveModes.add(committed.mode);
-  } else {
-    protectiveModes.delete(committed.mode);
-  }
-  return committed;
+  return result;
+}
+
+/** Compatibility entry point for an explicitly scoped one-account pass. */
+async function runSlowTradingBlackSwan(
+  account?: string,
+): Promise<SlowTradingBlackSwanRunResult> {
+  const storage = await slowTradingStorage.data.load({
+    account,
+    modeScope: "active",
+  });
+  const evidence = await captureEvidence({ storage });
+  return applyEvidence({ account: storage.account.slug, evidence });
 }
 
 /** Records operator acknowledgement for the active mode's current recovery. */
@@ -297,6 +328,12 @@ async function acknowledgeSlowTradingBlackSwanRecovery() {
 }
 
 const slowTradingBlackSwan = {
+  account: {
+    apply: applyEvidence,
+  },
+  evidence: {
+    capture: captureEvidence,
+  },
   recovery: {
     acknowledge: acknowledgeSlowTradingBlackSwanRecovery,
   },

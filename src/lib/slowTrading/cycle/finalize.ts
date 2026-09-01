@@ -1,9 +1,7 @@
 import dynamic from "@/lib/dynamic";
 import { TradingMode } from "@/lib/exchange";
-import exchangeFundingRate from "@/lib/exchange/funding-rate";
 import { tradeLog } from "@/lib/trading/helper/log";
 import slowTradingCache from "../cache";
-import slowTradingMarket from "../market";
 import slowTradingNotifications from "../notifications";
 import slowTradingPositions from "../positions";
 import slowTradingReporting from "../reporting";
@@ -11,10 +9,7 @@ import slowTradingShared from "../shared";
 import slowTradingStageRun from "../stage-run";
 import slowTradingStorage from "../storage";
 import slowTradingWatchReserve from "../watch-reserve";
-import type {
-  SlowTradingCycleResult,
-  SlowTradingCycleRuntime,
-} from "./types";
+import type { SlowTradingCycleResult, SlowTradingCycleRuntime } from "./types";
 
 /** Refreshes reporting data and persists the completed cycle in dependency order. */
 async function execute(
@@ -28,7 +23,6 @@ async function execute(
     exchange,
     exchangeType,
     isSandbox,
-    marketType,
     modeState,
     monitoringReasonByPosition,
     monitoringStage,
@@ -38,6 +32,7 @@ async function execute(
     shouldAutoEnter,
     shouldAutoExit,
     shouldMonitor,
+    sharedMarket,
     skippedEntrySignals,
     stage,
     storage,
@@ -118,20 +113,12 @@ async function execute(
       reportingSymbols.length > 0
         ? await Promise.all([
             profiler.time("cycle.latestPrices", () =>
-              slowTradingMarket.price.buildLatestBySymbol({
-                exchange,
-                marketType,
-                symbols: reportingSymbols,
-              }),
+              sharedMarket.prices.get("reporting", reportingSymbols),
             ),
             tradingMode === TradingMode.FUTURES
               ? profiler
                   .time("cycle.fundingRates", () =>
-                    exchangeFundingRate.latest.map({
-                      exchangeType,
-                      tradingMode,
-                      symbols: reportingSymbols,
-                    }),
+                    sharedMarket.fundingRates.get(reportingSymbols),
                   )
                   .catch((fundingError) => {
                     // Funding is supplementary monitoring data. Never let a

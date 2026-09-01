@@ -28,6 +28,43 @@ type SlowTradingCyclePlanningResult =
   | { completed: SlowTradingCycleResult; plan?: never }
   | { completed?: never; plan: SlowTradingCyclePlan };
 
+function createSpeedupCriteria(storage: SlowTradingStorageData) {
+  return {
+    negativePnlThresholdPct:
+      storage.runtime.speedupStageNegativePnlThresholdPct,
+    positivePnlThresholdPct:
+      storage.runtime.speedupStagePositivePnlThresholdPct,
+    takeProfitOffsetPct: storage.runtime.speedupStageTakeProfitOffsetPct,
+    takeProfitPercent: storage.config.modelConfig.takeProfitPercent,
+    useStopLossPlus: storage.config.modelConfig.useStopLossPlus,
+    volatilityThresholdPct: VOLATILITY_THRESHOLD,
+  };
+}
+
+/** Selects account-owned symbols before any shared public market request. */
+function selectStageSymbols(params: {
+  modeState: SlowTradingModeState;
+  stage?: RunSlowTradingCycleParams["stage"];
+  storage: SlowTradingStorageData;
+}): string[] | null {
+  if (!params.stage) {
+    return null;
+  }
+
+  const criteria = createSpeedupCriteria(params.storage);
+  return slowTradingStages.symbols.select({
+    configuredSymbols: params.storage.config.symbols,
+    modeState: params.modeState,
+    speedupNegativePnlThresholdPct: criteria.negativePnlThresholdPct,
+    speedupPositivePnlThresholdPct: criteria.positivePnlThresholdPct,
+    speedupTakeProfitOffsetPct: criteria.takeProfitOffsetPct,
+    stage: params.stage,
+    takeProfitPercent: criteria.takeProfitPercent,
+    useStopLossPlus: criteria.useStopLossPlus,
+    volatilityThresholdPct: criteria.volatilityThresholdPct,
+  });
+}
+
 /** Resolves stage ownership, runtime controls, and early cycle completion. */
 async function prepare(params: {
   activeMode: SlowTradingMode;
@@ -42,32 +79,12 @@ async function prepare(params: {
     blackSwan.state.isProtective(params.modeState.blackSwan) ||
     slowTradingBlackSwan.runtime.isProtectionPending(params.activeMode);
   const stage = params.request?.stage;
-  const speedupCriteria = {
-    negativePnlThresholdPct:
-      params.storage.runtime.speedupStageNegativePnlThresholdPct,
-    positivePnlThresholdPct:
-      params.storage.runtime.speedupStagePositivePnlThresholdPct,
-    takeProfitOffsetPct:
-      params.storage.runtime.speedupStageTakeProfitOffsetPct,
-    takeProfitPercent: params.storage.config.modelConfig.takeProfitPercent,
-    useStopLossPlus: params.storage.config.modelConfig.useStopLossPlus,
-    volatilityThresholdPct: VOLATILITY_THRESHOLD,
-  };
-  const stageSymbols = stage
-    ? slowTradingStages.symbols.select({
-        configuredSymbols: params.storage.config.symbols,
-        modeState: params.modeState,
-        speedupNegativePnlThresholdPct:
-          speedupCriteria.negativePnlThresholdPct,
-        speedupPositivePnlThresholdPct:
-          speedupCriteria.positivePnlThresholdPct,
-        speedupTakeProfitOffsetPct: speedupCriteria.takeProfitOffsetPct,
-        stage,
-        takeProfitPercent: speedupCriteria.takeProfitPercent,
-        useStopLossPlus: speedupCriteria.useStopLossPlus,
-        volatilityThresholdPct: speedupCriteria.volatilityThresholdPct,
-      })
-    : null;
+  const speedupCriteria = createSpeedupCriteria(params.storage);
+  const stageSymbols = selectStageSymbols({
+    modeState: params.modeState,
+    stage,
+    storage: params.storage,
+  });
   const monitoringStage =
     stage === "speedup"
       ? "speedup"
@@ -230,9 +247,13 @@ async function prepare(params: {
     params.storage.modes[params.activeMode] = params.modeState;
     // Empty heartbeats use one memory write and intentionally do not time
     // that write, avoiding recursive persistence just to record its duration.
-    await slowTradingStorage.mode.saveState(params.activeMode, params.modeState, {
-      account: params.storage.account.slug,
-    });
+    await slowTradingStorage.mode.saveState(
+      params.activeMode,
+      params.modeState,
+      {
+        account: params.storage.account.slug,
+      },
+    );
 
     return {
       completed: {
@@ -271,6 +292,9 @@ async function prepare(params: {
 
 const slowTradingCyclePlanning = {
   prepare,
+  symbols: {
+    select: selectStageSymbols,
+  },
 } as const;
 
 export default slowTradingCyclePlanning;

@@ -1,9 +1,6 @@
-import {
-  assignModelMemory,
-  assignVolatility,
-} from "@/components/api/production/utils";
+import { assignModelMemory } from "@/components/api/production/utils";
 import type { EntryRecommendation } from "@/lib/brain";
-import dynamic, { type VolatilityPoint } from "@/lib/dynamic";
+import dynamic from "@/lib/dynamic";
 import { getExchange, TradingMode } from "@/lib/exchange";
 import { resolveMarketTypeForTradingMode } from "@/lib/exchange/utils";
 import { tradeLog } from "@/lib/trading/helper/log";
@@ -12,19 +9,20 @@ import slowTradingExchangeSync from "../exchange-sync";
 import slowTradingMarket from "../market";
 import slowTradingMutationQueue from "../mutation-queue";
 import slowTradingNotifications from "../notifications";
-import slowTradingPerformance, {
-  type SlowTradingCyclePerformanceEntry,
-} from "../performance";
+import slowTradingPerformance from "../performance";
 import slowTradingPositions from "../positions";
 import slowTradingShared from "../shared";
 import slowTradingSidewaysExit from "../exit-sideways";
 import slowTradingSignals from "../signals";
 import slowTradingStorage from "../storage";
-import slowTradingCycleAccounts from "./accounts";
+import slowTradingCycleCoordinator, {
+  type SlowTradingCycleExecutionContext,
+} from "./coordinator";
 import slowTradingCycleEntry from "./entry";
 import slowTradingCycleFinalize from "./finalize";
 import slowTradingCycleMonitoring from "./monitoring";
 import slowTradingCyclePlanning from "./planning";
+import slowTradingCycleSharedMarket from "./shared-market";
 import type {
   RunSlowTradingCycleParams,
   SlowTradingCycleResult,
@@ -32,26 +30,20 @@ import type {
 } from "./types";
 
 /** Execute one serialized SLOW cycle and persist its active-mode result. */
-async function executeSlowTradingCycle(
-  params?: RunSlowTradingCycleParams,
+async function executeSlowTradingAccountCycle(
+  params: RunSlowTradingCycleParams,
+  context: SlowTradingCycleExecutionContext,
 ): Promise<SlowTradingCycleResult> {
-  // A. Load the current active mode and runtime controls.
-  const cycleStartedAt = Date.now();
-  const performanceEntries: SlowTradingCyclePerformanceEntry[] = [];
+  const cycleStartedAt = context.cycleStartedAt;
+  const performanceEntries = [...context.sharedPerformanceEntries];
   const profiler = slowTradingPerformance.cycle.createProfiler({
-    now: params?.performance?.now,
+    now: params.performance?.now,
     onSection: (entry) => {
       performanceEntries.push(entry);
-      params?.performance?.onSection?.(entry);
+      params.performance?.onSection?.(entry);
     },
   });
-  // PROD:CYCLE_PERFORMANCE_SECTION_DURATION
-  const storage = await profiler.time("storage.load", () =>
-    slowTradingStorage.data.load({
-      account: params?.account,
-      modeScope: "active",
-    }),
-  );
+  const storage = context.storage;
 
   return slowTradingStorage.account.runWithExchangeAccount(storage, async () =>
     profiler.time("cycle.total", async () => {
@@ -92,6 +84,7 @@ async function executeSlowTradingCycle(
               bypass: plan.bypass,
               forceEntrySymbols: Array.from(plan.forcedEntrySymbols),
               symbols: plan.stageSymbols ?? undefined,
+              marketSnapshot: context.sharedMarket ?? undefined,
               performance: profiler,
             }),
           )
@@ -149,15 +142,14 @@ async function executeSlowTradingCycle(
           throw new Error(modelMemoryRes.error);
         }
 
-        await profiler.time("cycle.assignVolatility", () =>
-          assignVolatility(
-            modelMemoryMap,
-            symbols,
-            storage.config.exchangeType,
-            storage.config.tradingMode,
-            storage.config.minActionableAbsoluteLevel,
-          ),
-        );
+        if (!context.sharedMarket) {
+          throw new Error("Shared market context is unavailable");
+        }
+        slowTradingCycleSharedMarket.memory.attachVolatility({
+          modelMemoryMap,
+          snapshot: context.sharedMarket,
+          symbols,
+        });
       }
 
       const dynamicTradeMemory = {
@@ -171,22 +163,11 @@ async function executeSlowTradingCycle(
         defaultTradingMode: tradingMode,
       });
 
-      let currentTimeMs = Date.now();
-      const firstSymbol = symbols[0];
-      const firstKlines = firstSymbol
-        ? await profiler.time("cycle.currentTimeKlines", () =>
-            exchange.getKlines({
-              symbol: `${firstSymbol}_USDT`,
-              interval: "5m",
-              marketType,
-              simpleTime: "10minute",
-            }),
-          )
-        : [];
-      const firstKline = firstKlines.at(-1);
-      if (firstKline) {
-        currentTimeMs = firstKline[0];
+      if (!context.sharedMarket) {
+        throw new Error("Shared market context is unavailable");
       }
+      const sharedMarket = context.sharedMarket;
+      const currentTimeMs = sharedMarket.currentTimeMs;
 
       // B.1 Refresh the quote balance according to live or sandbox execution mode.
       if (isSandbox) {
@@ -229,11 +210,10 @@ async function executeSlowTradingCycle(
               await profiler.time("cycle.exchangePositionSync", () =>
                 Promise.all([
                   exchange.getPositions(),
-                  slowTradingMarket.price.buildLatestBySymbol({
-                    exchange,
-                    marketType,
-                    symbols: activePositionSymbols,
-                  }),
+                  sharedMarket.prices.get(
+                    "position-sync",
+                    activePositionSymbols,
+                  ),
                 ]),
               );
             const syncResult = slowTradingExchangeSync.positions.syncLiveOpen({
@@ -298,11 +278,10 @@ async function executeSlowTradingCycle(
         modelMemoryMap,
       );
 
-      const volatilityPointsMap: Record<string, VolatilityPoint[]> = {};
-      for (const symbol of Object.keys(modelMemoryMap)) {
-        volatilityPointsMap[symbol] =
-          modelMemoryMap[symbol].volatility?.lastVolatility ?? [];
-      }
+      const volatilityPointsMap =
+        slowTradingCycleSharedMarket.memory.buildVolatilityPointsMap(
+          modelMemoryMap,
+        );
 
       if (plan.shouldCaptureEntry) {
         await slowTradingSidewaysExit.production.apply({
@@ -318,19 +297,12 @@ async function executeSlowTradingCycle(
         });
       }
 
-      // D. Recompute the price-norm state used for dynamic sizing decisions.
       if (plan.shouldCaptureEntry) {
-        await profiler.time("cycle.priceNorm", () =>
-          dynamic.priceNorm.generateInitial({
-            currentTimeMs,
-            symbols,
-            startTime: currentTimeMs,
-            dynamicTradeMemory,
-            useCache: true,
-            exchangeType,
-            volatilityMap: volatilityPointsMap,
-          }),
-        );
+        await profiler.time("cycle.priceNorm", () => {
+          dynamicTradeMemory.priceNormMapOverTime = slowTradingShared.clone(
+            sharedMarket.priceNormMapOverTime,
+          );
+        });
       }
 
       const runtime: SlowTradingCycleRuntime = {
@@ -350,6 +322,7 @@ async function executeSlowTradingCycle(
         performanceEntries,
         profiler,
         reports: [],
+        sharedMarket,
         skippedEntrySignals: [],
         storage,
         symbols,
@@ -371,12 +344,10 @@ async function executeSlowTradingCycle(
  */
 export function runSlowTradingCycle(params?: RunSlowTradingCycleParams) {
   return slowTradingMutationQueue.runExclusive(() =>
-    params?.account
-      ? executeSlowTradingCycle(params)
-      : slowTradingCycleAccounts.execute({
-          executeOne: executeSlowTradingCycle,
-          request: params,
-        }),
+    slowTradingCycleCoordinator.execute({
+      executeOne: executeSlowTradingAccountCycle,
+      request: params,
+    }),
   );
 }
 
@@ -388,4 +359,7 @@ const slowTradingCycle = {
 
 export default slowTradingCycle;
 export { slowTradingCycle };
-export type { RunSlowTradingCycleParams, SlowTradingCycleResult } from "./types";
+export type {
+  RunSlowTradingCycleParams,
+  SlowTradingCycleResult,
+} from "./types";

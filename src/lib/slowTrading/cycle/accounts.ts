@@ -1,61 +1,82 @@
 import { tradeLog } from "@/lib/trading/helper/log";
 import slowTradingNotifications from "../notifications";
 import slowTradingStorage from "../storage";
+import type { SlowTradingStorageData } from "../types";
 import type {
   RunSlowTradingCycleParams,
   SlowTradingCycleResult,
 } from "./types";
 
-/** Runs enabled accounts plus disabled accounts that still own open positions. */
-async function execute(params: {
-  executeOne: (
-    request: RunSlowTradingCycleParams,
-  ) => Promise<SlowTradingCycleResult>;
-  request?: RunSlowTradingCycleParams;
-}): Promise<SlowTradingCycleResult> {
+export interface SlowTradingCycleAccountScope {
+  request: RunSlowTradingCycleParams;
+  storage: SlowTradingStorageData;
+}
+
+/** Loads cycle-eligible accounts without performing any public market I/O. */
+async function loadEligible(request?: RunSlowTradingCycleParams): Promise<{
+  catalog: SlowTradingStorageData;
+  scopes: SlowTradingCycleAccountScope[];
+}> {
   const catalog = await slowTradingStorage.data.load({ modeScope: "active" });
-  const results: SlowTradingCycleResult[] = [];
+  const accountSlugs = request?.account
+    ? [request.account]
+    : catalog.runtime.exchangeAccounts.map((account) => account.slug);
+  const scopes: SlowTradingCycleAccountScope[] = [];
 
   // PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE
-  for (const account of catalog.runtime.exchangeAccounts) {
+  for (const accountSlug of accountSlugs) {
     try {
-      const scopedStorage = await slowTradingStorage.data.load({
-        account: account.slug,
+      const storage = await slowTradingStorage.data.load({
+        account: accountSlug,
         modeScope: "active",
       });
-      const activeMode = slowTradingStorage.mode.getActive(scopedStorage);
-      const hasOpenPositions = scopedStorage.modes[
-        activeMode
-      ].tradeSettings.some((tradeSetting) =>
-        (tradeSetting.model_memory.positions ?? []).some(
-          (position) => !position.closed,
-        ),
+      const activeMode = slowTradingStorage.mode.getActive(storage);
+      const hasOpenPositions = storage.modes[activeMode].tradeSettings.some(
+        (tradeSetting) =>
+          (tradeSetting.model_memory.positions ?? []).some(
+            (position) => !position.closed,
+          ),
       );
-      if (!account.enabled && !hasOpenPositions) continue;
+      if (!request?.account && !storage.account.enabled && !hasOpenPositions) {
+        continue;
+      }
 
       // PROD:MULTI_ACCOUNT_DISABLED_ENTRY_ONLY
-      results.push(
-        await params.executeOne({
-          ...params.request,
-          account: account.slug,
+      scopes.push({
+        storage,
+        request: {
+          ...request,
+          account: storage.account.slug,
           disableAutoEntry:
-            params.request?.disableAutoEntry || !account.enabled,
-        }),
-      );
+            request?.disableAutoEntry || !storage.account.enabled,
+        },
+      });
     } catch (error) {
+      if (request?.account) {
+        throw error;
+      }
       // PROD:MULTI_ACCOUNT_FAILURE_ISOLATION
-      tradeLog.error(`account cycle failed | account=${account.slug}`, error);
+      tradeLog.error(`account load failed | account=${accountSlug}`, error);
       await slowTradingNotifications.operationalError.notify({
-        source: `cycle.account.${account.slug}`,
+        source: `cycle.account.${accountSlug}`,
         error,
       });
     }
   }
 
-  const first = results[0];
+  return { catalog, scopes };
+}
+
+/** Combines sequential account results into the public cycle result shape. */
+function combine(params: {
+  catalog: SlowTradingStorageData;
+  request?: RunSlowTradingCycleParams;
+  results: SlowTradingCycleResult[];
+}): SlowTradingCycleResult {
+  const first = params.results[0];
   if (!first) {
-    const activeMode = slowTradingStorage.mode.getActive(catalog);
-    const modeState = catalog.modes[activeMode];
+    const activeMode = slowTradingStorage.mode.getActive(params.catalog);
+    const modeState = params.catalog.modes[activeMode];
     return {
       mode: activeMode,
       stage: params.request?.stage,
@@ -71,25 +92,34 @@ async function execute(params: {
 
   return {
     ...first,
-    symbols: Array.from(new Set(results.flatMap((result) => result.symbols))),
-    reports: results.flatMap((result) => result.reports),
-    executedEntrySignals: results.reduce(
+    symbols: Array.from(
+      new Set(params.results.flatMap((result) => result.symbols)),
+    ),
+    reports: params.results.flatMap((result) => result.reports),
+    executedEntrySignals: params.results.reduce(
       (total, result) => total + result.executedEntrySignals,
       0,
     ),
-    skippedEntrySignals: results.flatMap(
+    skippedEntrySignals: params.results.flatMap(
       (result) => result.skippedEntrySignals,
     ),
-    availableQuoteAsset: results.reduce(
+    availableQuoteAsset: params.results.reduce(
       (total, result) => total + result.availableQuoteAsset,
       0,
     ),
-    lastRunAt: Math.max(...results.map((result) => result.lastRunAt ?? 0)),
+    lastRunAt: Math.max(
+      ...params.results.map((result) => result.lastRunAt ?? 0),
+    ),
   };
 }
 
 const slowTradingCycleAccounts = {
-  execute,
+  results: {
+    combine,
+  },
+  scopes: {
+    loadEligible,
+  },
 } as const;
 
 export default slowTradingCycleAccounts;
