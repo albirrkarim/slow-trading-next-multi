@@ -207,6 +207,86 @@ describe("SLOW multi-account specs", () => {
     ]);
   });
 
+  it("keeps the newest run for each stage in the combined dashboard", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const defaults = slowTrading.storage.data.createDefault();
+    const template = defaults.runtime.exchangeAccounts[0];
+    await slowTrading.storage.data.save(defaults);
+    await slowTrading.storage.account.saveAccounts(
+      [
+        {
+          ...template,
+          slug: "alpha",
+          name: "Alpha",
+          sandbox: { enabled: true, initialBalanceUSDT: 100 },
+        },
+        {
+          ...template,
+          slug: "beta",
+          name: "Beta",
+          sandbox: { enabled: true, initialBalanceUSDT: 200 },
+        },
+      ],
+      defaults.sharedConfig,
+    );
+
+    const alpha = await slowTrading.storage.data.load({ account: "alpha" });
+    const beta = await slowTrading.storage.data.load({ account: "beta" });
+    alpha.modes.sandbox.lastRunAt = 3_000;
+    alpha.modes.sandbox.stageRuns = {
+      "risk-sentinel": {
+        t: 3_000,
+        ms: 10,
+        reports: 0,
+        symbols: 1,
+        summary: "alpha risk sentinel",
+        performance: { totalMs: 10, sections: [] },
+      },
+    };
+    beta.modes.sandbox.lastRunAt = 2_000;
+    beta.modes.sandbox.stageRuns = {
+      "capture-entry": {
+        t: 2_000,
+        ms: 20,
+        reports: 1,
+        symbols: 6,
+        summary: "beta capture entry",
+        performance: { totalMs: 20, sections: [] },
+      },
+      management: {
+        t: 1_000,
+        ms: 30,
+        reports: 0,
+        symbols: 6,
+        summary: "beta management",
+        performance: { totalMs: 30, sections: [] },
+      },
+    };
+    await slowTrading.storage.mode.saveState("sandbox", alpha.modes.sandbox, {
+      account: "alpha",
+    });
+    await slowTrading.storage.mode.saveState("sandbox", beta.modes.sandbox, {
+      account: "beta",
+    });
+
+    const dashboard =
+      await slowTrading.storage.dashboard.buildCombinedStateRealtime([
+        alpha,
+        beta,
+      ]);
+
+    // PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD
+    expect(dashboard.stats.stageRuns["risk-sentinel"]?.summary).toBe(
+      "alpha risk sentinel",
+    );
+    expect(dashboard.stats.stageRuns["capture-entry"]?.summary).toBe(
+      "beta capture entry",
+    );
+    expect(dashboard.stats.stageRuns.management?.summary).toBe(
+      "beta management",
+    );
+  });
+
   it("aggregates every enabled account in the MCP balance and excludes disabled accounts", async () => {
     const slowTrading = (await import("@/lib/slowTrading")).default;
     const defaults = slowTrading.storage.data.createDefault();

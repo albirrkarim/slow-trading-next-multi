@@ -15,6 +15,7 @@ import type {
   SlowTradingDashboardState,
   SlowTradingDashboardRuntimeConfig,
   SlowTradingHistoryPosition,
+  SlowTradingStageRunStatsMap,
   SlowTradingStorageData,
 } from "../types";
 import { tradeLog } from "@/lib/trading/helper/log";
@@ -190,6 +191,25 @@ function toDashboardRuntime(
   };
 }
 
+/** Selects the latest successful run for each stage across account snapshots. */
+function combineLatestStageRuns(
+  states: SlowTradingDashboardState[],
+): SlowTradingStageRunStatsMap {
+  const stageRuns: SlowTradingStageRunStatsMap = {};
+
+  for (const state of states) {
+    for (const [stage, run] of Object.entries(state.stats.stageRuns)) {
+      const slowStage = stage as keyof SlowTradingStageRunStatsMap;
+      if (!run) continue;
+      if ((stageRuns[slowStage]?.t ?? 0) < run.t) {
+        stageRuns[slowStage] = run;
+      }
+    }
+  }
+
+  return stageRuns;
+}
+
 /** Combines account-scoped dashboard snapshots without mixing persisted state. */
 export async function buildCombinedSlowTradingDashboardStateRealtime(
   storages: SlowTradingStorageData[],
@@ -215,6 +235,7 @@ export async function buildCombinedSlowTradingDashboardStateRealtime(
       ? state
       : latest,
   );
+  const stageRuns = combineLatestStageRuns(states);
 
   return {
     ...primary,
@@ -252,6 +273,7 @@ export async function buildCombinedSlowTradingDashboardStateRealtime(
       ...latestState.stats,
       closedTrades: history.length,
       openPositions: openPositions.length,
+      stageRuns,
       safeHavenLastScheduledAt: Math.max(
         0,
         ...states.map((state) => state.stats.safeHavenLastScheduledAt ?? 0),
