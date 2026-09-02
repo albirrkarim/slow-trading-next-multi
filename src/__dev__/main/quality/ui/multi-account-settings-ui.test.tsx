@@ -28,14 +28,18 @@ function createAccount(params: {
   initialBalanceUSDT: number;
   maxOpenPositions: number;
   name: string;
+  notes?: string;
   sandboxEnabled: boolean;
   slug: string;
 }): SlowTradingAccount {
   const now = Date.now();
-  const trading = slowTradingAccountConfig.trading.fromEffectiveConfig({
-    ...DEFAULT_DYNAMIC_TRADE_CONFIG_PRODUCTION,
-    maxOpenPositions: params.maxOpenPositions,
-  });
+  const trading = slowTradingAccountConfig.trading.fromEffectiveConfig(
+    {
+      ...DEFAULT_DYNAMIC_TRADE_CONFIG_PRODUCTION,
+      maxOpenPositions: params.maxOpenPositions,
+    },
+    params.notes,
+  );
 
   return {
     slug: params.slug,
@@ -60,6 +64,7 @@ function createState(): DashboardState {
       slug: "alpha",
       name: "Alpha",
       maxOpenPositions: 2,
+      notes: "Small account, conservative entries.",
       sandboxEnabled: true,
       initialBalanceUSDT: 1_000,
     }),
@@ -67,6 +72,7 @@ function createState(): DashboardState {
       slug: "beta",
       name: "Beta",
       maxOpenPositions: 7,
+      notes: "Larger account, wider worker capacity.",
       sandboxEnabled: true,
       initialBalanceUSDT: 2_000,
     }),
@@ -237,8 +243,15 @@ describe("multi-account settings UI", () => {
     const maxPositions = screen.getByLabelText(
       "Max Open Positions",
     ) as HTMLInputElement;
+    const strategyNotes = screen.getByLabelText(
+      "Strategy Notes",
+    ) as HTMLTextAreaElement;
     expect(maxPositions.value).toBe("2");
+    expect(strategyNotes.value).toBe("Small account, conservative entries.");
     fireEvent.change(maxPositions, { target: { value: "5" } });
+    fireEvent.change(strategyNotes, {
+      target: { value: "Updated Alpha strategy." },
+    });
 
     await user.click(
       screen.getByRole("combobox", { name: "Editing Account" }),
@@ -247,6 +260,9 @@ describe("multi-account settings UI", () => {
     expect(
       (screen.getByLabelText("Max Open Positions") as HTMLInputElement).value,
     ).toBe("7");
+    expect(
+      (screen.getByLabelText("Strategy Notes") as HTMLTextAreaElement).value,
+    ).toBe("Larger account, wider worker capacity.");
 
     await user.click(
       screen.getByRole("combobox", { name: "Editing Account" }),
@@ -255,6 +271,10 @@ describe("multi-account settings UI", () => {
     expect(
       (screen.getByLabelText("Max Open Positions") as HTMLInputElement).value,
     ).toBe("5");
+    // PROD:MULTI_ACCOUNT_TRADING_NOTES
+    expect(
+      (screen.getByLabelText("Strategy Notes") as HTMLTextAreaElement).value,
+    ).toBe("Updated Alpha strategy.");
   });
 
   it("scopes the Trading preview balance and positions to the edited account", async () => {

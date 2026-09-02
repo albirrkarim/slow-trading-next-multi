@@ -451,6 +451,11 @@ unsaved settings draft; it is persisted only when the normal Save action is
 used. The UI warns that the backup contains sensitive credentials and wallet
 details.
 
+The account-selected Trading editor shows a multiline Strategy Notes field
+between `Editing Account` and Entry. It persists as the selected account's
+`trading.notes`, switches with the account profile, and never affects entry,
+exit, reserve, leverage, or worker-capacity calculations.
+
 The Entry preview shows estimated entry margin, averaging reserve, total
 budget per worker, preserved bailout buffer when applicable, and available
 worker count. In the multi-account Trading editor, its balance, open positions,
@@ -509,6 +514,8 @@ balance without exposing an editable assumption.
 TC: `PROD:TRADING_ENTRY_LIVE_PREVIEW`
 
 TC: `PROD:TRADING_ACCOUNT_SCOPED_LIVE_PREVIEW`
+
+TC: `PROD:MULTI_ACCOUNT_TRADING_NOTES`
 
 The dashboard also counts historical entry sequences per coin for the current
 vPoint time range. Dashboard candidate signals require

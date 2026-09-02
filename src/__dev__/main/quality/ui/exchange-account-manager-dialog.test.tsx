@@ -40,6 +40,7 @@ function createConfigDraft(): ConfigDraft {
         type: "binance",
         enabled: true,
         trading: {
+          notes: "",
           modelConfig: { takeProfitPercent: 5 },
         },
         sandbox: { enabled: false, initialBalanceUSDT: 1000 },

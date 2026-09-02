@@ -76,9 +76,16 @@ must abort the cycle so the production error boundary records it in
 Sandbox futures entries use the same leverage calculation but must not call
 private exchange account-configuration endpoints.
 
+Each account's `trading.notes` is a user-authored strategy reminder stored in
+`accounts.json`. It is account metadata: it must survive account normalization,
+backup and restore, and Trading-editor account switches, but it must not be
+projected into the effective execution configuration or affect calculations.
+
 TC: `PROD:FUTURES_ENTRY_ACCOUNT_SETUP`
 
 TC: `PROD:ATOMIC_PERSISTENT_JSON`
+
+TC: `PROD:MULTI_ACCOUNT_TRADING_NOTES`
 
 ## C.5 Backtest Storage
 

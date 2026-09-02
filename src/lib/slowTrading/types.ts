@@ -438,6 +438,8 @@ export interface SlowTradingAccountTradingConfig
     | "watchReserveLevels"
     | "watchReservePctAlloc"
   > {
+  /** User-authored reminder describing this account's trading strategy. */
+  notes: string;
   modelConfig: SlowTradingAccountModelConfig;
 }
 

@@ -90,6 +90,7 @@ describe("slow specs storage", () => {
     const storage = slowTradingStorage.data.createDefault();
     storage.config.maxLeverage = 7;
     storage.config.modelConfig.takeProfitPercent = 4;
+    storage.account.trading.notes = "Conservative main-account strategy.";
 
     await slowTradingStorage.data.save(storage);
 
@@ -107,10 +108,16 @@ describe("slow specs storage", () => {
     });
     expect(accountsFile.accounts[0].trading).toMatchObject({
       maxLeverage: 7,
+      notes: "Conservative main-account strategy.",
       modelConfig: { takeProfitPercent: 4 },
     });
 
     const loaded = await slowTradingStorage.data.load();
+    // PROD:MULTI_ACCOUNT_TRADING_NOTES
+    expect(loaded.account.trading.notes).toBe(
+      "Conservative main-account strategy.",
+    );
+    expect(loaded.config).not.toHaveProperty("notes");
     expect(loaded.config.maxLeverage).toBe(7);
     expect(loaded.config.modelConfig.takeProfitPercent).toBe(4);
   });

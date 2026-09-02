@@ -27,6 +27,9 @@ function TradingAccountSettings({
   setConfigDraft,
 }: SettingsDialogTradingTabProps & { accountSelector?: React.ReactNode }) {
   const averagingEnabled = configDraft.enableWatchLogic ?? false;
+  const selectedAccount = configDraft.exchangeAccounts.find(
+    (account) => account.slug === configDraft.exchangeAccountSlug,
+  );
   const adaptiveConfig = adaptiveAveraging.config.normalize(
     configDraft.adaptiveAveraging,
     false,
@@ -40,6 +43,37 @@ function TradingAccountSettings({
               {accountSelector}
             </Box>
           )}
+          <SettingsInfoField
+            fullWidth
+            info="Private notes for remembering this account's strategy. Notes are saved with this account's Trading configuration and do not affect execution."
+            label="Strategy Notes"
+            maxRows={8}
+            minRows={3}
+            multiline
+            onChange={(event) => {
+              const notes = event.target.value;
+              // PROD:MULTI_ACCOUNT_TRADING_NOTES
+              setConfigDraft((prev) => {
+                if (!prev) return prev;
+
+                return {
+                  ...prev,
+                  exchangeAccounts: prev.exchangeAccounts.map((account) =>
+                    account.slug === prev.exchangeAccountSlug
+                      ? {
+                          ...account,
+                          trading: { ...account.trading, notes },
+                          updatedAt: Date.now(),
+                        }
+                      : account,
+                  ),
+                };
+              });
+            }}
+            placeholder="Describe the strategy and why these settings were chosen..."
+            size="small"
+            value={selectedAccount?.trading.notes ?? ""}
+          />
           <SettingsGroup title="Entry">
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 6 }}>

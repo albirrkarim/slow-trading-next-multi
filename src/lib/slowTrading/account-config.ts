@@ -42,8 +42,11 @@ const SHARED_CONFIG_KEYS = [
 /** Extracts exactly the settings owned by the Trading tab. */
 function fromEffectiveConfig(
   config: DynamicTradeConfig,
+  notes = "",
 ): SlowTradingAccountTradingConfig {
-  const trading = {} as SlowTradingAccountTradingConfig;
+  const trading = {
+    notes: typeof notes === "string" ? notes : "",
+  } as SlowTradingAccountTradingConfig;
 
   for (const key of TRADING_CONFIG_KEYS) {
     const value = config[key];
@@ -66,9 +69,14 @@ function toEffectiveConfig(
   sharedConfig: DynamicTradeConfig,
   account: Pick<SlowTradingAccount, "trading">,
 ): DynamicTradeConfig {
+  const tradingConfig = clone(account.trading) as Partial<
+    SlowTradingAccountTradingConfig
+  >;
+  delete tradingConfig.notes;
+
   return {
     ...clone(sharedConfig),
-    ...clone(account.trading),
+    ...tradingConfig,
     modelConfig: {
       ...clone(sharedConfig.modelConfig),
       ...clone(account.trading.modelConfig),
@@ -83,7 +91,7 @@ function withEffectiveConfig(
 ): SlowTradingAccount {
   return {
     ...account,
-    trading: fromEffectiveConfig(config),
+    trading: fromEffectiveConfig(config, account.trading.notes),
     updatedAt: Date.now(),
   };
 }

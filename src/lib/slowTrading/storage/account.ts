@@ -87,6 +87,10 @@ function createAccount(params: {
     params.trading && typeof params.trading === "object"
       ? params.trading
       : slowTradingAccountConfig.trading.fromEffectiveConfig(sharedConfig);
+  const tradingNotes =
+    trading && typeof trading === "object" && "notes" in trading
+      ? getString(trading.notes)
+      : "";
 
   return {
     slug: normalizeExchangeAccountSlug(params.slug),
@@ -99,6 +103,7 @@ function createAccount(params: {
       slowTradingAccountConfig.trading.toEffectiveConfig(sharedConfig, {
         trading: trading as SlowTradingAccount["trading"],
       }),
+      tradingNotes,
     ),
     sandbox: {
       enabled: sandbox.enabled === true,

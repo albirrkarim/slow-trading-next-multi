@@ -257,7 +257,9 @@ second time.
 
 The Trading tab edits one account at a time. Its `Editing Account` selector is
 placed directly above the Trading form and changes only the profile being
-edited; it does not choose which account executes. The adjacent Live Preview
+edited; it does not choose which account executes. A multiline Strategy Notes
+field appears before Entry and persists as that profile's `trading.notes` so
+the strategy intent can be remembered without affecting execution. The adjacent Live Preview
 uses only that selected account's spendable balance and open positions. Its
 local spendable assumption defaults to the selected account's current
 spendable balance and resets when another account is selected. Combined
@@ -297,4 +299,5 @@ these exact TC comments:
 - `PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD`
 - `PROD:MULTI_ACCOUNT_COMBINED_MCP_BALANCE`
 - `PROD:MULTI_ACCOUNT_CONFIG_OWNERSHIP`
+- `PROD:MULTI_ACCOUNT_TRADING_NOTES`
 - `BTEST:MULTI_ACCOUNT_COMBINED_BACKTEST`

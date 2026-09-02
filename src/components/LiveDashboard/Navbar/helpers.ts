@@ -305,11 +305,17 @@ export function applyConfigDraftToAccountProfile(
     symbols: parseSymbols(draft.symbolsText),
     modelConfig: cloneModelConfig(draft.modelConfig),
   };
+  const tradingNotes =
+    draft.exchangeAccounts.find((candidate) => candidate.slug === account.slug)
+      ?.trading.notes ?? account.trading.notes;
 
   return {
     ...account,
     trading:
-      slowTradingAccountConfig.trading.fromEffectiveConfig(effectiveConfig),
+      slowTradingAccountConfig.trading.fromEffectiveConfig(
+        effectiveConfig,
+        tradingNotes,
+      ),
     sandbox: {
       enabled: draft.sandboxEnabled,
       initialBalanceUSDT: Math.max(
