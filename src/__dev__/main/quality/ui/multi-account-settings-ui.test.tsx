@@ -21,6 +21,7 @@ import { DEFAULT_DYNAMIC_TRADE_CONFIG_PRODUCTION } from "@/lib/dynamic";
 import slowTradingAccountConfig from "@/lib/slowTrading/account-config";
 import type { SlowTradingAccount } from "@/lib/slowTrading";
 import blackSwan from "@/lib/trading/black-swan";
+import { createTestPosition } from "../fixtures/position";
 
 function createAccount(params: {
   enabled?: boolean;
@@ -254,7 +255,79 @@ describe("multi-account settings UI", () => {
     expect(
       (screen.getByLabelText("Max Open Positions") as HTMLInputElement).value,
     ).toBe("5");
+  });
 
+  it("scopes the Trading preview balance and positions to the edited account", async () => {
+    const user = userEvent.setup();
+    const state = createState();
+    state.openPositions = [
+      {
+        ...createTestPosition({ symbol: "ALPHA" }),
+        account: "alpha",
+        mode: "live",
+      },
+      {
+        ...createTestPosition({ symbol: "BETA" }),
+        account: "beta",
+        mode: "sandbox",
+      },
+      {
+        ...createTestPosition({ symbol: "GAMMA" }),
+        account: "beta",
+        mode: "sandbox",
+      },
+    ];
+    state.stats.openPositions = state.openPositions.length;
+
+    function Harness() {
+      const [draft, setDraft] = useState<ConfigDraft | null>(
+        makeConfigDraft(state),
+      );
+      if (!draft) return null;
+
+      return (
+        <SettingsDialog
+          configDraft={draft}
+          dashboardState={state}
+          onCloseDialog={vi.fn()}
+          onOpenDialog={vi.fn()}
+          onReinitialize={vi.fn(async () => undefined)}
+          reinitializing={false}
+          resetSandbox={vi.fn(async () => undefined)}
+          resettingSandboxAccount={null}
+          saveConfig={vi.fn(async () => undefined)}
+          savingConfig={false}
+          setConfigDraft={setDraft}
+          syncOnlineStorageToLocal={vi.fn(async () => undefined)}
+          syncingOnlineStorage={false}
+          tryWithdrawNow={vi.fn(async () => undefined)}
+          tryingWithdraw={false}
+        />
+      );
+    }
+
+    render(<Harness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open dashboard settings" }),
+    );
+
+    // PROD:TRADING_ACCOUNT_SCOPED_LIVE_PREVIEW
+    expect(
+      (screen.getByLabelText("Spendable assumption") as HTMLInputElement)
+        .value,
+    ).toBe("110");
+    expect(screen.getByText("1 / 2")).toBeTruthy();
+
+    await user.click(
+      screen.getByRole("combobox", { name: "Editing Account" }),
+    );
+    await user.click(screen.getByRole("option", { name: "Beta" }));
+
+    expect(
+      (screen.getByLabelText("Spendable assumption") as HTMLInputElement)
+        .value,
+    ).toBe("220");
+    expect(screen.getByText("2 / 7")).toBeTruthy();
   });
 
   it("renders and updates one Sandbox section per account", async () => {

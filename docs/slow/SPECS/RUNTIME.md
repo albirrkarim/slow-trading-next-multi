@@ -453,13 +453,18 @@ details.
 
 The Entry preview shows estimated entry margin, averaging reserve, total
 budget per worker, preserved bailout buffer when applicable, and available
-worker count. It includes a local spendable-assumption input that defaults to
-the current live spendable balance and recalculates the read-only preview
-without saving configuration. When fixed max entry margin is disabled, the
-preview auto-fits the estimated entry margin so one worker plus its preserved
-bailout buffer can fit in the assumed spendable balance. The Exit preview shows
-approximate take-profit and stop-loss USDT per worker for entry-only stage 1
-and every cumulative averaging stage through `watchMaxNextAveragingLevels`.
+worker count. In the multi-account Trading editor, its balance, open positions,
+position limit, and bailout candidates belong only to the account selected by
+`Editing Account`; combined dashboard totals must not enter this calculation.
+It includes a local spendable-assumption input that defaults to that selected
+account's current live spendable balance, resets to the newly selected
+account's balance when the editor changes accounts, and recalculates the
+read-only preview without saving configuration. When fixed max entry margin is
+disabled, the preview auto-fits the estimated entry margin so one worker plus
+its preserved bailout buffer can fit in the assumed spendable balance. The Exit
+preview shows approximate take-profit and stop-loss USDT per worker for
+entry-only stage 1 and every cumulative averaging stage through
+`watchMaxNextAveragingLevels`.
 Each stage adds its configured rolling averaging margin, applies leverage to the
 cumulative margin, then calculates take-profit and stop-loss USDT from that
 stage's estimated notional. This includes unreserved stages allowed by the
@@ -502,6 +507,8 @@ renders the same component from saved configuration and current spendable
 balance without exposing an editable assumption.
 
 TC: `PROD:TRADING_ENTRY_LIVE_PREVIEW`
+
+TC: `PROD:TRADING_ACCOUNT_SCOPED_LIVE_PREVIEW`
 
 The dashboard also counts historical entry sequences per coin for the current
 vPoint time range. Dashboard candidate signals require

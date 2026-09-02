@@ -257,7 +257,12 @@ second time.
 
 The Trading tab edits one account at a time. Its `Editing Account` selector is
 placed directly above the Trading form and changes only the profile being
-edited; it does not choose which account executes. Runtime > Sandbox renders
+edited; it does not choose which account executes. The adjacent Live Preview
+uses only that selected account's spendable balance and open positions. Its
+local spendable assumption defaults to the selected account's current
+spendable balance and resets when another account is selected. Combined
+dashboard balances and positions never participate in account entry sizing.
+Runtime > Sandbox renders
 one visible Sandbox section per account, including that account's mode toggle,
 initial balance, and reset action. The shared Management tab has no execution
 account selector.
