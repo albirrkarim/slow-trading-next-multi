@@ -345,10 +345,12 @@ TC: `PROD:TOTAL_ASSET`
 **MCP balance contract**
 
 The read-only `slow_balance_read` tool exposes the same canonical balance
-model for the active, live, or sandbox mode. Its response includes the numeric
-balance object, the balance equations, and a plain-language meaning for every
-field so agents do not guess how spendable, reserved, Safe Haven, locked, or
-total asset values relate.
+model for the active, live, or sandbox mode. The top-level `balance` is summed
+across every enabled exchange account and `accounts[]` retains the contribution
+from each included account. Disabled accounts are excluded. The response also
+includes the balance equations and a plain-language meaning for every field so
+agents do not guess how spendable, reserved, Safe Haven, locked, or total asset
+values relate.
 
 Live mode attempts to refresh the exchange-free USDT balance and may fall back
 to persisted state when the exchange read fails. Sandbox mode uses simulated
@@ -356,6 +358,8 @@ state. The MCP `totalAsset` remains `available + locked`; it is not floating
 equity and does not include unrealized P&L.
 
 TC: `PROD:MCP_BALANCE`
+
+TC: `PROD:MULTI_ACCOUNT_COMBINED_MCP_BALANCE`
 
 ### A.4 Use same Volatility Point array data
 

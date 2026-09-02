@@ -125,8 +125,12 @@ TC: `PROD:MCP_FINANCE_SUMMARY`
 
 The balance tool uses the dedicated `balance.read` permission and accepts
 `active`, `live`, or `sandbox` mode. It returns one documented USDT balance
-object with `available`, `spendable`, `reserved`, `safeHaven`, `locked`, and
-`totalAsset`, plus the equations and a plain-language meaning for every field.
+object summed across all enabled exchange accounts, plus an `accounts[]`
+breakdown containing each enabled account's slug, name, mode, and balance.
+Disabled accounts are excluded. Both aggregate and account balances contain
+`available`, `spendable`, `reserved`, `safeHaven`, `locked`, and `totalAsset`,
+and the response includes equations and a plain-language meaning for every
+field.
 
 `available` is the exchange-free quote balance before SLOW's virtual reserve
 subtraction. `spendable`, `reserved`, and `safeHaven` are virtual allocations
@@ -139,6 +143,8 @@ persisted balance if the exchange read fails. Sandbox reads use simulation
 state and do not query the exchange.
 
 TC: `PROD:MCP_BALANCE`
+
+TC: `PROD:MULTI_ACCOUNT_COMBINED_MCP_BALANCE`
 
 ## Agent Confirmation Rule
 

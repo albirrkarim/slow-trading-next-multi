@@ -62,7 +62,11 @@ const slowTrading = {
 
 export default slowTrading;
 export { slowTrading };
-export type { SlowTradingBalanceSummary } from "./balance-summary";
+export type {
+  SlowTradingAccountBalanceSummary,
+  SlowTradingBalance,
+  SlowTradingBalanceSummary,
+} from "./balance-summary";
 export type {
   SlowEntrySequenceCount,
   SlowEntrySequenceInterval,

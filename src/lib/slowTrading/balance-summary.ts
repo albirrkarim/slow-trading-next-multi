@@ -1,18 +1,32 @@
-import type { SlowTradingDashboardState, SlowTradingMode } from "./types";
+import type {
+  SlowTradingDashboardAccountSummary,
+  SlowTradingDashboardState,
+  SlowTradingMode,
+} from "./types";
 
 // PROD:MCP_BALANCE
 
+export interface SlowTradingBalance {
+  available: number;
+  currency: "USDT";
+  locked: number;
+  reserved: number;
+  safeHaven: number;
+  spendable: number;
+  totalAsset: number;
+}
+
+export interface SlowTradingAccountBalanceSummary {
+  balance: SlowTradingBalance;
+  mode: SlowTradingMode;
+  name: string;
+  slug: SlowTradingDashboardAccountSummary["slug"];
+}
+
 export interface SlowTradingBalanceSummary {
+  accounts: SlowTradingAccountBalanceSummary[];
   activeMode: SlowTradingMode;
-  balance: {
-    available: number;
-    currency: "USDT";
-    locked: number;
-    reserved: number;
-    safeHaven: number;
-    spendable: number;
-    totalAsset: number;
-  };
+  balance: SlowTradingBalance;
   equations: {
     available: string;
     spendable: string;
@@ -30,6 +44,23 @@ function roundUsdt(value: number): number {
   return Number((Number.isFinite(value) ? value : 0).toFixed(6));
 }
 
+/** Converts dashboard balance fields into the canonical MCP balance object. */
+function createBalance(
+  balances: SlowTradingDashboardState["balances"],
+): SlowTradingBalance {
+  return {
+    available: roundUsdt(balances.availableQuoteAsset),
+    currency: "USDT",
+    locked: roundUsdt(balances.lockedQuoteAsset),
+    reserved: roundUsdt(balances.reservedQuoteAsset),
+    safeHaven: roundUsdt(balances.safeHaven),
+    spendable: roundUsdt(balances.spendableQuoteAsset),
+    totalAsset: roundUsdt(
+      balances.availableQuoteAsset + balances.lockedQuoteAsset,
+    ),
+  };
+}
+
 /** Creates an agent-readable balance contract from the canonical dashboard balance state. */
 function createBalanceSummary(params: {
   activeMode: SlowTradingMode;
@@ -41,18 +72,14 @@ function createBalanceSummary(params: {
   const balances = params.dashboardState.balances;
 
   return {
+    accounts: (params.dashboardState.accountSummaries ?? []).map((account) => ({
+      balance: createBalance(account.balances),
+      mode: account.activeMode,
+      name: account.name,
+      slug: account.slug,
+    })),
     activeMode: params.activeMode,
-    balance: {
-      available: roundUsdt(balances.availableQuoteAsset),
-      currency: "USDT",
-      locked: roundUsdt(balances.lockedQuoteAsset),
-      reserved: roundUsdt(balances.reservedQuoteAsset),
-      safeHaven: roundUsdt(balances.safeHaven),
-      spendable: roundUsdt(balances.spendableQuoteAsset),
-      totalAsset: roundUsdt(
-        balances.availableQuoteAsset + balances.lockedQuoteAsset,
-      ),
-    },
+    balance: createBalance(balances),
     equations: {
       available: "available = spendable + reserved + safeHaven",
       spendable: "spendable = max(0, available - reserved - safeHaven)",

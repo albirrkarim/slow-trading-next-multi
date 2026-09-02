@@ -4,8 +4,8 @@ import coinTags from "@/lib/devBacktest/coins/tags";
 import { coinMetadataSync } from "@/lib/devBacktest/coins/tag-sync";
 import type { CoinTagState } from "@/lib/devBacktest/coins/tag-types";
 
-import slowTradingBalanceSummary from "./balance-summary";
 import slowTradingFinanceSummary from "./finance-summary";
+import slowTradingMcpBalance from "./mcp/balance";
 import slowTradingStorage from "./storage";
 import {
   SLOW_TRADING_MCP_PERMISSIONS,
@@ -400,7 +400,7 @@ const toolDefinitions: SlowTradingMcpToolDefinition[] = [
   {
     name: "slow_balance_read",
     description:
-      "Read the canonical SLOW USDT balance object. Returns available exchange-free balance, spendable capital, virtual reserve, Safe Haven, locked active-position margin, total asset, formulas, and a plain-language meaning for every field. totalAsset is available plus locked and is not floating equity or unrealized P&L.",
+      "Read the canonical SLOW USDT balance across all enabled exchange accounts, with an account breakdown. Returns available exchange-free balance, spendable capital, virtual reserve, Safe Haven, locked active-position margin, total asset, formulas, and a plain-language meaning for every field. totalAsset is available plus locked and is not floating equity or unrealized P&L.",
     permission: "balance.read",
     readOnlyHint: true,
     inputSchema: jsonSchema({
@@ -580,27 +580,11 @@ async function callMcpTool(params: {
 
   if (params.name === "slow_balance_read") {
     // PROD:MCP_BALANCE
+    // PROD:MULTI_ACCOUNT_COMBINED_MCP_BALANCE
     assertPermission(params.auth, "balance.read");
-    const storage = await slowTradingStorage.data.load({
-      includeHistory: true,
-      modeScope: "all",
-    });
-    const activeMode = slowTradingStorage.mode.getActive(storage);
-    const requestedMode = String(args.mode ?? "active");
-    const mode: SlowTradingMode =
-      requestedMode === "live" || requestedMode === "sandbox"
-        ? requestedMode
-        : activeMode;
-    const selectedStorage = cloneJson(storage);
-    selectedStorage.runtime.sandboxEnabled = mode === "sandbox";
-    const dashboardState =
-      await slowTradingStorage.dashboard.buildStateRealtime(selectedStorage);
-
-    return slowTradingBalanceSummary.create({
-      activeMode,
-      dashboardState,
+    return slowTradingMcpBalance.read({
       instanceName: getMcpAppName(),
-      mode,
+      requestedMode: args.mode,
     });
   }
 

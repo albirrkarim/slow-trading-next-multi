@@ -2,6 +2,7 @@ import fs from "fs-extra";
 import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SlowTradingBalanceSummary } from "@/lib/slowTrading";
 import { createTestPosition } from "../fixtures/position";
 
 let tmpRoot: string | null = null;
@@ -202,6 +203,86 @@ describe("SLOW multi-account specs", () => {
         slug: "beta",
         enabled: false,
         balances: expect.objectContaining({ availableQuoteAsset: 222 }),
+      }),
+    ]);
+  });
+
+  it("aggregates every enabled account in the MCP balance and excludes disabled accounts", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const defaults = slowTrading.storage.data.createDefault();
+    const template = defaults.runtime.exchangeAccounts[0];
+    await slowTrading.storage.data.save(defaults);
+    await slowTrading.storage.account.saveAccounts(
+      [
+        {
+          ...template,
+          slug: "alpha",
+          name: "Alpha",
+          sandbox: { enabled: true, initialBalanceUSDT: 100 },
+        },
+        {
+          ...template,
+          slug: "beta",
+          name: "Beta",
+          sandbox: { enabled: true, initialBalanceUSDT: 400 },
+        },
+        {
+          ...template,
+          slug: "paused",
+          name: "Paused",
+          enabled: false,
+          sandbox: { enabled: true, initialBalanceUSDT: 999 },
+        },
+      ],
+      defaults.sharedConfig,
+    );
+
+    for (const [account, quoteAsset, safeHaven] of [
+      ["alpha", 80, 20],
+      ["beta", 350, 50],
+      ["paused", 999, 0],
+    ] as const) {
+      const storage = await slowTrading.storage.data.load({ account });
+      storage.modes.sandbox.dynamicTradeMemory.quoteAsset = quoteAsset;
+      storage.modes.sandbox.dynamicTradeMemory.safeHaven = safeHaven;
+      await slowTrading.storage.mode.saveState(
+        "sandbox",
+        storage.modes.sandbox,
+        { account },
+      );
+    }
+
+    const result = (await slowTrading.mcp.tools.call({
+      arguments: { mode: "sandbox" },
+      auth: {
+        permissions: new Set(["balance.read" as const]),
+        token: {
+          createdAt: 0,
+          enabled: true,
+          id: "balance-test",
+          name: "Balance test",
+          permissions: ["balance.read"],
+          tokenHash: "",
+          tokenSecretEncrypted: "",
+        },
+      },
+      name: "slow_balance_read",
+    })) as SlowTradingBalanceSummary;
+
+    // PROD:MULTI_ACCOUNT_COMBINED_MCP_BALANCE
+    expect(result.balance).toMatchObject({
+      available: 500,
+      safeHaven: 70,
+      totalAsset: 500,
+    });
+    expect(result.accounts).toEqual([
+      expect.objectContaining({
+        slug: "alpha",
+        balance: expect.objectContaining({ totalAsset: 100 }),
+      }),
+      expect.objectContaining({
+        slug: "beta",
+        balance: expect.objectContaining({ totalAsset: 400 }),
       }),
     ]);
   });
