@@ -4,6 +4,11 @@ import { getMarketCapUSDMapForSymbols } from "@/lib/exchange/market-cap";
 import slowTradingShared from "./shared";
 import type { SlowTradingStorageData } from "./types";
 import { tradeLog } from "@/lib/trading/helper/log";
+import slowTradingPublicMarketCache from "./public-market-cache";
+import binanceRequestCoordinator from "@/lib/exchange/platform/binance/request-coordinator";
+import slowTradingNotifications from "./notifications";
+
+const LATEST_PRICE_CACHE_TTL_MS = 5_000;
 
 /**
  * Builds latest price by symbol from the latest SLOW storage and runtime data.
@@ -33,20 +38,40 @@ export async function buildLatestPriceBySymbol(params: {
   const entries = await Promise.all(
     uniqueSymbols.map(async (symbol) => {
       try {
-        const klines = await exchange.getKlines({
-          symbol: `${symbol}_USDT`,
-          interval: "5m",
-          simpleTime: "10minute",
-          limit: 5,
-          marketType,
+        const now = Date.now();
+        const latestPrice = await slowTradingPublicMarketCache.value.getOrLoad({
+          expiresAt: now + LATEST_PRICE_CACHE_TTL_MS,
+          key: [
+            "latest-price",
+            exchange.exchangeType,
+            marketType,
+            symbol,
+          ].join(":"),
+          now,
+          load: async () => {
+            const klines = await exchange.getKlines({
+              symbol: `${symbol}_USDT`,
+              interval: "5m",
+              simpleTime: "10minute",
+              limit: 5,
+              marketType,
+            });
+            return Number.parseFloat(klines.at(-1)?.[4] ?? "");
+          },
         });
-        const latestPrice = Number.parseFloat(klines.at(-1)?.[4] ?? "");
         if (!Number.isFinite(latestPrice) || latestPrice <= 0) {
           return null;
         }
 
         return [symbol, latestPrice] as const;
       } catch (error) {
+        if (binanceRequestCoordinator.error.isRateLimit(error)) {
+          await slowTradingNotifications.operationalError.notify({
+            source: "slow-trading.market-price",
+            error,
+          });
+          return null;
+        }
         tradeLog.warn(
           `[slow-trading] failed to capture reporting snapshot price for ${symbol}`,
           error,

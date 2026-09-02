@@ -4,30 +4,16 @@ import { BASE_URL } from "./config";
 import { tradeLog } from "@lib/trading";
 import { getCurrentExchangeAccountSlug } from "@/lib/exchange/account-context";
 import { getBinanceCredentials } from "@/lib/exchange/credentials";
+import binanceRequestCoordinator, {
+  BinanceApiError,
+  BinanceCooldownError,
+} from "./request-coordinator";
 
-export class BinanceApiError extends Error {
-  readonly code?: number | string;
-
-  constructor(message: string, code?: number | string) {
-    super(message);
-    this.name = "BinanceApiError";
-    this.code = code;
-  }
-}
+export { BinanceApiError, BinanceCooldownError } from "./request-coordinator";
 
 export async function delay(ms: number = 1100): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
-
-/**
- * Simple sequential rate limiter for Binance public API.
- * Ensures a minimum gap between consecutive requests to avoid IP bans.
- */
-const publicRateLimiter = {
-  lastRequestTime: 0,
-  minGapMs: 350,
-  queue: Promise.resolve() as Promise<any>,
-};
 
 /**
  * Generates a SHA-256 HMAC signature from a query string using API_SECRET.
@@ -75,49 +61,68 @@ export async function requestPrivate<T>(
   try {
     const accountSlug = getCurrentExchangeAccountSlug();
     const creds = getBinanceCredentials(accountSlug);
-
-    param.recvWindow = 5000;
-    param.timestamp = Date.now();
-    const queryString = generateQueryString(param);
-    const signature = getSignature(queryString, creds.apiSecret);
-    const signedQueryString = `${queryString}&signature=${signature}`;
-    param.signature = signature;
-
-    const config: AxiosRequestConfig = {
-      headers: {
-        "X-MBX-APIKEY": creds.apiKey,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    };
-
     const url = `${domain}${endpoint}`;
-    let response;
-    if (method === "get") {
-      response = await axios.get(`${url}?${signedQueryString}`, config);
-    } else if (method === "delete") {
-      response = await axios.delete(`${url}?${signedQueryString}`, config);
-    } else if (options.postParamsInQuery) {
-      response = await axios.post(`${url}?${signedQueryString}`, undefined, config);
-    } else {
-      // For POST, send the fully signed query string as the body
-      const fullBody = signedQueryString;
-      response = await axios.post(url, fullBody, config);
-    }
+    const response = await binanceRequestCoordinator.request.run(
+      {
+        domain,
+        endpoint,
+        kind: "private",
+        params: param,
+      },
+      () => {
+        const signedParams = {
+          ...param,
+          recvWindow: 5000,
+          timestamp: Date.now(),
+        };
+        const queryString = generateQueryString(signedParams);
+        const signature = getSignature(queryString, creds.apiSecret);
+        const signedQueryString = `${queryString}&signature=${signature}`;
+        const config: AxiosRequestConfig = {
+          headers: {
+            "X-MBX-APIKEY": creds.apiKey,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        };
+
+        if (method === "get") {
+          return axios.get<T>(`${url}?${signedQueryString}`, config);
+        }
+        if (method === "delete") {
+          return axios.delete<T>(`${url}?${signedQueryString}`, config);
+        }
+        if (options.postParamsInQuery) {
+          return axios.post<T>(
+            `${url}?${signedQueryString}`,
+            undefined,
+            config,
+          );
+        }
+
+        return axios.post<T>(url, signedQueryString, config);
+      },
+    );
 
     const data = response.data;
 
     return data;
   } catch (error: any) {
+    if (error instanceof BinanceCooldownError) throw error;
+
     const errorData = error.response?.data;
     const errorMessage = errorData?.msg || errorData?.message || error.message;
-    const errorCode = errorData?.code ? ` (code: ${errorData.code})` : "";
+    const errorCode =
+      errorData?.code !== undefined ? ` (code: ${errorData.code})` : "";
 
     tradeLog.error("Binance API Error:", errorData || error.message);
 
     if (errorData) {
       throw new BinanceApiError(
         `Binance API Error: ${errorMessage}${errorCode}`,
-        errorData.code,
+        {
+          code: errorData.code,
+          status: error.response?.status,
+        },
       );
     }
     throw error;
@@ -135,41 +140,47 @@ export async function requestPublic<T>(
   endpoint: string,
   params: Record<string, any> = {},
   domain = BASE_URL,
+  options: {
+    timeoutMs?: number;
+  } = {},
 ): Promise<T> {
-  // Chain onto the queue so requests run sequentially with a minimum gap
-  const result = publicRateLimiter.queue.then(async () => {
-    const now = Date.now();
-    const elapsed = now - publicRateLimiter.lastRequestTime;
-    if (elapsed < publicRateLimiter.minGapMs) {
-      await delay(publicRateLimiter.minGapMs - elapsed);
-    }
-    publicRateLimiter.lastRequestTime = Date.now();
-
-    const url = `${domain}${endpoint}`;
-    try {
-      const response = await axios.get(url, { params });
-      return response.data as T;
-    } catch (error: any) {
-      const errorData = error.response?.data;
-      const errorMessage =
-        errorData?.msg || errorData?.message || error.message;
-      const errorCode = errorData?.code ? ` (code: ${errorData.code})` : "";
-
-      tradeLog.error("Binance Public API Error:", errorData || error.message, {
-        url,
+  const url = `${domain}${endpoint}`;
+  try {
+    const response = await binanceRequestCoordinator.request.run(
+      {
+        domain,
+        endpoint,
+        kind: "public",
         params,
-      });
-      if (errorData) {
-        throw new Error(
-          `Binance Public API Error: ${errorMessage}${errorCode}`,
-        );
-      }
-      throw error;
+      },
+      () =>
+        axios.get<T>(url, {
+          params,
+          ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
+        }),
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error instanceof BinanceCooldownError) throw error;
+
+    const errorData = error.response?.data;
+    const errorMessage = errorData?.msg || errorData?.message || error.message;
+    const errorCode =
+      errorData?.code !== undefined ? ` (code: ${errorData.code})` : "";
+
+    tradeLog.error("Binance Public API Error:", errorData || error.message, {
+      url,
+      params,
+    });
+    if (errorData) {
+      throw new BinanceApiError(
+        `Binance Public API Error: ${errorMessage}${errorCode}`,
+        {
+          code: errorData.code,
+          status: error.response?.status,
+        },
+      );
     }
-  });
-
-  // Always advance the queue (even on error) so it doesn't stall
-  publicRateLimiter.queue = result.catch(() => {});
-
-  return result;
+    throw error;
+  }
 }

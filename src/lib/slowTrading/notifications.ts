@@ -25,9 +25,11 @@ import slowTradingDailyPerformance, {
   type SlowTradingDailyPerformanceReport,
 } from "./daily-performance";
 import type { DailyPnlLimitEvaluation } from "./daily-pnl-limit";
+import { BinanceCooldownError } from "@/lib/exchange/platform/binance/request-coordinator";
 
 const HOUR_MS = 60 * 60 * 1000;
 const NOTIFICATION_CHANNELS: NotificationChannel[] = ["telegram", "email"];
+let lastNotifiedBinanceCooldownRetryAt = 0;
 
 export const STALE_POSITION_THRESHOLD_MS =
   DEFAULT_STALE_POSITION_HOUR * HOUR_MS;
@@ -516,6 +518,14 @@ export async function notifySlowTradingOperationalError(params: {
   error: unknown;
   details?: Record<string, unknown>;
 }) {
+  if (params.error instanceof BinanceCooldownError) {
+    if (params.error.retryAt === lastNotifiedBinanceCooldownRetryAt) {
+      return;
+    }
+    // PROD:BINANCE_GLOBAL_COOLDOWN
+    lastNotifiedBinanceCooldownRetryAt = params.error.retryAt;
+  }
+
   const errorMessage = getErrorMessage(params.error);
   const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
 

@@ -1,5 +1,6 @@
-import axios from "axios";
 import { tradeLog } from "@/lib/trading/helper/log";
+import { requestPublic } from "../utils";
+import binanceRequestCoordinator from "../request-coordinator";
 
 const FUTURES_BASE_URL = "https://fapi.binance.com";
 
@@ -35,8 +36,11 @@ export async function getFuturesSymbolInfo(
     // We can't filter by symbol in query param for exchangeInfo usually.
     // Cache could be populated for all, but for now just fetch.
     // Actually, let's just fetch once and cache.
-    const res = await axios.get(`${FUTURES_BASE_URL}/fapi/v1/exchangeInfo`);
-    const data: ExchangeInfo = res.data;
+    const data = await requestPublic<ExchangeInfo>(
+      "/fapi/v1/exchangeInfo",
+      {},
+      FUTURES_BASE_URL,
+    );
 
     const symbolInfo = data.symbols.find((s) => s.symbol === symbol);
     if (!symbolInfo) return null;
@@ -60,6 +64,7 @@ export async function getFuturesSymbolInfo(
     }
     return null;
   } catch (e) {
+    if (binanceRequestCoordinator.error.isRateLimit(e)) throw e;
     tradeLog.error("Failed to fetch futures exchange info", e);
     return null;
   }

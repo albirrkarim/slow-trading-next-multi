@@ -2,6 +2,9 @@ import slowTrading, {
   type SlowTradingEntryDiagnostic,
 } from "@/lib/slowTrading";
 import { tradeLog } from "@/lib/trading/helper/log";
+import binanceRequestCoordinator, {
+  BinanceCooldownError,
+} from "@/lib/exchange/platform/binance/request-coordinator";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 interface EntryDiagnosticsResponse {
@@ -9,9 +12,16 @@ interface EntryDiagnosticsResponse {
   generatedAt: number;
 }
 
+interface EntryDiagnosticsErrorResponse {
+  error: string;
+  retryAt?: number;
+}
+
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<EntryDiagnosticsResponse | { error: string }>,
+  res: NextApiResponse<
+    EntryDiagnosticsResponse | EntryDiagnosticsErrorResponse
+  >,
 ) {
   if (req.method !== "GET") {
     res.setHeader("Allow", ["GET"]);
@@ -21,6 +31,15 @@ export default async function handler(
 
   res.setHeader("Cache-Control", "no-store");
 
+  const activeCooldown = binanceRequestCoordinator.cooldown.get();
+  if (activeCooldown) {
+    res.status(503).json({
+      error: "Binance cooldown",
+      retryAt: activeCooldown.retryAt,
+    });
+    return;
+  }
+
   try {
     const diagnostics = await slowTrading.signals.diagnostics.build();
     res.status(200).json({
@@ -28,6 +47,14 @@ export default async function handler(
       generatedAt: Date.now(),
     });
   } catch (error: any) {
+    if (error instanceof BinanceCooldownError) {
+      res.status(503).json({
+        error: "Binance cooldown",
+        retryAt: error.retryAt,
+      });
+      return;
+    }
+
     await slowTrading.storage.logs
       .appendError({
         source: "api.slow-trading.entry-diagnostics",

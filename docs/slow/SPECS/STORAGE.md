@@ -161,3 +161,20 @@ The snapshot is shared by live and sandbox monitoring and is retained when the
 position moves into closed history. Legacy and spot positions may omit it.
 
 TC: `PROD:MONITORING_POSITION_FUNDING_RATE`
+
+## C.11 Incremental Volatility Persistence
+
+Production volatility assignment remains sequential. After one symbol's
+prediction-engine refresh succeeds, its volatility memory is merged by point
+id and atomically persisted before assignment advances to the next symbol.
+
+If a later symbol fails, every earlier successful symbol remains available on
+the next cycle and is not discarded with the failed cycle. Concurrent callers
+for the same exchange, market, symbol, and actionable-level configuration join
+one in-progress calculation. This is part of the existing assignment loop and
+does not introduce a separate bootstrap queue or storage format.
+
+Account balances, positions, decisions, orders, and mode memory remain outside
+the shared volatility calculation.
+
+TC: `PROD:VOLATILITY_INCREMENTAL_PERSISTENCE`

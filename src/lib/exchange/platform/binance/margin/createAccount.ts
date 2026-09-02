@@ -1,5 +1,6 @@
 import { requestPrivate } from "../utils";
 import { tradeLog } from "@/lib/trading/helper/log";
+import binanceRequestCoordinator from "../request-coordinator";
 
 /**
  * Enable Isolated Margin Account for a specific symbol
@@ -20,6 +21,7 @@ export async function createIsolatedMarginAccount(
     // Assume success if no error.
     return (response && response.success) !== false;
   } catch (error: any) {
+    if (binanceRequestCoordinator.error.isRateLimit(error)) throw error;
     // If it's already created or other acceptable errors, we might want to handle them.
     // However, usually if it exists we wouldn't be calling this.
     // Code -11001 means account does not exist.

@@ -7,6 +7,9 @@ import { timeMsToReadable } from "./utils";
 import { tradeLog } from "@lib/trading";
 import { getExchange } from "@/lib/exchange";
 import { MAX_KLINES_PER_CALL } from "../exchange/constants";
+import binanceRequestCoordinator from "@/lib/exchange/platform/binance/request-coordinator";
+
+const MAX_FETCH_ATTEMPTS = 3;
 
 function isInvalidSymbolError(error: any): boolean {
   return (
@@ -223,9 +226,9 @@ export async function fetchKlinesFunction(
 
     let batch: Kline[] = [];
     let attempts = 0;
-    const maxRetries = 5;
+    const maxAttempts = MAX_FETCH_ATTEMPTS;
 
-    while (attempts < maxRetries) {
+    while (attempts < maxAttempts) {
       signal?.throwIfAborted();
       try {
         batch = await exchange.getKlines({
@@ -240,11 +243,15 @@ export async function fetchKlinesFunction(
       } catch (err: any) {
         attempts++;
         const invalidSymbol = isInvalidSymbolError(err);
-        const delayMs = 1000 * attempts; // exponential backoff
+        const rateLimited =
+          binanceRequestCoordinator.error.isRateLimit(err);
+        const retryable =
+          binanceRequestCoordinator.error.isRetryable(err);
+        const delayMs = 1_000 * 2 ** (attempts - 1);
         tradeLog.warn(
           `${symbol} ⚠️ Error fetching batch ${chunkIndex + 1}: ${
             err.code || err.message
-          } (attempt ${attempts}/${maxRetries})`,
+          } (attempt ${attempts}/${maxAttempts})`,
         );
         if (invalidSymbol) {
           tradeLog.error(
@@ -252,11 +259,14 @@ export async function fetchKlinesFunction(
           );
           break;
         }
-        if (attempts >= maxRetries) {
+        if (rateLimited || !retryable) {
+          throw err;
+        }
+        if (attempts >= maxAttempts) {
           tradeLog.error(
-            `${symbol} ❌ Failed after ${maxRetries} retries, skipping batch.`,
+            `${symbol} ❌ Failed after ${maxAttempts} attempts.`,
           );
-          break;
+          throw err;
         }
         await delay(delayMs);
       }

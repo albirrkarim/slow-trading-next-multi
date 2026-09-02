@@ -10,6 +10,80 @@ import { FILES } from "@/components/storage";
 import type { ExchangeType, TradingMode } from "@/lib/exchange";
 import { resolveMarketTypeForTradingMode } from "@/lib/exchange/utils";
 import { TRADE_MESSAGE } from "@/lib/trading/message";
+import slowTradingJsonFile from "@/lib/slowTrading/storage/json-file";
+import slowTradingPublicMarketCache from "@/lib/slowTrading/public-market-cache";
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function getVolatilityFile(exchangeType: ExchangeType, symbol: string) {
+  return `${FILES.slow.volatility(exchangeType)}/${symbol}.json`;
+}
+
+/** Atomically merges one symbol's completed public volatility calculation. */
+export async function persistVolatilityMemory(params: {
+  exchangeType: ExchangeType;
+  memory: PredictionEngineMemory;
+  symbol: string;
+}): Promise<PredictionEngineMemory> {
+  return slowTradingJsonFile.update.atomic<PredictionEngineMemory>(
+    getVolatilityFile(params.exchangeType, params.symbol),
+    (current) =>
+      mergeVolatilityMemoryById(
+        current as PredictionEngineMemory | undefined,
+        params.memory,
+      ),
+  );
+}
+
+/** Refreshes and persists public volatility once for concurrent consumers. */
+async function refreshSharedVolatility(params: {
+  exchangeType: ExchangeType;
+  marketType: "FUTURES" | "SPOT";
+  minActionableAbsoluteLevel?: number;
+  symbol: string;
+}): Promise<PredictionEngineMemory> {
+  const key = [
+    "volatility",
+    params.exchangeType,
+    params.marketType,
+    params.symbol,
+    params.minActionableAbsoluteLevel ?? "default",
+  ].join(":");
+
+  return slowTradingPublicMarketCache.operation.singleFlight(key, async () => {
+    const file = getVolatilityFile(params.exchangeType, params.symbol);
+    const fileExists = await fs.exists(file);
+    const memory = fileExists
+      ? ((await fs.readJSON(file)) as PredictionEngineMemory)
+      : {
+          symbol: params.symbol,
+          lastVolatility: [],
+        };
+    const beforeRefresh = fileExists ? JSON.stringify(memory) : null;
+
+    await predictionEngine({
+      tradePair: `${params.symbol}_USDT`,
+      memory,
+      endTime: Date.now(),
+      exchangeType: params.exchangeType,
+      marketType: params.marketType,
+      minActionableAbsoluteLevel: params.minActionableAbsoluteLevel,
+    });
+
+    if (!fileExists || JSON.stringify(memory) !== beforeRefresh) {
+      // PROD:VOLATILITY_INCREMENTAL_PERSISTENCE
+      return persistVolatilityMemory({
+        exchangeType: params.exchangeType,
+        memory,
+        symbol: params.symbol,
+      });
+    }
+
+    return memory;
+  });
+}
 
 /**
  * Assigns model memory from `tradeSettings` into the `modelMemoryMap`.
@@ -75,47 +149,15 @@ export async function assignVolatility(
       };
     }
 
-    if (
-      await fs.exists(`${FILES.slow.volatility(exchangeType)}/${symbol}.json`)
-    ) {
-      // tradeLog.debug("Load volatility from json ", symbol);
-      modelMemoryMap[symbol].volatility = (await fs.readJSON(
-        `${FILES.slow.volatility(exchangeType)}/${symbol}.json`,
-      )) as PredictionEngineMemory;
-    }
-
-    let vMemory = modelMemoryMap[symbol].volatility;
-    if (!vMemory) {
-      vMemory = {
-        symbol,
-        lastVolatility: [],
-      };
-      modelMemoryMap[symbol].volatility = vMemory;
-    }
-
-    // Try to fill next volatility points.
-    if (vMemory) {
-      // with fresh
-      tradeLog.debug("Try to fill vPoints ", symbol);
-      tradeLog.debug(
-        "BEFORE vMemory.lastVolatility.length ",
-        vMemory.lastVolatility.length,
-      );
-
-      await predictionEngine({
-        tradePair: `${symbol}_USDT`,
-        memory: vMemory,
-        endTime: Date.now(),
+    const vMemory = cloneJson(
+      await refreshSharedVolatility({
         exchangeType,
         marketType,
         minActionableAbsoluteLevel,
-      });
-
-      tradeLog.debug(
-        "AFTER vMemory.lastVolatility.length ",
-        vMemory.lastVolatility.length,
-      );
-    }
+        symbol,
+      }),
+    );
+    modelMemoryMap[symbol].volatility = vMemory;
 
     const fullLength = vMemory.lastVolatility.length;
     const earliestActivePositionOpenedAt = modelMemoryMap[symbol].positions

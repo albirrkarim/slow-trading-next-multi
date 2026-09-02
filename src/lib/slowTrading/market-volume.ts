@@ -6,6 +6,9 @@ import type {
 import { resolvePersistentStorageRoot } from "@/lib/persistent-storage-root";
 import fs from "fs-extra";
 import path from "node:path";
+import slowTradingPublicMarketCache from "./public-market-cache";
+
+const VOLUME_24H_CACHE_TTL_MS = 10 * 60_000;
 
 export type SlowTradingMarketType = "FUTURES" | "SPOT";
 
@@ -72,7 +75,7 @@ async function readSnapshot(
 }
 
 /** Fetches one ticker batch, persists compact JSON, then reads it back. */
-async function refreshSnapshot({
+async function refreshSnapshotUncached({
   exchangeType,
   marketType,
   symbols,
@@ -97,7 +100,38 @@ async function refreshSnapshot({
   return (await readSnapshot(exchangeType, marketType)) ?? snapshot;
 }
 
+/** Reuses one 24-hour ticker batch for ten minutes across stage consumers. */
+async function refreshSnapshot(params: {
+  exchangeType: ExchangeType;
+  marketType: SlowTradingMarketType;
+  symbols: string[];
+}) {
+  const now = Date.now();
+  const symbols = Array.from(
+    new Set(params.symbols.map(normalizeCoin).filter(Boolean)),
+  ).sort((left, right) => left.localeCompare(right));
+  const key = [
+    "volume-24h",
+    snapshotPath(params.exchangeType, params.marketType),
+    symbols.join(","),
+  ].join(":");
+
+  const snapshot = await slowTradingPublicMarketCache.value.getOrLoad({
+    expiresAt: now + VOLUME_24H_CACHE_TTL_MS,
+    key,
+    now,
+    load: () => refreshSnapshotUncached({ ...params, symbols }),
+  });
+  return {
+    ...snapshot,
+    volumes: { ...snapshot.volumes },
+  };
+}
+
 const slowTradingMarketVolume = {
+  cache: {
+    ttlMs: VOLUME_24H_CACHE_TTL_MS,
+  },
   map: {
     build: buildVolumeMap,
   },

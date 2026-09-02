@@ -3,6 +3,7 @@ import type { UnifiedTicker } from "@/lib/exchange/types";
 import fs from "fs-extra";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import slowTradingPublicMarketCache from "@/lib/slowTrading/public-market-cache";
 
 const mocks = vi.hoisted(() => ({
   getTickers: vi.fn(),
@@ -35,7 +36,26 @@ function ticker(coin: string, volume: number): UnifiedTicker {
 describe("SLOW 24-hour market volume", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    slowTradingPublicMarketCache.state.clear();
     await fs.remove(mocks.root);
+  });
+
+  it("coalesces concurrent 24-hour volume refreshes", async () => {
+    mocks.getTickers.mockResolvedValue([ticker("SOL", 125_000_000)]);
+    const params = {
+      exchangeType: "binance" as const,
+      marketType: "FUTURES" as const,
+      symbols: ["SOL"],
+    };
+
+    const [first, second] = await Promise.all([
+      slowTrading.marketVolume.snapshot.refresh(params),
+      slowTrading.marketVolume.snapshot.refresh(params),
+    ]);
+
+    // PROD:SHARED_MARKET_SINGLE_FLIGHT
+    expect(first).toEqual(second);
+    expect(mocks.getTickers).toHaveBeenCalledTimes(1);
   });
 
   afterAll(async () => {

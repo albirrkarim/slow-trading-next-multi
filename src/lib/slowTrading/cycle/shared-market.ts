@@ -19,10 +19,14 @@ import slowTradingMarket from "../market";
 import slowTradingMarketVolume from "../market-volume";
 import type { SlowTradingCycleProfiler } from "../performance";
 import slowTradingShared from "../shared";
+import slowTradingPublicMarketCache from "../public-market-cache";
 import type { SlowTradingStorageData } from "../types";
+import binanceRequestCoordinator from "@/lib/exchange/platform/binance/request-coordinator";
+import slowTradingNotifications from "../notifications";
 
 type PriceNormMap = NonNullable<DynamicTradeMemory["priceNormMapOverTime"]>;
 type PricePurpose = "position-sync" | "reporting";
+const FIVE_MINUTES_MS = 5 * 60_000;
 
 export interface SlowTradingSharedMarketSnapshot {
   currentTimeMs: number;
@@ -90,7 +94,7 @@ function buildVolatilityPointsMap(
 }
 
 /** Builds the single immutable public-market snapshot used by one stage cycle. */
-async function prepare(params: {
+async function prepareUncached(params: {
   minActionableAbsoluteLevel?: number;
   prepareEntryContext: boolean;
   profiler: SlowTradingCycleProfiler;
@@ -136,14 +140,33 @@ async function prepare(params: {
   });
   let currentTimeMs = Date.now();
   const firstSymbol = symbols[0];
+  const candleRequestTime = Date.now();
   const currentTimeKlines = await params.profiler.time(
     "signals.currentTimeKlines",
     () =>
-      exchange.getKlines({
-        symbol: `${firstSymbol}_USDT`,
-        interval: "5m",
-        marketType,
-        simpleTime: "10minute",
+      slowTradingPublicMarketCache.value.getOrLoad({
+        expiresAt: slowTradingPublicMarketCache.boundary.next(
+          candleRequestTime,
+          FIVE_MINUTES_MS,
+        ),
+        key: [
+          "stage-candle-5m",
+          exchange.exchangeType,
+          marketType,
+          firstSymbol,
+        ].join(":"),
+        now: candleRequestTime,
+        shouldCache: (klines) => {
+          const closeTime = Number(klines.at(-1)?.[6]);
+          return Number.isFinite(closeTime) && closeTime <= candleRequestTime;
+        },
+        load: () =>
+          exchange.getKlines({
+            symbol: `${firstSymbol}_USDT`,
+            interval: "5m",
+            marketType,
+            simpleTime: "10minute",
+          }),
       }),
   );
   const currentTimeKline = currentTimeKlines.at(-1);
@@ -277,6 +300,12 @@ async function prepare(params: {
             })
             .then((snapshot) => snapshot.volumes)
             .catch(async (error) => {
+              if (binanceRequestCoordinator.error.isRateLimit(error)) {
+                await slowTradingNotifications.operationalError.notify({
+                  source: "cycle.volume-24h",
+                  error,
+                });
+              }
               tradeLog.error(
                 "[slow-trading] failed to refresh 24h volume",
                 error,
@@ -292,6 +321,35 @@ async function prepare(params: {
       },
     },
   };
+}
+
+/** Coalesces concurrent consumers of the same immutable public snapshot. */
+async function prepare(params: {
+  minActionableAbsoluteLevel?: number;
+  prepareEntryContext: boolean;
+  profiler: SlowTradingCycleProfiler;
+  storage: SlowTradingStorageData;
+  symbols: string[];
+}): Promise<SlowTradingSharedMarketSnapshot | null> {
+  const symbols = normalizeSymbols(params.symbols);
+  if (symbols.length === 0) {
+    // PROD:EMPTY_MONITORING_NO_MARKET_IO
+    return null;
+  }
+
+  const key = [
+    "shared-snapshot",
+    params.storage.config.exchangeType,
+    params.storage.config.tradingMode,
+    params.storage.config.decisionEngineVersion,
+    params.minActionableAbsoluteLevel ?? "default",
+    params.prepareEntryContext ? "entry" : "monitoring",
+    symbols.join(","),
+  ].join(":");
+
+  return slowTradingPublicMarketCache.operation.singleFlight(key, () =>
+    prepareUncached({ ...params, symbols }),
+  );
 }
 
 const slowTradingCycleSharedMarket = {

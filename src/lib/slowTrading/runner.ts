@@ -6,9 +6,12 @@ import slowTradingNotifications from "./notifications";
 import slowTradingQueue from "./queue";
 import slowTradingStages, { type SlowTradingStage } from "./stages";
 import slowTradingStorage from "./storage";
+import binanceRequestCoordinator, {
+  BinanceCooldownError,
+} from "@/lib/exchange/platform/binance/request-coordinator";
 
 const MINUTE_MS = 60 * 1000;
-export const SLOW_TRADING_RUNNER_IMPLEMENTATION_VERSION = 9;
+export const SLOW_TRADING_RUNNER_IMPLEMENTATION_VERSION = 10;
 
 /** Background in-process scheduler for the independent SLOW production stages. */
 export class SlowTradingRunner {
@@ -70,11 +73,26 @@ export class SlowTradingRunner {
           ? await runTick()
           : await this.enqueue(runTick);
     } catch (error) {
-      tradeLog.error(`runner ${stage} tick failed`, error);
-      await slowTradingNotifications.operationalError.notify({
-        source: `runner.tick.${stage}`,
-        error,
-      });
+      if (binanceRequestCoordinator.error.isRateLimit(error)) {
+        const cooldown = binanceRequestCoordinator.cooldown.get();
+        if (error instanceof BinanceCooldownError && error.activated) {
+          await slowTradingNotifications.operationalError.notify({
+            source: `runner.tick.${stage}`,
+            error,
+          });
+        }
+        tradeLog.debug(
+          `runner ${stage} skipped during Binance cooldown${
+            cooldown ? ` until ${new Date(cooldown.retryAt).toISOString()}` : ""
+          }`,
+        );
+      } else {
+        tradeLog.error(`runner ${stage} tick failed`, error);
+        await slowTradingNotifications.operationalError.notify({
+          source: `runner.tick.${stage}`,
+          error,
+        });
+      }
     }
 
     if (this.isRunning) {
@@ -103,6 +121,16 @@ export class SlowTradingRunner {
     const snapshot = slowTradingStorage.dashboard.buildState(storage);
     const intervalMs =
       slowTradingStages.interval.getMinutes(storage.runtime, stage) * MINUTE_MS;
+
+    const activeCooldown = binanceRequestCoordinator.cooldown.get();
+    if (activeCooldown && storage.config.exchangeType === "binance") {
+      tradeLog.debug(
+        `skipping ${stage} stage during Binance cooldown until ${new Date(
+          activeCooldown.retryAt,
+        ).toISOString()}`,
+      );
+      return intervalMs;
+    }
 
     if (!storage.runtime.runnerEnabled) {
       if (this.lastLoopState !== "disabled") {
@@ -145,6 +173,15 @@ export class SlowTradingRunner {
             `finished risk sentinel | account=${account.slug} mode=${result.mode} state=${result.next.status} reason=${result.next.reason} emergencyExits=${result.forceExitSymbols.length}`,
           );
         } catch (error) {
+          if (binanceRequestCoordinator.error.isRateLimit(error)) {
+            if (error instanceof BinanceCooldownError && error.activated) {
+              await slowTradingNotifications.operationalError.notify({
+                source: `runner.tick.${stage}`,
+                error,
+              });
+            }
+            continue;
+          }
           // PROD:MULTI_ACCOUNT_FAILURE_ISOLATION
           tradeLog.error(
             `risk sentinel failed | account=${account.slug}`,
@@ -175,6 +212,15 @@ export class SlowTradingRunner {
             account.slug,
           );
         } catch (error) {
+          if (binanceRequestCoordinator.error.isRateLimit(error)) {
+            if (error instanceof BinanceCooldownError && error.activated) {
+              await slowTradingNotifications.operationalError.notify({
+                source: `runner.tick.${stage}`,
+                error,
+              });
+            }
+            continue;
+          }
           // PROD:MULTI_ACCOUNT_FAILURE_ISOLATION
           tradeLog.error(
             `queue synchronization failed | account=${account.slug}`,

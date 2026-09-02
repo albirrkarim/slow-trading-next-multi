@@ -5,6 +5,7 @@ import { BASE_URL } from "./config";
 import { tradeLog } from "@lib/trading";
 import { getCurrentExchangeAccountSlug } from "@/lib/exchange/account-context";
 import { getTokocryptoCredentials } from "@/lib/exchange/credentials";
+import { requestPublic as requestBinancePublic } from "@/lib/exchange/platform/binance/utils";
 // import path from "path";
 // import fs from "fs-extra";
 
@@ -117,6 +118,10 @@ export async function requestPublic<T>(
   params: Record<string, any> = {},
   domain = BASE_URL,
 ): Promise<T> {
+  if (new URL(domain).hostname.endsWith("binance.com")) {
+    return requestBinancePublic<T>(endpoint, params, domain);
+  }
+
   try {
     const response = await axios.get(`${domain}${endpoint}`, { params });
     const data = response.data;

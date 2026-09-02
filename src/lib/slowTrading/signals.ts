@@ -39,6 +39,7 @@ import slowTradingDailyPnlLimit from "./daily-pnl-limit";
 import slowTradingCycleSharedMarket, {
   type SlowTradingSharedMarketSnapshot,
 } from "./cycle/shared-market";
+import binanceRequestCoordinator from "@/lib/exchange/platform/binance/request-coordinator";
 
 /**
  * Remove entry signals for symbols that already have open positions.
@@ -627,7 +628,10 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
                 tradingMode: storage.config.tradingMode,
               });
               return [symbol, kline] as const;
-            } catch {
+            } catch (error) {
+              if (binanceRequestCoordinator.error.isRateLimit(error)) {
+                throw error;
+              }
               return [symbol, undefined] as const;
             }
           }),

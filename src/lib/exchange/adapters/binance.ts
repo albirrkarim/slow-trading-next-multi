@@ -32,6 +32,7 @@ import { getMarketCapUSDForSymbol } from "../market-cap";
 import { tradeLog } from "@/lib/trading/helper/log";
 import exchangeExit from "../ensure-closed";
 import binanceFuturesFunding from "@/lib/exchange/platform/binance/futures/funding";
+import binanceRequestCoordinator from "@/lib/exchange/platform/binance/request-coordinator";
 
 /**
  * Binance Exchange Adapter
@@ -137,11 +138,13 @@ export class BinanceExchange implements IExchange {
 
       return balance;
     } catch (error) {
-      notifyBinanceBalanceFailure({
-        symbol,
-        tradingMode,
-        reason: formatBinanceBalanceError(error),
-      });
+      if (!binanceRequestCoordinator.error.isRateLimit(error)) {
+        notifyBinanceBalanceFailure({
+          symbol,
+          tradingMode,
+          reason: formatBinanceBalanceError(error),
+        });
+      }
 
       throw error;
     }

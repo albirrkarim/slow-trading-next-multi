@@ -1,6 +1,7 @@
 import type { InitialBalance } from "@/lib/trading";
 import { requestPrivate } from "../utils";
 import { tradeLog } from "@/lib/trading/helper/log";
+import binanceRequestCoordinator from "../request-coordinator";
 
 /**
  * Binance Account Balance Response
@@ -63,6 +64,7 @@ export async function getAsset(asset: string): Promise<AssetBalance | null> {
         parseFloat(currencyBalance.free) + parseFloat(currencyBalance.locked),
     };
   } catch (error) {
+    if (binanceRequestCoordinator.error.isRateLimit(error)) throw error;
     tradeLog.error(`Error fetching balance for ${asset}:`, error);
     return null;
   }

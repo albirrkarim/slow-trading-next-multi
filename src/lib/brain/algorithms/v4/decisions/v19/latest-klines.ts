@@ -55,6 +55,13 @@ export async function buildLatestKlineBySymbol(params: {
 
           return [symbol, klines.at(-1)] as const;
         } catch (error) {
+          if (
+            error instanceof Error &&
+            "retryAt" in error &&
+            Number.isFinite(Number(error.retryAt))
+          ) {
+            throw error;
+          }
           tradeLog.error(
             `decision.v19 failed to fetch latest kline for ${symbol}`,
             error,

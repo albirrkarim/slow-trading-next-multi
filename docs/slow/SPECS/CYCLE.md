@@ -248,7 +248,65 @@ Public requests must retain bounded concurrency and exchange-aware rate
 limiting. The architecture reduces calls by sharing work; it must not replace
 sequential requests with an unbounded burst.
 
-Planned TC: `PROD:SHARED_MARKET_SINGLE_FLIGHT`
+Completed public-market results use freshness windows that match the data:
+
+- Black Swan candles: 55 seconds.
+- Latest reporting and position-sync prices: 5 seconds.
+- A completed five-minute stage candle: until the next aligned five-minute
+  boundary. An in-progress candle is coalesced only while its request runs.
+- Funding rates: 5 minutes.
+- 24-hour volume: 10 minutes.
+- Volatility refresh: in-flight coalescing only; completed memory follows the
+  existing vPoint synchronization throttle and persistent cache.
+
+The full shared snapshot is coalesced while preparation is in progress. Its
+individual public inputs then follow the freshness windows above; the system
+does not retain account decisions or order authorization in that snapshot.
+
+TC: `PROD:SHARED_MARKET_SINGLE_FLIGHT`
+
+### 8.1 Binance Request Coordinator
+
+Every Binance public and private REST request in the exchange adapter must pass
+through one in-process coordinator. The coordinator serializes REST work,
+estimates the documented endpoint request weight, observes
+`X-MBX-USED-WEIGHT-*` response headers, and slows or defers requests as the
+current request-weight window approaches its limit.
+
+The coordinator is below SLOW orchestration so independent cycle stages,
+entry diagnostics, dashboard data, volatility refresh, and private account
+execution cannot create separate uncoordinated Binance queues.
+
+TC: `PROD:BINANCE_REQUEST_COORDINATOR`
+
+### 8.2 Binance Global Cooldown
+
+HTTP `429`, HTTP `418`, and Binance error code `-1003` activate one hard
+cooldown for the running app instance. The coordinator uses `Retry-After` and
+Binance's `banned until` timestamp when available, and otherwise applies a
+safe fallback cooldown.
+
+While the cooldown is active:
+
+- No queued public or private Binance REST callback may execute.
+- Scheduled Binance stages skip without emitting repeated operational-error
+  notifications.
+- Entry diagnostics return HTTP `503`, the message `Binance cooldown`, and the
+  numeric `retryAt` timestamp without starting market analysis.
+- The first rate-limit response emits the canonical cooldown error; callers
+  observing the same cooldown do not create another Binance request.
+
+TC: `PROD:BINANCE_GLOBAL_COOLDOWN`
+
+### 8.3 Retry Classification
+
+Rate-limit responses and invalid-symbol responses are never retried. Kline
+fetching retries only temporary transport failures and HTTP `5xx` responses,
+uses exponential backoff, and stops after three total attempts. Exhausted or
+non-retryable failures abort the fetch instead of continuing with a partial
+market history.
+
+TC: `PROD:BINANCE_RATE_LIMIT_NO_RETRY`
 
 ## 9. Failure Isolation
 

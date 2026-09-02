@@ -10,6 +10,7 @@ import slowTradingStageRun from "../stage-run";
 import slowTradingStorage from "../storage";
 import slowTradingWatchReserve from "../watch-reserve";
 import type { SlowTradingCycleResult, SlowTradingCycleRuntime } from "./types";
+import binanceRequestCoordinator from "@/lib/exchange/platform/binance/request-coordinator";
 
 /** Refreshes reporting data and persists the completed cycle in dependency order. */
 async function execute(
@@ -120,7 +121,16 @@ async function execute(
                   .time("cycle.fundingRates", () =>
                     sharedMarket.fundingRates.get(reportingSymbols),
                   )
-                  .catch((fundingError) => {
+                  .catch(async (fundingError) => {
+                    if (
+                      binanceRequestCoordinator.error.isRateLimit(fundingError)
+                    ) {
+                      await slowTradingNotifications.operationalError.notify({
+                        source: "cycle.funding-rates",
+                        error: fundingError,
+                      });
+                      return {};
+                    }
                     // Funding is supplementary monitoring data. Never let a
                     // failed public snapshot stop position management.
                     tradeLog.error(

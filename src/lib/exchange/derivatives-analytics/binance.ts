@@ -2,6 +2,7 @@ import type {
   DerivativesPositioningHistoryParams,
   DerivativesPositioningPoint,
 } from "./types";
+import { requestPublic } from "@/lib/exchange/platform/binance/utils";
 
 const BINANCE_FUTURES_REST_URL = "https://fapi.binance.com";
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -18,17 +19,12 @@ function makeBinanceSymbol(symbol: string): string {
 }
 
 async function getJson(url: URL): Promise<unknown> {
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Binance market-data request failed (${response.status})`);
-  }
-
-  return response.json();
+  return requestPublic<unknown>(
+    url.pathname,
+    Object.fromEntries(url.searchParams.entries()),
+    url.origin,
+    { timeoutMs: REQUEST_TIMEOUT_MS },
+  );
 }
 
 /**

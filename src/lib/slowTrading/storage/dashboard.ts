@@ -18,6 +18,7 @@ import type {
   SlowTradingStorageData,
 } from "../types";
 import { tradeLog } from "@/lib/trading/helper/log";
+import binanceRequestCoordinator from "@/lib/exchange/platform/binance/request-coordinator";
 import blackSwan from "@/lib/trading/black-swan";
 
 /**
@@ -70,6 +71,9 @@ async function getSlowTradingLatestPriceMap(
 
           return [symbol, latestPrice] as const;
         } catch (error) {
+          if (binanceRequestCoordinator.error.isRateLimit(error)) {
+            return null;
+          }
           tradeLog.warn(
             `[slow-trading] failed to refresh floating pnl for ${symbol}`,
             error,

@@ -7,6 +7,7 @@ import slowTradingMutationQueue from "./mutation-queue";
 import slowTradingNotifications from "./notifications";
 import slowTradingStorage from "./storage";
 import type { SlowTradingMode, SlowTradingStorageData } from "./types";
+import binanceRequestCoordinator from "@/lib/exchange/platform/binance/request-coordinator";
 
 const MINUTE_MS = 60_000;
 const CACHE_TTL_MS = 55_000;
@@ -110,7 +111,10 @@ async function getBreadthCandles(params: {
               storage: params.storage,
               symbol,
             });
-          } catch {
+          } catch (error) {
+            if (binanceRequestCoordinator.error.isRateLimit(error)) {
+              throw error;
+            }
             // Missing symbols are excluded from the valid breadth denominator.
           }
         }
@@ -190,7 +194,10 @@ async function captureEvidence(params: {
           symbol: "BTC",
         })
       : [];
-  } catch {
+  } catch (error) {
+    if (binanceRequestCoordinator.error.isRateLimit(error)) {
+      throw error;
+    }
     // The pure detector converts unavailable/stale BTC data into fail-closed WATCH.
   }
 

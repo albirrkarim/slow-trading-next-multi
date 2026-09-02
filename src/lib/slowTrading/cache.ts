@@ -1,5 +1,5 @@
 import { FILES } from "@/components/storage";
-import { mergeVolatilityMemoryById } from "@/components/api/production/utils";
+import { persistVolatilityMemory } from "@/components/api/production/utils";
 import fs from "fs-extra";
 import type { SlowTradingModeState, SlowTradingStorageData } from "./types";
 
@@ -19,17 +19,11 @@ export async function persistModeStateCaches(params: {
     const modelMemory = tradeSetting.model_memory;
 
     if (modelMemory.volatility) {
-      const volatilityFile = `${FILES.slow.volatility(exchangeType)}/${symbol}.json`;
-      const persistedVolatility = (await fs.pathExists(volatilityFile))
-        ? ((await fs.readJSON(volatilityFile)) as
-            | NonNullable<typeof modelMemory.volatility>
-            | undefined)
-        : undefined;
-
-      await fs.writeJSON(
-        volatilityFile,
-        mergeVolatilityMemoryById(persistedVolatility, modelMemory.volatility),
-      );
+      await persistVolatilityMemory({
+        exchangeType,
+        memory: modelMemory.volatility,
+        symbol,
+      });
       delete modelMemory.volatility;
     }
   }
