@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Paper, Tooltip, Typography } from "@mui/material";
+import { alpha, Box, Paper, Tooltip, Typography } from "@mui/material";
 import { useMemo } from "react";
 
 import HeaderMetrics from "@/components/ui/HeaderMetrics";
@@ -25,6 +25,11 @@ export interface VPointPctMetrics {
   avg: number | null;
   max: number | null;
   min: number | null;
+}
+
+export interface VPointLevelMaxDrawdown extends VPointPctMetrics {
+  count: number;
+  targetLevels: number[];
 }
 
 export interface RangedVPointsSummary {
@@ -94,6 +99,66 @@ function summarizeVPoints(points: VolatilityPoint[]): RangedVPointsSummary {
   };
 }
 
+/** Summarizes each level's next outward-level pct values as drawdown samples. */
+export function summarizeVPointLevelMaxDrawdowns(
+  points: Pick<VolatilityPoint, "lvl" | "pct">[],
+): Map<number, VPointLevelMaxDrawdown> {
+  const valuesBySourceLevel = new Map<number, number[]>();
+
+  for (const point of points) {
+    if (
+      !Number.isInteger(point.lvl) ||
+      point.lvl === 0 ||
+      !Number.isFinite(point.pct)
+    ) {
+      continue;
+    }
+
+    const sourceLevel = point.lvl > 0 ? point.lvl - 1 : point.lvl + 1;
+    const current = valuesBySourceLevel.get(sourceLevel) ?? [];
+    current.push(point.pct);
+    valuesBySourceLevel.set(sourceLevel, current);
+  }
+
+  return new Map(
+    [...valuesBySourceLevel.entries()].map(
+      ([sourceLevel, values]) => [
+        sourceLevel,
+        {
+          avg: values.reduce((sum, value) => sum + value, 0) / values.length,
+          count: values.length,
+          max: Math.max(...values),
+          min: Math.min(...values),
+          targetLevels:
+            sourceLevel === 0
+              ? [1, -1]
+              : [sourceLevel + (sourceLevel > 0 ? 1 : -1)],
+        },
+      ],
+    ),
+  );
+}
+
+/** Explains which outward vPoint pct samples feed one level's Max DD. */
+export function buildVPointLevelMaxDrawdownTooltip(
+  level: number,
+  metric?: VPointLevelMaxDrawdown,
+): string {
+  const defaultTargetLevels =
+    level === 0 ? [1, -1] : [level + (level > 0 ? 1 : -1)];
+  const targetLevels = metric?.targetLevels.length
+    ? metric.targetLevels
+    : defaultTargetLevels;
+  const targetLabel = targetLevels
+    .map((targetLevel) => `Level ${targetLevel}`)
+    .join(" and ");
+  const sampleLabel = metric
+    ? `the ${metric.count.toLocaleString()} matching vPoint${metric.count === 1 ? "" : "s"}`
+    : "no matching vPoints because none are available";
+
+  return `Level ${level} Max DD uses pct from ${targetLabel} vPoints in the selected range. Each pct is the price-movement magnitude from the preceding pivot to that outward level. Max, avg, and min summarize ${sampleLabel}.`;
+}
+
 /** Calculates the whole-percent progression from one level to the next. */
 export function calculateVPointLevelProgressionPct({
   count,
@@ -112,6 +177,26 @@ export function calculateVPointLevelProgressionPct({
   }
 
   return Math.floor((count / lowerCount) * 100);
+}
+
+/** Calculates a level row's proportional heat-map width. */
+export function calculateVPointLevelHeatPct({
+  count,
+  maximumCount,
+}: {
+  count: number;
+  maximumCount: number;
+}): number {
+  if (
+    !Number.isFinite(count) ||
+    count <= 0 ||
+    !Number.isFinite(maximumCount) ||
+    maximumCount <= 0
+  ) {
+    return 0;
+  }
+
+  return Math.min(100, (count / maximumCount) * 100);
 }
 
 /** Builds the outward level progressions available from one vPoint level. */
@@ -189,6 +274,12 @@ function formatVPointPct(value: number | null): string {
   return value === null ? "—" : `${value.toFixed(2)}%`;
 }
 
+function formatLevelMaxDrawdown(metric?: VPointLevelMaxDrawdown): string {
+  if (!metric) return "Max DD —";
+
+  return `Max DD (max: ${formatVPointPct(metric.max)}, avg: ${formatVPointPct(metric.avg)}, min: ${formatVPointPct(metric.min)})`;
+}
+
 export default function VPointsFrequency({
   endTime,
   startTime,
@@ -248,6 +339,11 @@ function VPointsFrequencyContent({
   const countByLevel = new Map(
     frequencies.map(({ count, level }) => [level, count]),
   );
+  const maxDrawdownByLevel = useMemo(
+    () => summarizeVPointLevelMaxDrawdowns(points),
+    [points],
+  );
+  const maximumCount = Math.max(...frequencies.map(({ count }) => count));
 
   if (frequencies.length === 0) {
     return (
@@ -302,6 +398,15 @@ function VPointsFrequencyContent({
             countByLevel,
             level,
           });
+          const heatPct = calculateVPointLevelHeatPct({
+            count,
+            maximumCount,
+          });
+          const maxDrawdown = maxDrawdownByLevel.get(level);
+          const maxDrawdownTooltip = buildVPointLevelMaxDrawdownTooltip(
+            level,
+            maxDrawdown,
+          );
 
           return (
             <Box
@@ -310,13 +415,45 @@ function VPointsFrequencyContent({
                 alignItems: "center",
                 borderTop: index === 0 ? 0 : 1,
                 borderColor: "divider",
+                backgroundImage: (theme) =>
+                  `linear-gradient(to left, ${alpha(theme.palette.primary.main, 0.28)}, ${alpha(theme.palette.primary.main, 0.08)} 68%, transparent)`,
+                backgroundPosition: "right center",
+                backgroundRepeat: "no-repeat",
+                backgroundSize: `${heatPct}% 100%`,
                 display: "flex",
                 justifyContent: "space-between",
                 px: 1.25,
                 py: 0.75,
               }}
             >
-              <Typography variant="body2">Level {level}</Typography>
+              <Box
+                sx={{
+                  alignItems: "baseline",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 0.75,
+                  minWidth: 0,
+                  pr: 1,
+                }}
+              >
+                <Typography variant="body2">Level {level}</Typography>
+                <Tooltip arrow enterTouchDelay={0} title={maxDrawdownTooltip}>
+                  <Typography
+                    aria-label={maxDrawdownTooltip}
+                    color="text.secondary"
+                    component="span"
+                    sx={{
+                      borderBottom: "1px dotted",
+                      cursor: "help",
+                      lineHeight: 1.35,
+                    }}
+                    tabIndex={0}
+                    variant="caption"
+                  >
+                    {formatLevelMaxDrawdown(maxDrawdown)}
+                  </Typography>
+                </Tooltip>
+              </Box>
               <Box
                 sx={{
                   alignItems: "baseline",

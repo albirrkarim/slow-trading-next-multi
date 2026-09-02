@@ -552,6 +552,19 @@ with its result formatted to two decimal places and names the target level.
 
 TC: `PROD:VPOINTS_FREQUENCY`
 
+Each level row also shows `Max DD` statistics calculated from the `pct` values
+of its next outward level in the current selected range. Level `1` uses Level
+`2` points, Level `2` uses Level `3`, and negative levels mirror the rule so
+Level `-1` uses Level `-2`. Level `0` combines the Level `1` and Level `-1`
+samples. Max, average, and minimum use only finite matching `pct` values. A row
+without a next outward-level sample displays an unavailable value. Its
+keyboard-, hover-, and touch-accessible tooltip identifies the target level,
+range, sample count, and that `pct` is the price-movement magnitude from the
+preceding pivot to the outward vPoint. Each row also renders a proportional
+heatmap whose width is its count divided by the largest level count.
+
+TC: `PROD:VPOINTS_LEVEL_MAX_DD`
+
 The dashboard shows an `Entry Decisions` section immediately below VPoints
 Frequency. It evaluates the latest point for every configured coin whose
 absolute level meets `config.minActionableAbsoluteLevel`. Each row identifies

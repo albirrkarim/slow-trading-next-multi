@@ -15,9 +15,12 @@ import {
   matchesLatestVolatilitySymbolSearch,
 } from "@/components/LiveDashboard/Feature/LatestVolatilityPoints";
 import {
+  buildVPointLevelMaxDrawdownTooltip,
+  calculateVPointLevelHeatPct,
   calculateVPointLevelProgressionPct,
   countRangedVPointLevelFrequency,
   getVPointLevelProgressions,
+  summarizeVPointLevelMaxDrawdowns,
   summarizeRangedVPoints,
 } from "@/components/LiveDashboard/Feature/VPointsFrequency";
 import {
@@ -214,6 +217,19 @@ describe("latest volatility point volume", () => {
     ).toBeNull();
   });
 
+  it("scales level heat widths against the highest count", () => {
+    // PROD:VPOINTS_FREQUENCY
+    expect(
+      calculateVPointLevelHeatPct({ count: 1_477, maximumCount: 1_477 }),
+    ).toBe(100);
+    expect(
+      calculateVPointLevelHeatPct({ count: 793, maximumCount: 1_477 }),
+    ).toBeCloseTo((793 / 1_477) * 100);
+    expect(calculateVPointLevelHeatPct({ count: 0, maximumCount: 1_477 })).toBe(
+      0,
+    );
+  });
+
   it("attaches outward progression to its source level", () => {
     // PROD:VPOINTS_FREQUENCY
     const countByLevel = new Map([
@@ -258,6 +274,69 @@ describe("latest volatility point volume", () => {
         targetLevel: -2,
       },
     ]);
+  });
+
+  it("summarizes each level from its next outward-level pct values", () => {
+    // PROD:VPOINTS_LEVEL_MAX_DD
+    const metrics = summarizeVPointLevelMaxDrawdowns([
+      { lvl: 2, pct: 6 },
+      { lvl: 2, pct: 8 },
+      { lvl: 3, pct: 10 },
+      { lvl: 1, pct: 2 },
+      { lvl: -1, pct: 3 },
+      { lvl: -2, pct: 4 },
+      { lvl: -2, pct: 6 },
+      { lvl: 0, pct: 99 },
+      { lvl: 2, pct: Number.NaN },
+    ]);
+
+    expect(metrics.get(1)).toEqual({
+      avg: 7,
+      count: 2,
+      max: 8,
+      min: 6,
+      targetLevels: [2],
+    });
+    expect(metrics.get(2)).toEqual({
+      avg: 10,
+      count: 1,
+      max: 10,
+      min: 10,
+      targetLevels: [3],
+    });
+    expect(metrics.get(0)).toEqual({
+      avg: 2.5,
+      count: 2,
+      max: 3,
+      min: 2,
+      targetLevels: [1, -1],
+    });
+    expect(metrics.get(-1)).toEqual({
+      avg: 5,
+      count: 2,
+      max: 6,
+      min: 4,
+      targetLevels: [-2],
+    });
+    expect(metrics.has(3)).toBe(false);
+  });
+
+  it("explains the source level and sample count for Max DD", () => {
+    // PROD:VPOINTS_LEVEL_MAX_DD
+    expect(
+      buildVPointLevelMaxDrawdownTooltip(1, {
+        avg: 7,
+        count: 2,
+        max: 8,
+        min: 6,
+        targetLevels: [2],
+      }),
+    ).toContain(
+      "Level 1 Max DD uses pct from Level 2 vPoints in the selected range",
+    );
+    expect(buildVPointLevelMaxDrawdownTooltip(3)).toContain(
+      "no matching vPoints",
+    );
   });
 
   it("counts latest table TOP and DOWN percentages from ranged vPoints", () => {
