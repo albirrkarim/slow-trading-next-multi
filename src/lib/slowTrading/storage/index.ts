@@ -23,6 +23,7 @@ import {
 } from "./history";
 import {
   hydrateSlowTradingHistoryFromFiles,
+  readHistoryForAccounts,
   readHistoryRange,
 } from "./history-files";
 import {
@@ -96,6 +97,7 @@ const slowTradingStorage = {
     getClosed: getSlowTradingHistory,
     getOpen: getSlowTradingOpenPositions,
     hydrate: hydrateSlowTradingHistoryFromFiles,
+    readAccounts: readHistoryForAccounts,
     readRange: readHistoryRange,
     updateNotes: updateSlowTradingHistoryEntryNotes,
   },

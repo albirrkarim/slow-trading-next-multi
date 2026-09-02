@@ -367,6 +367,147 @@ describe("SLOW multi-account specs", () => {
     ]);
   });
 
+  it("aggregates MCP history and finance data across enabled accounts", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const defaults = slowTrading.storage.data.createDefault();
+    const template = defaults.runtime.exchangeAccounts[0];
+    await slowTrading.storage.data.save(defaults);
+    await slowTrading.storage.account.saveAccounts(
+      [
+        {
+          ...template,
+          slug: "alpha",
+          name: "Alpha",
+          sandbox: { enabled: true, initialBalanceUSDT: 100 },
+        },
+        {
+          ...template,
+          slug: "beta",
+          name: "Beta",
+          sandbox: { enabled: true, initialBalanceUSDT: 400 },
+        },
+        {
+          ...template,
+          slug: "paused",
+          name: "Paused",
+          enabled: false,
+          sandbox: { enabled: true, initialBalanceUSDT: 999 },
+        },
+      ],
+      defaults.sharedConfig,
+    );
+
+    const accountData = [
+      ["alpha", 12, "2026-09-01T10:00:00.000Z"],
+      ["beta", -4, "2026-09-01T11:00:00.000Z"],
+      ["paused", 999, "2026-09-01T12:00:00.000Z"],
+    ] as const;
+
+    for (const [account, netUsdt, closedAt] of accountData) {
+      const storage = await slowTrading.storage.data.load({ account });
+      const tradeSetting = storage.modes.sandbox.tradeSettings[0];
+      tradeSetting.model_memory.positions = [
+        createTestPosition({
+          account,
+          entryId: `OPEN_${account}`,
+          entryTime: new Date(closedAt).getTime() + 1,
+          executionMode: "sandbox",
+          symbol: tradeSetting.symbol,
+        }),
+      ];
+      tradeSetting.model_memory.positionsSell = [
+        createTestPosition({
+          account,
+          closed: {
+            feeUsdt: 0.1,
+            price: 11,
+            reason: "TAKE_PROFIT",
+            t: new Date(closedAt).getTime(),
+          },
+          entryId: `CLOSED_${account}`,
+          entryTime: new Date(closedAt).getTime() - 1,
+          executionMode: "sandbox",
+          netUsdt,
+          symbol: tradeSetting.symbol,
+        }),
+      ];
+      await slowTrading.storage.mode.saveState(
+        "sandbox",
+        storage.modes.sandbox,
+        { account },
+      );
+    }
+
+    const auth = {
+      permissions: new Set(["trade_history.read" as const]),
+      token: {
+        createdAt: 0,
+        enabled: true,
+        id: "history-test",
+        name: "History test",
+        permissions: ["trade_history.read" as const],
+        tokenHash: "",
+        tokenSecretEncrypted: "",
+      },
+    };
+    const history = (await slowTrading.mcp.tools.call({
+      arguments: { limit: 10, mode: "sandbox" },
+      auth,
+      name: "slow_trade_history_read",
+    })) as {
+      accounts: Array<{ name: string; slug: string }>;
+      history: Array<{ account: string }>;
+      openPositions: Array<{ account: string }>;
+      totalClosed: number;
+    };
+    const limitedHistory = (await slowTrading.mcp.tools.call({
+      arguments: {
+        includeOpenPositions: false,
+        limit: 1,
+        mode: "sandbox",
+      },
+      auth,
+      name: "slow_trade_history_read",
+    })) as {
+      history: Array<{ account: string }>;
+      totalClosed: number;
+    };
+    const finance = (await slowTrading.mcp.tools.call({
+      arguments: {
+        end: "2026-09-01",
+        mode: "sandbox",
+        start: "2026-09-01",
+      },
+      auth,
+      name: "slow_finance_summary",
+    })) as {
+      accounts: Array<{ name: string; slug: string }>;
+      closedTradeCount: number;
+      realizedNetPnlUsdt: number;
+    };
+
+    // PROD:MULTI_ACCOUNT_COMBINED_MCP_DATA
+    expect(history.accounts).toEqual([
+      expect.objectContaining({ name: "Alpha", slug: "alpha" }),
+      expect.objectContaining({ name: "Beta", slug: "beta" }),
+    ]);
+    expect(history.history.map((position) => position.account).sort()).toEqual([
+      "alpha",
+      "beta",
+    ]);
+    expect(
+      history.openPositions.map((position) => position.account).sort(),
+    ).toEqual(["alpha", "beta"]);
+    expect(history.totalClosed).toBe(2);
+    expect(limitedHistory).toMatchObject({
+      history: [{ account: "beta" }],
+      totalClosed: 2,
+    });
+    expect(finance.accounts).toEqual(history.accounts);
+    expect(finance.closedTradeCount).toBe(2);
+    expect(finance.realizedNetPnlUsdt).toBe(8);
+  });
+
   it("documents executable guards for sequencing and account dependencies", async () => {
     const [
       cycleAccounts,
@@ -376,6 +517,7 @@ describe("SLOW multi-account specs", () => {
       withdrawal,
       dashboard,
       history,
+      mcpHistory,
       standardBacktest,
     ] = await Promise.all([
       fs.readFile("src/lib/slowTrading/cycle/accounts.ts", "utf8"),
@@ -385,6 +527,7 @@ describe("SLOW multi-account specs", () => {
       fs.readFile("src/lib/slowTrading/withdrawal.ts", "utf8"),
       fs.readFile("src/lib/slowTrading/storage/dashboard.ts", "utf8"),
       fs.readFile("src/lib/slowTrading/storage/history-files.ts", "utf8"),
+      fs.readFile("src/lib/slowTrading/mcp/history.ts", "utf8"),
       fs.readFile("src/lib/devBacktest/api/dynamicTradeBacktest.ts", "utf8"),
     ]);
 
@@ -408,5 +551,7 @@ describe("SLOW multi-account specs", () => {
     expect(dashboard).toContain("PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD");
     // BOTH:MULTI_ACCOUNT_HISTORY_OWNER
     expect(history).toContain("BOTH:MULTI_ACCOUNT_HISTORY_OWNER");
+    // PROD:MULTI_ACCOUNT_COMBINED_MCP_DATA
+    expect(mcpHistory).toContain("PROD:MULTI_ACCOUNT_COMBINED_MCP_DATA");
   });
 });

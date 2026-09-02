@@ -5,6 +5,7 @@ import path from "path";
 import { clone, normalizeSymbol } from "./common";
 import type { HistoryPosition } from "./internal-types";
 import type {
+  SlowTradingHistoryPosition,
   SlowTradingMode,
   SlowTradingModeState,
   SlowTradingStorageData,
@@ -66,6 +67,47 @@ export async function readHistoryFile(
 
   const raw = await fs.readJSON(filePath);
   return Array.isArray(raw) ? raw : [];
+}
+
+/** Reads shared closed history once and keeps only the requested account owners. */
+export async function readHistoryForAccounts(params: {
+  accountSlugs: readonly string[];
+  mode: SlowTradingMode;
+  symbol?: string;
+}): Promise<SlowTradingHistoryPosition[]> {
+  const accountSlugs = new Set(params.accountSlugs);
+  if (accountSlugs.size === 0) return [];
+
+  const requestedSymbol = normalizeSymbol(params.symbol ?? "");
+  const symbols = requestedSymbol
+    ? [requestedSymbol]
+    : (
+        await fs
+          .readdir(getModeHistoryRoot(params.mode), { withFileTypes: true })
+          .catch(() => [])
+      )
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+        .map((entry) => normalizeSymbol(path.basename(entry.name, ".json")));
+  const history: SlowTradingHistoryPosition[] = [];
+
+  for (const symbol of symbols) {
+    const positions = await readHistoryFile(params.mode, symbol);
+
+    history.push(
+      ...positions
+        .filter(
+          (position) =>
+            Boolean(position.closed) && accountSlugs.has(position.account),
+        )
+        .map((position) => ({
+          ...clone(position),
+          mode: params.mode,
+          symbol,
+        })),
+    );
+  }
+
+  return history.sort((left, right) => left.opened.t - right.opened.t);
 }
 
 /** Reads closed positions whose closing time falls within a half-open range. */

@@ -248,12 +248,18 @@ positions, and history. It has no global account selector. Shared Daily PnL uses
 the combined shared history. Any account-specific feature owns a local account
 selector that changes only that feature.
 
-The read-only MCP `slow_balance_read` tool follows the same boundary. Its
-top-level balance is the sum of every enabled account in the requested mode,
-and its `accounts[]` field preserves each included account's contribution.
-Consumers such as the ReinventWP Company Dashboard treat that top-level value
-as the balance of this SLOW instance and must not sum the account breakdown a
-second time.
+All account-scoped read-only MCP tools follow the same boundary. The
+`slow_balance_read` top-level balance is the sum of every enabled account in the
+requested mode, and its `accounts[]` field preserves each included account's
+contribution. `slow_trade_history_read` concatenates closed and open positions
+from enabled accounts before applying its global filter and limit, while
+`slow_finance_summary` calculates one result from their combined closed trades.
+Both history tools preserve account identity and exclude disabled accounts.
+Consumers such as the ReinventWP Company Dashboard treat aggregate values as
+the value of this SLOW instance and must not sum account breakdowns a second
+time.
+
+TC: `PROD:MULTI_ACCOUNT_COMBINED_MCP_DATA`
 
 The Trading tab edits one account at a time. Its `Editing Account` selector is
 placed directly above the Trading form and changes only the profile being

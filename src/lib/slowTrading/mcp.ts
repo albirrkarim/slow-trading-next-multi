@@ -6,13 +6,13 @@ import type { CoinTagState } from "@/lib/devBacktest/coins/tag-types";
 
 import slowTradingFinanceSummary from "./finance-summary";
 import slowTradingMcpBalance from "./mcp/balance";
+import slowTradingMcpHistory from "./mcp/history";
 import slowTradingStorage from "./storage";
 import {
   SLOW_TRADING_MCP_PERMISSIONS,
   type SlowTradingMcpPermission,
   type SlowTradingMcpPublicTokenRecord,
   type SlowTradingMcpTokenRecord,
-  type SlowTradingMode,
 } from "./types";
 
 const WRITE_TOOL_NOTICE =
@@ -415,7 +415,7 @@ const toolDefinitions: SlowTradingMcpToolDefinition[] = [
   {
     name: "slow_finance_summary",
     description:
-      "Summarize realized net USDT P&L from closed SLOW trades inside one bounded UTC date range. Balance changes and open-position unrealized P&L are excluded.",
+      "Summarize realized net USDT P&L across every enabled exchange account from closed SLOW trades inside one bounded UTC date range. Disabled accounts, balance changes, and open-position unrealized P&L are excluded.",
     permission: "trade_history.read",
     readOnlyHint: true,
     inputSchema: jsonSchema(
@@ -440,7 +440,7 @@ const toolDefinitions: SlowTradingMcpToolDefinition[] = [
   {
     name: "slow_trade_history_read",
     description:
-      "Read SLOW trade history and open positions from the current storage snapshot.",
+      "Read combined SLOW trade history and open positions across every enabled exchange account. Each position retains its account slug and disabled accounts are excluded.",
     permission: "trade_history.read",
     readOnlyHint: true,
     inputSchema: jsonSchema({
@@ -589,52 +589,47 @@ async function callMcpTool(params: {
   }
 
   if (params.name === "slow_trade_history_read") {
+    // PROD:MULTI_ACCOUNT_COMBINED_MCP_DATA
     assertPermission(params.auth, "trade_history.read");
-    const storage = await slowTradingStorage.data.load({ includeHistory: true });
-    const activeMode = slowTradingStorage.mode.getActive(storage);
-    const requestedMode = String(args.mode ?? "active");
-    const mode: SlowTradingMode =
-      requestedMode === "live" || requestedMode === "sandbox"
-        ? requestedMode
-        : activeMode;
-    const symbol = String(args.symbol ?? "").trim().toUpperCase();
     const limit = Math.min(500, Math.max(1, Number(args.limit) || 50));
     const includeOpenPositions = args.includeOpenPositions !== false;
-    const history = slowTradingStorage.history
-      .getClosed(storage, mode)
-      .filter((position) => !symbol || position.symbol === symbol)
-      .slice(-limit)
-      .reverse();
-    const openPositions = includeOpenPositions
-      ? slowTradingStorage.history
-          .getOpen(storage, mode)
-          .filter((position) => !symbol || position.symbol === symbol)
-      : [];
+    const combined = await slowTradingMcpHistory.read({
+      defaultMode: "active",
+      includeOpenPositions,
+      requestedMode: args.mode,
+      symbol: String(args.symbol ?? ""),
+    });
 
     return cloneJson({
-      activeMode,
-      mode,
-      history,
-      openPositions,
-      totalClosed: slowTradingStorage.history
-        .getClosed(storage, mode)
-        .filter((position) => !symbol || position.symbol === symbol).length,
+      accounts: combined.accounts,
+      activeMode: combined.activeMode,
+      mode: combined.mode,
+      history: combined.closed.slice(-limit).reverse(),
+      openPositions: combined.open,
+      totalClosed: combined.closed.length,
     });
   }
 
   if (params.name === "slow_finance_summary") {
     // PROD:MCP_FINANCE_SUMMARY
+    // PROD:MULTI_ACCOUNT_COMBINED_MCP_DATA
     assertPermission(params.auth, "trade_history.read");
-    const mode: SlowTradingMode = args.mode === "sandbox" ? "sandbox" : "live";
-    const storage = await slowTradingStorage.data.load({ includeHistory: true });
-
-    return slowTradingFinanceSummary.create({
-      end: String(args.end ?? ""),
-      instanceName: getMcpAppName(),
-      mode,
-      positions: slowTradingStorage.history.getClosed(storage, mode),
-      start: String(args.start ?? ""),
+    const combined = await slowTradingMcpHistory.read({
+      defaultMode: "live",
+      includeOpenPositions: false,
+      requestedMode: args.mode,
     });
+
+    return {
+      ...slowTradingFinanceSummary.create({
+        end: String(args.end ?? ""),
+        instanceName: getMcpAppName(),
+        mode: combined.mode,
+        positions: combined.closed,
+        start: String(args.start ?? ""),
+      }),
+      accounts: combined.accounts,
+    };
   }
 
   throw new Error(`Unknown MCP tool: ${params.name}`);

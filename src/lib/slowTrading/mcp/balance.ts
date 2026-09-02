@@ -2,7 +2,7 @@ import slowTradingBalanceSummary, {
   type SlowTradingBalanceSummary,
 } from "../balance-summary";
 import slowTradingStorage from "../storage";
-import type { SlowTradingMode } from "../types";
+import slowTradingMcpAccountScope from "./account-scope";
 
 // PROD:MCP_BALANCE
 // PROD:MULTI_ACCOUNT_COMBINED_MCP_BALANCE
@@ -16,42 +16,25 @@ interface SlowTradingMcpBalanceReadParams {
 async function read(
   params: SlowTradingMcpBalanceReadParams,
 ): Promise<SlowTradingBalanceSummary> {
-  const catalog = await slowTradingStorage.data.load({ modeScope: "active" });
-  const activeMode = slowTradingStorage.mode.getActive(catalog);
-  const requestedMode = String(params.requestedMode ?? "active");
-  const mode: SlowTradingMode =
-    requestedMode === "live" || requestedMode === "sandbox"
-      ? requestedMode
-      : activeMode;
-  const enabledAccounts = catalog.runtime.exchangeAccounts.filter(
-    (account) => account.enabled,
-  );
-
-  if (enabledAccounts.length === 0) {
-    throw new Error(
-      "SLOW has no enabled exchange accounts to include in balance.",
-    );
-  }
-
-  const storages = [];
-  for (const account of enabledAccounts) {
-    const storage = await slowTradingStorage.data.load({
-      account: account.slug,
-      includeHistory: true,
-      modeScope: "all",
-    });
-    storage.runtime.sandboxEnabled = mode === "sandbox";
-    storages.push(storage);
+  const scope = await slowTradingMcpAccountScope.resolve({
+    defaultMode: "active",
+    requestedMode: params.requestedMode,
+  });
+  const storages = await slowTradingMcpAccountScope.loadStorages(scope, {
+    includeHistory: true,
+  });
+  for (const storage of storages) {
+    storage.runtime.sandboxEnabled = scope.mode === "sandbox";
   }
 
   const dashboardState =
     await slowTradingStorage.dashboard.buildCombinedStateRealtime(storages);
 
   return slowTradingBalanceSummary.create({
-    activeMode,
+    activeMode: scope.activeMode,
     dashboardState,
     instanceName: params.instanceName,
-    mode,
+    mode: scope.mode,
   });
 }
 
