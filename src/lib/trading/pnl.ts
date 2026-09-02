@@ -93,3 +93,21 @@ export function computeClosedPositionMetrics(
     netCurrentUSDT: roundTo(netCurrentUSDT, 3),
   };
 }
+
+/** Records the best and worst observed fee-aware USDT PnL on a position. */
+export function applyPositionNetUsdtExtrema(
+  position: Pick<Position, "pnl">,
+  netUsdt: number,
+): void {
+  if (!Number.isFinite(netUsdt)) {
+    return;
+  }
+
+  const observation = roundTo(netUsdt, 3);
+  position.pnl.maxUpUsdt = Number.isFinite(position.pnl.maxUpUsdt)
+    ? roundTo(Math.max(position.pnl.maxUpUsdt ?? observation, observation), 3)
+    : observation;
+  position.pnl.maxDownUsdt = Number.isFinite(position.pnl.maxDownUsdt)
+    ? roundTo(Math.min(position.pnl.maxDownUsdt ?? observation, observation), 3)
+    : observation;
+}

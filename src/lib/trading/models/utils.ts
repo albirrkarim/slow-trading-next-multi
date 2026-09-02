@@ -6,7 +6,10 @@ import type {
 } from "./type";
 import { TokocryptoFees, type Kline } from "@lib/exchange/platform/tokocrypto";
 import { type VolatilityPoint } from "@lib/dynamic";
-import { computeClosedPositionMetrics } from "@/lib/trading/pnl";
+import {
+  applyPositionNetUsdtExtrema,
+  computeClosedPositionMetrics,
+} from "@/lib/trading/pnl";
 import tradingPosition from "@/lib/trading/position";
 
 interface SellPosition {
@@ -151,6 +154,8 @@ function exitPosition({
 
   // C.3 Net PnL (USDT)
   pos.pnl.netUsdt = metrics.netProfitUSDT;
+  // BOTH:POSITION_PNL_USDT_EXTREMA
+  applyPositionNetUsdtExtrema(pos, metrics.netProfitUSDT);
 
   const totalFeeUsdt = pos.exposure.notionalUsdt * roundTripFee;
   const reason = closeReason ?? inferCloseReason(exitMessage);

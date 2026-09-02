@@ -230,6 +230,19 @@ Behavior expected:
   not increase monitoring frequency. Speedup and Standard positions therefore
   have different minimum effective sample cadences.
 
+Every fee-aware `position.pnl.netUsdt` observation also updates the position's
+USDT extrema:
+
+- `position.pnl.maxUpUsdt` is the highest observed `netUsdt`.
+- `position.pnl.maxDownUsdt` is the lowest observed `netUsdt`.
+- The first finite observation initializes both fields. Production monitoring,
+  exchange-side close reconciliation, dynamic backtests, and quick-backtest
+  history must preserve the same semantics.
+- Trade History exposes both values as sortable **Max Up USD** and
+  **Max Down USD** columns.
+
+TC: `BOTH:POSITION_PNL_USDT_EXTREMA`
+
 Every successfully monitored production position persists
 `position.lastMonitoringStage` with the actual completed stage (`speedup` or
 `standard`), its `lastUpdated` timestamp, and the classification `reason`

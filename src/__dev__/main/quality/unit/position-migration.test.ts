@@ -57,6 +57,8 @@ function createLegacyPosition() {
     netProfitPercent: 3,
     netProfitUSDT: 0.72,
     netCurrentUSDT: 24.72,
+    maxRunUpUSDT: 1.25,
+    maxDrawdownUSDT: -0.5,
   };
 }
 
@@ -111,6 +113,10 @@ describe("position storage migration", () => {
             },
           ],
         },
+      },
+      pnl: {
+        maxUpUsdt: 1.25,
+        maxDownUsdt: -0.5,
       },
     });
     expect(migrated.opened.source).toBeUndefined();

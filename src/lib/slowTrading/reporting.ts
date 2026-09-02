@@ -9,7 +9,10 @@ import type {
 } from "@/lib/exchange/types";
 import { getFeeCalculator } from "@/lib/exchange/fees";
 import { TokocryptoFees } from "@/lib/exchange/platform/tokocrypto";
-import { computeClosedPositionMetrics } from "@/lib/trading/pnl";
+import {
+  applyPositionNetUsdtExtrema,
+  computeClosedPositionMetrics,
+} from "@/lib/trading/pnl";
 import type { SlowTradingHistoryPosition, SlowTradingModeState } from "./types";
 import slowTradingPnlHistory from "./pnl-history";
 
@@ -222,6 +225,8 @@ export function applyFloatingSlowTradingPositionMetrics<T extends Position>(
 
   position.pnl.netPct = metrics.netProfitPercent;
   position.pnl.netUsdt = metrics.netProfitUSDT;
+  // BOTH:POSITION_PNL_USDT_EXTREMA
+  applyPositionNetUsdtExtrema(position, metrics.netProfitUSDT);
   position.pnl.currentValueUsdt = metrics.netCurrentUSDT;
   position.pnl.markPrice = price;
   applyFloatingFeeEstimate(position, roundTripFeeRatio);
@@ -252,6 +257,8 @@ function applyClosedPositionMetrics<T extends Position>(
 
   position.pnl.netPct = metrics.netProfitPercent;
   position.pnl.netUsdt = metrics.netProfitUSDT;
+  // BOTH:POSITION_PNL_USDT_EXTREMA
+  applyPositionNetUsdtExtrema(position, metrics.netProfitUSDT);
   position.pnl.currentValueUsdt = metrics.netCurrentUSDT;
 
   return position;
@@ -325,6 +332,11 @@ function seedSyntheticHistory<T extends SlowTradingHistoryPosition>(
   if (pctValues.length > 0) {
     next.pnl.maxUpPct = roundPct(Math.max(...pctValues));
     next.pnl.maxDownPct = roundPct(Math.min(...pctValues));
+  }
+
+  if (isFiniteNumber(next.pnl.netUsdt)) {
+    // Legacy histories can at least retain their final close as an observation.
+    applyPositionNetUsdtExtrema(next, next.pnl.netUsdt);
   }
 
   return next;

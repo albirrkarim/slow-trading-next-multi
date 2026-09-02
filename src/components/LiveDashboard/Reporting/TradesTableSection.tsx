@@ -54,6 +54,8 @@ type SortKey =
   | "holdMs"
   | "maxDrawdownPercent"
   | "maxRunUpPercent"
+  | "maxDrawdownUsdt"
+  | "maxRunUpUsdt"
   | "netProfitUSDT";
 
 const metricTooltipSlotProps = {
@@ -454,6 +456,10 @@ export function TradesTableSection({
           return row.pnl.maxDownPct ?? 0;
         case "maxRunUpPercent":
           return row.pnl.maxUpPct ?? 0;
+        case "maxDrawdownUsdt":
+          return row.pnl.maxDownUsdt ?? 0;
+        case "maxRunUpUsdt":
+          return row.pnl.maxUpUsdt ?? 0;
         case "netProfitUSDT":
           return row.pnl.netUsdt ?? 0;
         default:
@@ -620,6 +626,28 @@ export function TradesTableSection({
                   onClick={() => handleRequestSort("maxDrawdownPercent")}
                 >
                   Max Down
+                </TableSortLabel>
+              </TableCell>
+              <TableCell width={125} align="right">
+                <TableSortLabel
+                  active={sortKey === "maxRunUpUsdt"}
+                  direction={
+                    sortKey === "maxRunUpUsdt" ? sortDirection : "asc"
+                  }
+                  onClick={() => handleRequestSort("maxRunUpUsdt")}
+                >
+                  Max Up USD
+                </TableSortLabel>
+              </TableCell>
+              <TableCell width={135} align="right">
+                <TableSortLabel
+                  active={sortKey === "maxDrawdownUsdt"}
+                  direction={
+                    sortKey === "maxDrawdownUsdt" ? sortDirection : "asc"
+                  }
+                  onClick={() => handleRequestSort("maxDrawdownUsdt")}
+                >
+                  Max Down USD
                 </TableSortLabel>
               </TableCell>
               <TableCell width={120} align="right">
@@ -789,6 +817,30 @@ export function TradesTableSection({
                         formatValue={formatPercent}
                         ranges={DRAWDOWN_COLOR_RANGES}
                         value={row.pnl.maxDownPct}
+                        variant="body1"
+                      />
+                    </MetricTooltip>
+                  </TableCell>
+                  <TableCell align="right">
+                    <MetricTooltip title="Maximum fee-aware USDT profit observed while this trade was open. It comes from position.pnl.maxUpUsdt and follows position.pnl.netUsdt movements.">
+                      <RangedValueText
+                        component="span"
+                        fallbackColor="text.secondary"
+                        formatValue={formatUsdt}
+                        ranges={PROFIT_LOSS_COLOR_RANGES}
+                        value={row.pnl.maxUpUsdt}
+                        variant="body1"
+                      />
+                    </MetricTooltip>
+                  </TableCell>
+                  <TableCell align="right">
+                    <MetricTooltip title="Maximum fee-aware USDT loss observed while this trade was open. It comes from position.pnl.maxDownUsdt and follows position.pnl.netUsdt movements.">
+                      <RangedValueText
+                        component="span"
+                        fallbackColor="text.secondary"
+                        formatValue={formatUsdt}
+                        ranges={PROFIT_LOSS_COLOR_RANGES}
+                        value={row.pnl.maxDownUsdt}
                         variant="body1"
                       />
                     </MetricTooltip>

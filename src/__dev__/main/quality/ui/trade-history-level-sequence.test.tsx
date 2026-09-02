@@ -68,6 +68,8 @@ describe("trade-history level sequence", () => {
         ],
         netPct: 10,
         netUsdt: 1,
+        maxUpUsdt: 4.25,
+        maxDownUsdt: -3.5,
       },
       symbol: "SUI",
     });
@@ -98,6 +100,11 @@ describe("trade-history level sequence", () => {
         .map((chip) => chip.textContent),
     ).toEqual(["L2", "L3 AVG 5x", "L4 AVG 2x", "L0 EXIT"]);
     expect(chart.nextElementSibling?.contains(sequence)).toBe(true);
+    // BOTH:POSITION_PNL_USDT_EXTREMA
+    expect(screen.getByText("Max Up USD")).toBeTruthy();
+    expect(screen.getByText("Max Down USD")).toBeTruthy();
+    expect(screen.getByText("$+4.25")).toBeTruthy();
+    expect(screen.getByText("$-3.50")).toBeTruthy();
     expect(screen.queryByText("sandbox")).toBeNull();
   });
 

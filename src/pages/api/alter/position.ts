@@ -454,6 +454,8 @@ export function migrateLegacyPosition(
       currentValueUsdt: finiteNumber(value.netCurrentUSDT),
       maxUpPct: finiteNumber(value.maxRunUpPercent),
       maxDownPct: finiteNumber(value.maxDrawdownPercent),
+      maxUpUsdt: finiteNumber(value.maxRunUpUSDT),
+      maxDownUsdt: finiteNumber(value.maxDrawdownUSDT),
       history: Array.isArray(value.netProfitPercentHistory)
         ? value.netProfitPercentHistory
             .filter(isRecord)
@@ -659,6 +661,8 @@ export function validateCanonicalPosition(
     value.pnl.currentValueUsdt,
     value.pnl.maxUpPct,
     value.pnl.maxDownPct,
+    value.pnl.maxUpUsdt,
+    value.pnl.maxDownUsdt,
   ].filter((number) => number !== undefined);
   if (
     pnlNumbers.some((number) => !Number.isFinite(number)) ||

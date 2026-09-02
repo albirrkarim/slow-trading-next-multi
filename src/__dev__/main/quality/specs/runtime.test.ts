@@ -583,9 +583,23 @@ describe("slow specs runtime", () => {
     // PROD:MONITORING_OPEN_POSITION
     expect(position.pnl.netPct).toBe(9.8);
     expect(position.pnl.netUsdt).toBe(0.98);
+    // BOTH:POSITION_PNL_USDT_EXTREMA
+    expect(position.pnl.maxUpUsdt).toBe(0.98);
+    expect(position.pnl.maxDownUsdt).toBe(0.98);
     expect(position.fees.entryUsdt).toBe(0);
     expect(position.fees.estimatedExitUsdt).toBe(0.02);
     expect(position.pnl.markPrice).toBe(11);
+
+    slowTrading.reporting.modeState.sync({
+      exchangeType: "binance",
+      modeState,
+      latestPriceBySymbol: { SUI: 9 },
+      currentTimeMs: Date.UTC(2026, 0, 1, 0, 10),
+    });
+
+    expect(position.pnl.netUsdt).toBe(-1.02);
+    expect(position.pnl.maxUpUsdt).toBe(0.98);
+    expect(position.pnl.maxDownUsdt).toBe(-1.02);
   });
 
   it("persists the latest valid funding snapshot during monitoring", () => {

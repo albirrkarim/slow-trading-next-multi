@@ -267,6 +267,12 @@ export interface PositionPnl {
   /** Worst observed net PnL in percentage points. */
   maxDownPct?: number;
 
+  /** Best observed fee-aware net PnL in USDT. */
+  maxUpUsdt?: number;
+
+  /** Worst observed fee-aware net PnL in USDT. */
+  maxDownUsdt?: number;
+
   history?: PositionPnlPoint[];
 }
 
@@ -527,6 +533,8 @@ recreate its version union.
     "currentValueUsdt": 24.614,
     "maxUpPct": 3.74,
     "maxDownPct": -0.818,
+    "maxUpUsdt": 0.892,
+    "maxDownUsdt": -0.195,
     "history": [
       {
         "t": 1785352980000,
@@ -635,6 +643,8 @@ damage already-migrated records.
 | `markPrice` | `pnl.markPrice` |
 | `maxRunUpPercent` | `pnl.maxUpPct` |
 | `maxDrawdownPercent` | `pnl.maxDownPct` |
+| `maxRunUpUSDT` | `pnl.maxUpUsdt` |
+| `maxDrawdownUSDT` | `pnl.maxDownUsdt` |
 | `netProfitPercentHistory` | `pnl.history` |
 | `exitId` | `closed.vPoint.id` |
 | `exitLevel` | `closed.vPoint.lvl` |

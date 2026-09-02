@@ -542,6 +542,11 @@ export function positionsToQuickTradeHistory(
         const pctValues = history
           .map((point) => point.pct)
           .filter((value) => Number.isFinite(value));
+        const usdtValues = [
+          position.pnl.maxUpUsdt,
+          position.pnl.maxDownUsdt,
+          position.pnl.netUsdt,
+        ].filter((value): value is number => Number.isFinite(value));
 
         return {
           ...position,
@@ -555,6 +560,9 @@ export function positionsToQuickTradeHistory(
             history,
             maxDownPct: pctValues.length ? Math.min(...pctValues) : 0,
             maxUpPct: pctValues.length ? Math.max(...pctValues) : 0,
+            // BOTH:POSITION_PNL_USDT_EXTREMA
+            maxDownUsdt: usdtValues.length ? Math.min(...usdtValues) : 0,
+            maxUpUsdt: usdtValues.length ? Math.max(...usdtValues) : 0,
           },
           symbol: normalizedSymbol,
         };

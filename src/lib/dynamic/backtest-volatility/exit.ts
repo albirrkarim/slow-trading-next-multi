@@ -16,10 +16,12 @@ import type { DataBacktestPurpose } from "@lib/brain/algorithms/type-execute";
 import type { BacktestConfigDynamic } from "../type-backtest";
 import { type VolatilityPoint } from "../utils/volatility";
 import {
+  calculateBacktestFeeAdjustedNetProfitUSDT,
   calculateBacktestNetProfitUSDT,
   resolveBacktestExitDecision,
 } from "./exit-policy";
 import { BACKTEST_ONE_SIDE_FEE_RATIO } from "./constants";
+import { applyPositionNetUsdtExtrema } from "@/lib/trading/pnl";
 
 const DEFAULT_BACKTEST_EXIT_MODEL_CONFIG: TradingModelConfig = {
   takeProfitPercent: 5,
@@ -102,6 +104,18 @@ export function tryToExit({
         exitFeeRatio: BACKTEST_ONE_SIDE_FEE_RATIO,
       });
 
+      if (!exitDecision.shouldExit) {
+        // BOTH:POSITION_PNL_USDT_EXTREMA
+        applyPositionNetUsdtExtrema(
+          open,
+          calculateBacktestFeeAdjustedNetProfitUSDT(
+            open,
+            currentVolatility.p,
+            BACKTEST_ONE_SIDE_FEE_RATIO,
+          ),
+        );
+      }
+
       if (exitDecision.shouldExit) {
         const isShort = open.direction === "SHORT";
         const positionsBefore = deepCopy(opensCoin);
@@ -127,6 +141,8 @@ export function tryToExit({
           recoveredMarginUsdt - fee,
         );
         open.pnl.netUsdt = grossProfitUsdt - open.fees.entryUsdt - fee;
+        // BOTH:POSITION_PNL_USDT_EXTREMA
+        applyPositionNetUsdtExtrema(open, open.pnl.netUsdt);
         open.pnl.netPct =
           open.exposure.notionalUsdt > 0
             ? (open.pnl.netUsdt / open.exposure.notionalUsdt) * 100

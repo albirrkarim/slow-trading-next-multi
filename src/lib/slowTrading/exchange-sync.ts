@@ -2,7 +2,10 @@ import type { UnifiedPosition } from "@/lib/exchange/types";
 import type { Position } from "@/lib/trading/models";
 import tradingPosition from "@/lib/trading/position";
 import type { VolatilityPoint } from "@/lib/dynamic";
-import { computeClosedPositionMetrics } from "@/lib/trading/pnl";
+import {
+  applyPositionNetUsdtExtrema,
+  computeClosedPositionMetrics,
+} from "@/lib/trading/pnl";
 import slowTradingShared from "./shared";
 import slowTradingWatchReserve from "./watch-reserve";
 import type { SlowTradingModeState } from "./types";
@@ -102,6 +105,8 @@ function closeLocalPositionFromExchange(params: {
     closedPosition.pnl.currentValueUsdt = metrics.netCurrentUSDT;
     closedPosition.pnl.netPct = metrics.netProfitPercent;
     closedPosition.pnl.netUsdt = metrics.netProfitUSDT;
+    // BOTH:POSITION_PNL_USDT_EXTREMA
+    applyPositionNetUsdtExtrema(closedPosition, metrics.netProfitUSDT);
   }
 
   slowTradingWatchReserve.reserve.releaseRemaining(

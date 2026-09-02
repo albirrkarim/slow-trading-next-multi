@@ -351,6 +351,10 @@ export interface PositionPnl {
   currentValueUsdt?: number;
   maxUpPct?: number;
   maxDownPct?: number;
+  /** Best observed fee-aware net PnL in USDT. */
+  maxUpUsdt?: number;
+  /** Worst observed fee-aware net PnL in USDT. */
+  maxDownUsdt?: number;
   history?: PositionPnlPoint[];
 }
 

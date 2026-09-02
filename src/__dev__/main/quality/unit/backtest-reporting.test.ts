@@ -140,6 +140,69 @@ describe("backtest canonical position reporting", () => {
     expect(recoveredUsdt).toBeLessThan(position.exposure.notionalUsdt);
   });
 
+  it("tracks fee-aware USDT extrema across backtest price movements", () => {
+    const position = createTestPosition({
+      entryPrice: 10,
+      entryTime: 1,
+      marginUsdt: 10,
+      notionalUsdt: 10,
+      quantity: 1,
+    });
+    const modelMemory: TradingModelMemory = {
+      positions: [position],
+      positionsSell: [],
+    };
+    const dynamicTradeMemory = createDynamicTradeMemory();
+    const makePoint = (t: number, p: number) => ({
+      id: `B_${t}`,
+      t,
+      l: "B" as const,
+      pct: 1,
+      p,
+      vb: 0,
+      vq: 0,
+      lvl: -2,
+      symbol: "SUI",
+    });
+    const runAt = (points: ReturnType<typeof makePoint>[]) =>
+      tryToExit({
+        currentTimeMs: points.at(-1)?.t ?? 0,
+        volatilityMap: { SUI: points },
+        modelMemoryMap: { SUI: modelMemory },
+        forceSell: false,
+        backtestPack: {
+          currentTimeMsBacktest: points.at(-1)?.t ?? 0,
+          tradeHistoryMap: { SUI: [] },
+          growthOvertime: [],
+          modelMemoryMap: { SUI: modelMemory },
+          priceNormMapOverTime: {},
+          verbose: false,
+        },
+        config: {
+          marginMode: "ISOLATED",
+          modelConfig: {
+            stopLossPercent: 90,
+            stopLossUSDT: 0,
+            takeProfitPercent: 100,
+          },
+          tradingMode: TradingMode.FUTURES,
+        } as any,
+        dynamicTradeMemory,
+      });
+
+    runAt([makePoint(2, 11)]);
+
+    // BOTH:POSITION_PNL_USDT_EXTREMA
+    expect(position.pnl.maxUpUsdt).toBe(0.989);
+    expect(position.pnl.maxDownUsdt).toBe(0.989);
+
+    runAt([makePoint(2, 11), makePoint(3, 9)]);
+
+    expect(position.pnl.maxUpUsdt).toBe(0.989);
+    expect(position.pnl.maxDownUsdt).toBe(-1.009);
+    expect(position.closed).toBeUndefined();
+  });
+
   it("records the first crossed loss instead of the later vPoint rail loss", () => {
     const position = createTestPosition({
       averaging: {
