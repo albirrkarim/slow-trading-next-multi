@@ -354,7 +354,6 @@ export function NavbarDayPreviewSection({
 }
 
 interface NavbarActionsSectionProps {
-  coinTags?: Record<string, string[]>;
   configDraft: ConfigDraft | null;
   dashboardState: DashboardState | null;
   onRefresh: LiveDashboardNavbarProps["onRefresh"];
@@ -371,14 +370,11 @@ interface NavbarActionsSectionProps {
   setConfigDraft: React.Dispatch<React.SetStateAction<ConfigDraft | null>>;
   syncOnlineStorageToLocal: (onlineBaseUrl: string) => Promise<void>;
   syncingOnlineStorage: boolean;
-  tagColors?: Record<string, string>;
-  tagDescriptions?: Record<string, string>;
   tryWithdrawNow: (scheduleId: string) => Promise<void>;
   tryingWithdraw: boolean;
 }
 
 export function NavbarActionsSection({
-  coinTags,
   configDraft,
   dashboardState,
   onRefresh,
@@ -395,8 +391,6 @@ export function NavbarActionsSection({
   setConfigDraft,
   syncOnlineStorageToLocal,
   syncingOnlineStorage,
-  tagColors,
-  tagDescriptions,
   tryWithdrawNow,
   tryingWithdraw,
 }: NavbarActionsSectionProps) {
@@ -435,11 +429,8 @@ export function NavbarActionsSection({
             {() =>
               dashboardState ? (
                 <SlowTradingReporting
-                  coinTags={coinTags}
                   dashboardState={dashboardState}
                   onRefresh={onRefresh}
-                  tagColors={tagColors}
-                  tagDescriptions={tagDescriptions}
                 />
               ) : (
                 <Box sx={{ p: 2 }}>

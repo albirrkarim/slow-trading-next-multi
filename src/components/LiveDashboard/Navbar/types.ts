@@ -124,11 +124,8 @@ export interface BalanceSummary {
 }
 
 export interface LiveDashboardNavbarProps {
-  coinTags?: Record<string, string[]>;
   dashboardState: SlowTradingDashboardState | null;
   onRefresh: () => Promise<void>;
   onReinitialize: () => Promise<void>;
   reinitializing: boolean;
-  tagColors?: Record<string, string>;
-  tagDescriptions?: Record<string, string>;
 }

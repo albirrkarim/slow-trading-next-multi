@@ -19,6 +19,36 @@ vi.mock(
 );
 
 describe("trade-history level sequence", () => {
+  it("shows the last monitoring stage and the Standard classification reason", () => {
+    const position = createTestPosition({ symbol: "SUI" });
+    position.lastMonitoringStage = {
+      stage: "standard",
+      lastUpdated: 200,
+      reason:
+        "No Speedup rule matched: canonical net PnL 0.2%; PnL rules require >= +1.5% or <= -1.5%",
+    };
+
+    render(
+      <SnackbarProvider>
+        <TradesTableSection
+          exchangeType="binance"
+          history={[{ ...position, mode: "sandbox" }]}
+          mode="sandbox"
+          onHistoryChange={vi.fn()}
+          readOnly
+        />
+      </SnackbarProvider>,
+    );
+
+    // PROD:MONITORING_OPEN_POSITION
+    expect(screen.getByText("Last stage: standard")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Reason: No Speedup rule matched: canonical net PnL 0.2%; PnL rules require >= +1.5% or <= -1.5%",
+      ),
+    ).toBeTruthy();
+  });
+
   it("shows the persisted entry, averaging, and exit path below the PnL chart", () => {
     const position = createTestPosition({
       averaging: {

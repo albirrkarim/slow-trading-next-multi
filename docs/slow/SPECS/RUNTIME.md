@@ -251,6 +251,11 @@ diagnostic. New entries do not claim a monitoring stage before their first
 successful monitoring pass. The field remains on a position after close so
 trade history preserves its latest monitoring diagnostic.
 
+The Trade History symbol cell omits coin tags and shows the closed position's
+last monitoring stage. When that stage is `standard`, the cell also shows the
+persisted classification reason. Legacy rows without the optional diagnostic
+show an em dash for the stage.
+
 The Standard reason records the canonical persisted `pnl.netPct` used during
 stage selection and the active positive and negative PnL thresholds. Dashboard
 display values and older PnL-history samples are not used to classify the next

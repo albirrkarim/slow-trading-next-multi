@@ -15,13 +15,10 @@ import {
 } from "./theme-color";
 
 export default function LiveDashboardNavbar({
-  coinTags,
   dashboardState,
   onRefresh,
   onReinitialize,
   reinitializing,
-  tagColors,
-  tagDescriptions,
 }: LiveDashboardNavbarProps) {
   const {
     configDraft,
@@ -93,7 +90,6 @@ export default function LiveDashboardNavbar({
       />
 
       <NavbarActionsSection
-        coinTags={coinTags}
         configDraft={configDraft}
         dashboardState={dashboardState}
         onRefresh={onRefresh}
@@ -110,8 +106,6 @@ export default function LiveDashboardNavbar({
         setConfigDraft={setConfigDraft}
         syncOnlineStorageToLocal={syncOnlineStorageToLocal}
         syncingOnlineStorage={syncingOnlineStorage}
-        tagColors={tagColors}
-        tagDescriptions={tagDescriptions}
         tryWithdrawNow={tryWithdrawNow}
         tryingWithdraw={tryingWithdraw}
       />

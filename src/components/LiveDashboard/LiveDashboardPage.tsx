@@ -797,13 +797,10 @@ export default function DynamicTradeHistoryPage({
   return (
     <Box>
       <LiveDashboardNavbar
-        coinTags={coinMetadata.coinTags}
         dashboardState={dashboardState}
         onRefresh={execute}
         onReinitialize={() => execute(true)}
         reinitializing={reinitializing}
-        tagColors={tagColors}
-        tagDescriptions={tagDescriptions}
       />
       {(loading || reinitializing) && (
         <LinearProgress

@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactElement } from "react";
-import CoinTagChip from "@/components/dev/Coins/CoinTagChip";
 import ButtonDialog from "@/components/ui/ButtonDialog";
 import CopyToClipboardIconButton from "@/components/ui/CopyToClipboardIconButton";
 import { endpoints } from "@/components/endpoints";
@@ -237,55 +236,6 @@ function getEntryMarginUsdt(row: SlowTradingReportRow) {
     : 0;
 }
 
-function getCoinTagsForSymbol(
-  coinTags: Record<string, string[]> | undefined,
-  symbol: string | undefined,
-) {
-  if (!coinTags || !symbol) {
-    return [];
-  }
-
-  return (
-    coinTags[symbol] ??
-    coinTags[symbol.toUpperCase()] ??
-    coinTags[symbol.toLowerCase()] ??
-    []
-  );
-}
-
-function CoinTagsInline({
-  tags,
-  tagColors,
-  tagDescriptions,
-}: {
-  tags: string[];
-  tagColors?: Record<string, string>;
-  tagDescriptions?: Record<string, string>;
-}) {
-  if (tags.length === 0) {
-    return null;
-  }
-
-  return (
-    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
-      {tags.map((tag) => {
-        const tagKey = tag.toLocaleLowerCase();
-
-        return (
-          <CoinTagChip
-            key={tag}
-            description={tagDescriptions?.[tagKey] ?? ""}
-            label={tag}
-            size="small"
-            tagColor={tagColors?.[tagKey] ?? "#1976d2"}
-            sx={{ height: 18, fontSize: "0.62rem" }}
-          />
-        );
-      })}
-    </Box>
-  );
-}
-
 function buildTradeChartPosition(row: SlowTradingReportRow) {
   return row;
 }
@@ -403,17 +353,13 @@ function FeatureCell({ row }: { row: SlowTradingReportRow }) {
 }
 
 export function TradesTableSection({
-  coinTags,
   exchangeType,
   history,
   mode,
   onHistoryChange,
   readOnly = false,
   reserveMultiplier = 2,
-  tagColors,
-  tagDescriptions,
 }: {
-  coinTags?: Record<string, string[]>;
   exchangeType: ExchangeType;
   history: SlowTradingReportRow[];
   mode: SlowTradingMode;
@@ -423,8 +369,6 @@ export function TradesTableSection({
   ) => void;
   readOnly?: boolean;
   reserveMultiplier?: number;
-  tagColors?: Record<string, string>;
-  tagDescriptions?: Record<string, string>;
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const [page, setPage] = useState(0);
@@ -672,7 +616,7 @@ export function TradesTableSection({
               const pnlPercent = row.pnl.netPct ?? 0;
               const pnlUsdt = row.pnl.netUsdt ?? 0;
               const entryMarginUsdt = getEntryMarginUsdt(row);
-              const rowTags = getCoinTagsForSymbol(coinTags, row.symbol);
+              const lastMonitoringStage = row.lastMonitoringStage;
 
               return (
                 <TableRow key={buildRowKey(row, index)} hover>
@@ -714,11 +658,27 @@ export function TradesTableSection({
                       Account: {row.account}
                     </Typography>
 
-                    <CoinTagsInline
-                      tagColors={tagColors}
-                      tagDescriptions={tagDescriptions}
-                      tags={rowTags}
-                    />
+                    <Typography
+                      color="text.secondary"
+                      display="block"
+                      variant="caption"
+                    >
+                      Last stage: {lastMonitoringStage?.stage ?? "—"}
+                    </Typography>
+                    {lastMonitoringStage?.stage === "standard" && (
+                      <Typography
+                        color="text.secondary"
+                        display="block"
+                        variant="caption"
+                        sx={{
+                          lineHeight: 1.4,
+                          mt: 0.25,
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        Reason: {lastMonitoringStage.reason.trim() || "—"}
+                      </Typography>
+                    )}
                     {/* <Chip label={row.tradingMode} size="small" variant="outlined" /> */}
                   </TableCell>
                   <TableCell
