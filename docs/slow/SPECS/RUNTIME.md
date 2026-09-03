@@ -256,6 +256,14 @@ last monitoring stage. When that stage is `standard`, the cell also shows the
 persisted classification reason. Legacy rows without the optional diagnostic
 show an em dash for the stage.
 
+The Trade History JSON detail uses a read-only interactive tree. The root is
+expanded with nested objects collapsed initially. Every nested object or array
+can be expanded or collapsed independently with its disclosure control or the
+keyboard, and the toolbar can expand the entire tree, collapse nested values,
+or copy the complete formatted JSON.
+
+TC: `PROD:TRADE_HISTORY_JSON_TREE`
+
 The Standard reason records the canonical persisted `pnl.netPct` used during
 stage selection and the active positive and negative PnL thresholds. Dashboard
 display values and older PnL-history samples are not used to classify the next

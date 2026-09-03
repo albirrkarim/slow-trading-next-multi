@@ -1,5 +1,6 @@
 import { ClientProvider } from "@/components/ui/ClientProvider";
 import type { Metadata, Viewport } from "next";
+import "react-json-view-lite/dist/index.css";
 
 import "../components/style.css";
 
@@ -31,4 +32,3 @@ export default function RootLayout({
     </html>
   );
 }
-

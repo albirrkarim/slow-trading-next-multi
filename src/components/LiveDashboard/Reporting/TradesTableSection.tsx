@@ -2,7 +2,6 @@
 
 import type { ReactElement } from "react";
 import ButtonDialog from "@/components/ui/ButtonDialog";
-import CopyToClipboardIconButton from "@/components/ui/CopyToClipboardIconButton";
 import { endpoints } from "@/components/endpoints";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -44,6 +43,7 @@ import type { SlowTradingReportRow } from "./types";
 import { formatHoldMs } from "./utils";
 import positionData from "@/lib/trading/position";
 import TradeHistoryNotesField from "./TradeHistoryNotesField";
+import JsonTreeViewer from "@/components/LiveDashboard/Shared/JsonTreeViewer";
 
 type SortKey =
   | "symbol"
@@ -870,24 +870,11 @@ export function TradesTableSection({
                     >
                       {() => (
                         <Box sx={{ p: 2 }}>
-                          <CopyToClipboardIconButton
-                            color="inherit"
-                            size="small"
-                            tooltipTitle="Copy JSON"
-                            aria-label="Copy trade JSON"
-                            text={JSON.stringify(row, null, 2)}
+                          {/* PROD:TRADE_HISTORY_JSON_TREE */}
+                          <JsonTreeViewer
+                            ariaLabel={`${row.symbol} trade JSON tree`}
+                            value={row}
                           />
-                          <Box
-                            component="pre"
-                            sx={{
-                              m: 0,
-                              whiteSpace: "pre-wrap",
-                              wordBreak: "break-word",
-                              fontSize: "0.75rem",
-                            }}
-                          >
-                            {JSON.stringify(row, null, 2)}
-                          </Box>
                         </Box>
                       )}
                     </ButtonDialog>
