@@ -78,10 +78,6 @@ export async function executeAveraging({
       message: "[Averaging] No open position to average into",
     };
   }
-  const monitoringStateAtExecution = existingPosition.lastMonitoringStage
-    ? { ...existingPosition.lastMonitoringStage }
-    : undefined;
-
   if (
     hasPositionHitTargetVolatilityPoint({
       position: existingPosition,
@@ -301,7 +297,9 @@ export async function executeAveraging({
         ? rescueProjection.projectedProfitPct
         : undefined,
       // PROD:AVERAGING_MONITORING_STATE_SNAPSHOT
-      monitoringState: monitoringStateAtExecution,
+      monitoringState: existingPosition.lastMonitoringStage
+        ? { ...existingPosition.lastMonitoringStage }
+        : undefined,
     });
 
     markReservedWatchStepUsed({
@@ -415,7 +413,9 @@ export async function executeAveraging({
           ? rescueProjection.projectedProfitPct
           : undefined,
         // PROD:AVERAGING_MONITORING_STATE_SNAPSHOT
-        monitoringState: monitoringStateAtExecution,
+        monitoringState: existingPosition.lastMonitoringStage
+          ? { ...existingPosition.lastMonitoringStage }
+          : undefined,
       });
 
       markReservedWatchStepUsed({
