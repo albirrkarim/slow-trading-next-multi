@@ -316,6 +316,8 @@ export interface PositionAveragingExecution {
   reservedMarginUsdt?: number;
   adaptiveMultiplier?: number;
   projectedProfitPct?: number;
+  /** Frozen copy of the position's last monitoring stage when this fill completed. */
+  monitoringState?: PositionLastMonitoringStage;
 }
 
 export interface PositionAveragingState {

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { SnackbarProvider } from "notistack";
 import { describe, expect, it, vi } from "vitest";
 
@@ -49,7 +49,7 @@ describe("trade-history level sequence", () => {
     ).toBeTruthy();
   });
 
-  it("shows the persisted entry, averaging, and exit path below the PnL chart", () => {
+  it("shows the persisted entry, averaging, and exit path below the PnL chart", async () => {
     const position = createTestPosition({
       averaging: {
         entryLevel: -2,
@@ -58,6 +58,11 @@ describe("trade-history level sequence", () => {
             allocationPct: 2,
             level: -4,
             marginUsdt: 40,
+            monitoringState: {
+              lastUpdated: 250,
+              reason: "No Speedup rule matched",
+              stage: "standard",
+            },
             price: 8,
             t: 250,
           },
@@ -65,6 +70,11 @@ describe("trade-history level sequence", () => {
             allocationPct: 5,
             level: -3,
             marginUsdt: 20,
+            monitoringState: {
+              lastUpdated: 200,
+              reason: "negative PnL threshold",
+              stage: "speedup",
+            },
             price: 9,
             t: 200,
           },
@@ -87,7 +97,7 @@ describe("trade-history level sequence", () => {
         price: 11,
         reason: "TAKE_PROFIT",
         t: 300,
-        vPoint: { id: "T_EXIT", lvl: 0 },
+        vPoint: { id: "B_EXIT", lvl: -4 },
       },
       entryLevel: -2,
       entryTime: 100,
@@ -102,6 +112,7 @@ describe("trade-history level sequence", () => {
         maxDownUsdt: -3.5,
       },
       symbol: "SUI",
+      vPoints: [{ id: "B_AVERAGED_3", lvl: -3 }],
     });
 
     render(
@@ -128,7 +139,20 @@ describe("trade-history level sequence", () => {
       within(sequence)
         .getAllByText(/^L/)
         .map((chip) => chip.textContent),
-    ).toEqual(["L2", "L3 AVG 5x", "L4 AVG 2x", "L0 EXIT"]);
+    ).toEqual(["L2", "L3 AVG 5x", "L4 AVG 2x EXIT"]);
+    // PROD:AVERAGING_MONITORING_STATE_SNAPSHOT
+    const speedupState = within(sequence).getByLabelText(
+      "Speedup monitoring state at averaging level 3",
+    );
+    expect(
+      within(sequence).getByLabelText(
+        "Standard monitoring state at averaging level 4",
+      ),
+    ).toBeTruthy();
+    fireEvent.mouseOver(speedupState);
+    expect((await screen.findByRole("tooltip")).textContent).toContain(
+      "negative PnL threshold",
+    );
     expect(chart.nextElementSibling?.contains(sequence)).toBe(true);
     // BOTH:POSITION_PNL_USDT_EXTREMA
     expect(screen.getByText("Max Up USD")).toBeTruthy();

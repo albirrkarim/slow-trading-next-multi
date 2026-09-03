@@ -1,6 +1,7 @@
 "use client";
 
 import type { VolatilityPoint } from "@/lib/dynamic";
+import type { PositionLastMonitoringStage } from "@/lib/trading/models";
 import lateEntryVPointDrift from "@/lib/trading/execute/late-entry-vpoint-drift";
 import PositionLevelSequence, {
   type PositionLevelSequenceCoverage,
@@ -20,6 +21,7 @@ interface ReserveStep {
 interface AveragingTrigger {
   allocationPct?: number;
   level?: number;
+  monitoringState?: PositionLastMonitoringStage;
 }
 
 interface WatchState {
@@ -53,14 +55,14 @@ function levelKey(level: number): number {
  * Builds the observed level path after the volatility target zone breaks averaging.
  */
 function getTargetHitSequence({
-  averagingMultiplierByLevel,
+  averagingExecutionByLevel,
   direction,
   entryLevel,
   entryTime,
   volatilityPoints,
   watchState,
 }: {
-  averagingMultiplierByLevel: Map<number, number | undefined>;
+  averagingExecutionByLevel: Map<number, AveragingTrigger>;
   direction?: "LONG" | "SHORT";
   entryLevel: number | null;
   entryTime?: number;
@@ -136,17 +138,17 @@ function getTargetHitSequence({
       const step = reserveStepsByLevel.get(levelKey(point.lvl));
       const isAveraged =
         step?.status === "USED" ||
-        averagingMultiplierByLevel.has(levelKey(point.lvl));
+        averagingExecutionByLevel.has(levelKey(point.lvl));
+      const execution = averagingExecutionByLevel.get(levelKey(point.lvl));
 
       return {
-        averagingMultiplier: averagingMultiplierByLevel.get(
-          levelKey(point.lvl),
-        ),
+        averagingMultiplier: execution?.allocationPct,
         coveredMarginUsdt: 0,
         isAveraged,
         isEntry: false,
         level: point.lvl,
         marginUsdt: step?.marginUsdt,
+        monitoringState: execution?.monitoringState,
         reserveStatus: step?.status,
         state: isAveraged ? ("passed" as const) : ("skipped" as const),
       };
@@ -183,19 +185,16 @@ export function buildOpenPositionLevelSequence({
     spendableQuoteAsset >= 0
       ? spendableQuoteAsset
       : null;
-  const averagingMultiplierByLevel = new Map<number, number | undefined>();
+  const averagingExecutionByLevel = new Map<number, AveragingTrigger>();
   for (const execution of watchState?.executions ?? []) {
     const level = finiteLevel(execution.level);
     if (level !== null) {
-      averagingMultiplierByLevel.set(
-        levelKey(level),
-        execution.allocationPct,
-      );
+      averagingExecutionByLevel.set(levelKey(level), execution);
     }
   }
   // BOTH:VOLATILITY_TARGET_TP
   const targetHitSequence = getTargetHitSequence({
-    averagingMultiplierByLevel,
+    averagingExecutionByLevel,
     direction,
     entryLevel: normalizedEntryLevel,
     entryTime,
@@ -258,8 +257,7 @@ export function buildOpenPositionLevelSequence({
   ) {
     const currentMagnitude = levelKey(normalizedCurrentLevel);
     const insertionIndex = sequence.findIndex(
-      (item, index) =>
-        index > 0 && levelKey(item.level) > currentMagnitude,
+      (item, index) => index > 0 && levelKey(item.level) > currentMagnitude,
     );
     const currentItem = {
       isEntry: false,
@@ -301,7 +299,8 @@ export function buildOpenPositionLevelSequence({
   return sequence.map((item, index) => {
     const isAveraged =
       item.reserveStatus === "USED" ||
-      averagingMultiplierByLevel.has(levelKey(item.level));
+      averagingExecutionByLevel.has(levelKey(item.level));
+    const execution = averagingExecutionByLevel.get(levelKey(item.level));
     const validUnreservedMargin =
       item.reserveStatus === "UNRESERVED" &&
       typeof item.marginUsdt === "number" &&
@@ -341,12 +340,11 @@ export function buildOpenPositionLevelSequence({
 
     return {
       ...item,
-      averagingMultiplier: averagingMultiplierByLevel.get(
-        levelKey(item.level),
-      ),
+      averagingMultiplier: execution?.allocationPct,
       coveredMarginUsdt,
       driftPct: index === currentIndex ? currentDriftPct : undefined,
       isAveraged,
+      monitoringState: execution?.monitoringState,
       state,
       unreservedCoverage,
     };

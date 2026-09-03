@@ -642,7 +642,23 @@ persisted averaging execution with its level, actual multiplier, margin, fill
 price, optional reservation/projection data, and execution time. The sequence
 does not reconstruct unused reserve steps or depend on current volatility data.
 
+Every successful production or sandbox averaging execution optionally freezes
+an independent copy of the position's `lastMonitoringStage` as
+`execution.monitoringState`. It captures exactly the last persisted monitoring
+state available when the averaging fill is recorded; later monitoring updates
+must not modify this snapshot. Existing executions and backtest executions may
+omit it.
+
+When this snapshot exists, the shared level sequence shows its stage icon
+immediately before the corresponding averaged level. Speedup uses the speed
+icon and Standard uses the schedule icon; the tooltip shows the frozen reason
+and update time. When an averaging execution and the exit share a level, they
+are one chip containing both states, for example `L4 AVG 3x EXIT`, rather than
+discarding the averaging multiplier or rendering duplicate level chips.
+
 TC: `BOTH:REUSABLE_LEVEL_SEQUENCE`
+
+TC: `PROD:AVERAGING_MONITORING_STATE_SNAPSHOT`
 
 ### B.4.5 Volatility target-zone stop loss
 

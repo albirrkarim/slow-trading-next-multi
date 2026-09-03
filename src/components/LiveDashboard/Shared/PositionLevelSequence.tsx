@@ -1,10 +1,15 @@
 "use client";
 
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
+import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
+import SpeedRoundedIcon from "@mui/icons-material/SpeedRounded";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import { Alert, Box, Chip, Tooltip } from "@mui/material";
 
-import type { Position } from "@/lib/trading/models";
+import type {
+  Position,
+  PositionLastMonitoringStage,
+} from "@/lib/trading/models";
 
 export type PositionLevelSequenceState =
   | "current"
@@ -15,10 +20,7 @@ export type PositionLevelSequenceState =
   | "target"
   | "unreserved";
 export type PositionLevelSequenceReserveStatus =
-  | "RELEASED"
-  | "RESERVED"
-  | "UNRESERVED"
-  | "USED";
+  "RELEASED" | "RESERVED" | "UNRESERVED" | "USED";
 export type PositionLevelSequenceCoverage = "full" | "none" | "partial";
 
 export interface PositionLevelSequenceItem {
@@ -30,6 +32,7 @@ export interface PositionLevelSequenceItem {
   isExit?: boolean;
   level: number;
   marginUsdt?: number;
+  monitoringState?: PositionLastMonitoringStage;
   reserveStatus?: PositionLevelSequenceReserveStatus;
   state: PositionLevelSequenceState;
   unreservedCoverage?: PositionLevelSequenceCoverage;
@@ -145,6 +148,39 @@ function formatCoverage(item: PositionLevelSequenceItem): string | null {
   return `Coverage ${formattedPct}% ($${item.coveredMarginUsdt.toFixed(2)} of $${item.marginUsdt.toFixed(2)})`;
 }
 
+function MonitoringStateIcon({
+  level,
+  monitoringState,
+}: {
+  level: number;
+  monitoringState: PositionLastMonitoringStage;
+}) {
+  const isSpeedup = monitoringState.stage === "speedup";
+  const stageLabel = isSpeedup ? "Speedup" : "Standard";
+  const Icon = isSpeedup ? SpeedRoundedIcon : ScheduleRoundedIcon;
+
+  return (
+    <Tooltip
+      arrow
+      placement="top"
+      title={`${stageLabel} was the last monitoring stage when this averaging execution was recorded. ${monitoringState.reason} Last updated: ${new Date(monitoringState.lastUpdated).toLocaleString()}`}
+    >
+      <Box
+        aria-label={`${stageLabel} monitoring state at averaging level ${levelKey(level)}`}
+        component="span"
+        sx={{
+          alignItems: "center",
+          color: isSpeedup ? "warning.main" : "text.secondary",
+          display: "inline-flex",
+          mx: 0.25,
+        }}
+      >
+        <Icon sx={{ fontSize: 15 }} />
+      </Box>
+    </Tooltip>
+  );
+}
+
 /** Builds the hover explanation for one sequence chip. */
 function buildTooltip(
   item: PositionLevelSequenceItem,
@@ -175,8 +211,7 @@ function buildTooltip(
     item.reserveStatus === "RESERVED" ? "Reserved watch step" : null,
     item.reserveStatus === "UNRESERVED" ? "Unreserved watch step" : null,
     formatCoverage(item),
-    item.reserveStatus !== "UNRESERVED" &&
-    typeof item.marginUsdt === "number"
+    item.reserveStatus !== "UNRESERVED" && typeof item.marginUsdt === "number"
       ? `Margin $${item.marginUsdt.toFixed(2)}`
       : null,
   ];
@@ -223,8 +258,7 @@ export function buildHistoryPositionLevelSequence(
       const isAveraged = execution !== undefined;
       const isAdverseLevel =
         position.direction === "LONG" ? point.lvl < 0 : point.lvl > 0;
-      const isDeeperThanEntry =
-        Math.abs(point.lvl) > Math.abs(entryLevel);
+      const isDeeperThanEntry = Math.abs(point.lvl) > Math.abs(entryLevel);
 
       items.push({
         averagingMultiplier: execution?.allocationPct,
@@ -233,6 +267,7 @@ export function buildHistoryPositionLevelSequence(
         isEntry: false,
         level: point.lvl,
         marginUsdt: execution?.marginUsdt,
+        monitoringState: execution?.monitoringState,
         reserveStatus: isAveraged ? "USED" : undefined,
         state:
           !isAveraged && isAdverseLevel && isDeeperThanEntry
@@ -243,15 +278,20 @@ export function buildHistoryPositionLevelSequence(
 
     const exitLevel = Number(position.closed?.vPoint?.lvl);
     if (Number.isFinite(exitLevel)) {
+      const execution = executionByLevel.get(exitLevel);
       const isTargetExit =
         position.closed?.reason === "VOLATILITY_TARGET_TP" ||
         position.closed?.reason === "VOLATILITY_TARGET_SL";
       items.push({
         coveredMarginUsdt: 0,
-        isAveraged: false,
+        averagingMultiplier: execution?.allocationPct,
+        isAveraged: execution !== undefined,
         isEntry: false,
         isExit: true,
         level: exitLevel,
+        marginUsdt: execution?.marginUsdt,
+        monitoringState: execution?.monitoringState,
+        reserveStatus: execution ? "USED" : undefined,
         state: isTargetExit ? "target" : "exit",
       });
     }
@@ -282,6 +322,7 @@ export function buildHistoryPositionLevelSequence(
       isEntry: false,
       level: execution.level,
       marginUsdt: execution.marginUsdt,
+      monitoringState: execution.monitoringState,
       reserveStatus: "USED",
       state: "passed",
     });
@@ -289,17 +330,25 @@ export function buildHistoryPositionLevelSequence(
 
   const exitLevel = Number(position.closed?.vPoint?.lvl);
   if (Number.isFinite(exitLevel)) {
+    const matchingItem = items.find(
+      (item) => item.isAveraged && item.level === exitLevel,
+    );
     const isTargetExit =
       position.closed?.reason === "VOLATILITY_TARGET_TP" ||
       position.closed?.reason === "VOLATILITY_TARGET_SL";
-    items.push({
-      coveredMarginUsdt: 0,
-      isAveraged: false,
-      isEntry: false,
-      isExit: true,
-      level: exitLevel,
-      state: isTargetExit ? "target" : "exit",
-    });
+    if (matchingItem) {
+      matchingItem.isExit = true;
+      matchingItem.state = isTargetExit ? "target" : "exit";
+    } else {
+      items.push({
+        coveredMarginUsdt: 0,
+        isAveraged: false,
+        isEntry: false,
+        isExit: true,
+        level: exitLevel,
+        state: isTargetExit ? "target" : "exit",
+      });
+    }
   }
 
   return items;
@@ -323,7 +372,9 @@ export default function PositionLevelSequence({
   }
 
   return (
-    <Box sx={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: 1 }}>
+    <Box
+      sx={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: 1 }}
+    >
       <Box
         aria-label="Position level sequence"
         sx={{
@@ -364,17 +415,18 @@ export default function PositionLevelSequence({
           ]
             .filter(Boolean)
             .join(", ");
-          const chipSuffix = item.isAveraged
-            ? ` AVG${
-                averagingMultiplierLabel ? ` ${averagingMultiplierLabel}` : ""
-              }`
-            : item.isExit || item.state === "exit"
-              ? " EXIT"
-              : item.state === "skipped"
-                ? " NOT AVG"
-                : reachedWithoutAveraging && driftLabel
-                  ? ` drift ${driftLabel}`
-                  : "";
+          const chipSuffix = [
+            item.isAveraged
+              ? ` AVG${
+                  averagingMultiplierLabel ? ` ${averagingMultiplierLabel}` : ""
+                }`
+              : "",
+            item.isExit || item.state === "exit" ? " EXIT" : "",
+            !item.isAveraged && item.state === "skipped" ? " NOT AVG" : "",
+            !item.isAveraged && reachedWithoutAveraging && driftLabel
+              ? ` drift ${driftLabel}`
+              : "",
+          ].join("");
 
           return (
             <Box
@@ -385,6 +437,12 @@ export default function PositionLevelSequence({
                 <ArrowForwardRoundedIcon
                   aria-hidden
                   sx={{ color: "text.disabled", fontSize: 14, mx: 0.25 }}
+                />
+              )}
+              {item.monitoringState && (
+                <MonitoringStateIcon
+                  level={item.level}
+                  monitoringState={item.monitoringState}
                 />
               )}
               <Tooltip

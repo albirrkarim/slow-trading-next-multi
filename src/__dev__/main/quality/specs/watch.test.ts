@@ -92,7 +92,9 @@ vi.mock("@/lib/trading/helper/notification", () => ({
 describe("slow specs watch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    exchangeMocks.adjustQuantity.mockImplementation(async (quantity: number) => quantity);
+    exchangeMocks.adjustQuantity.mockImplementation(
+      async (quantity: number) => quantity,
+    );
     exchangeMocks.getKlines.mockResolvedValue([
       [2, "10", "10", "10", "10", "100"],
     ]);
@@ -107,10 +109,7 @@ describe("slow specs watch", () => {
     });
 
     // BOTH:WATCH_MECHANISM
-    expect(watchState.steps.map((step) => step.marginUsdt)).toEqual([
-      20,
-      60,
-    ]);
+    expect(watchState.steps.map((step) => step.marginUsdt)).toEqual([20, 60]);
     expect(watchState.reservedRemainingMarginUsdt).toBe(80);
 
     const point = {
@@ -464,6 +463,12 @@ describe("slow specs watch", () => {
       ],
       positionsSell: [],
     };
+    modelMemory.positions[0].lastMonitoringStage = {
+      lastUpdated: 1_788_423_657_759,
+      reason:
+        "No Speedup rule matched: canonical net PnL -0.801%; PnL rules require >= +1.5% or <= -1.5%",
+      stage: "standard",
+    };
 
     const result = await executeAveraging({
       symbol: "SUI",
@@ -493,12 +498,21 @@ describe("slow specs watch", () => {
     expect(position.exposure.quantity).toBe(3);
     expect(position.exposure.notionalUsdt).toBe(30);
     expect(position.exposure.marginUsdt).toBe(15);
-    expect(result.message).toContain(
-      "AVERAGED: margin $10.00 (watch step -4)",
-    );
+    expect(result.message).toContain("AVERAGED: margin $10.00 (watch step -4)");
     expect(result.message).not.toContain("AVERAGED: +");
     expect(trigger?.reservedMarginUsdt).toBe(10);
     expect(trigger?.marginUsdt).toBe(10);
+    // PROD:AVERAGING_MONITORING_STATE_SNAPSHOT
+    expect(trigger?.monitoringState).toEqual({
+      lastUpdated: 1_788_423_657_759,
+      reason:
+        "No Speedup rule matched: canonical net PnL -0.801%; PnL rules require >= +1.5% or <= -1.5%",
+      stage: "standard",
+    });
+    modelMemory.positions[0].lastMonitoringStage.reason = "Later stage update";
+    expect(trigger?.monitoringState?.reason).toContain(
+      "No Speedup rule matched",
+    );
     expect(position.strategy.averaging.steps[0]).toMatchObject({
       marginUsdt: 10,
       reservedMarginUsdt: 10,
@@ -515,9 +529,7 @@ describe("slow specs watch", () => {
       pctAlloc: 2,
     });
     const modelMemory: TradingModelMemory = {
-      positions: [
-        createWatchPosition({ watchState }),
-      ],
+      positions: [createWatchPosition({ watchState })],
       positionsSell: [],
     };
 
@@ -554,9 +566,7 @@ describe("slow specs watch", () => {
       pctAlloc: 2,
     });
     const modelMemory: TradingModelMemory = {
-      positions: [
-        createWatchPosition({ watchState }),
-      ],
+      positions: [createWatchPosition({ watchState })],
       positionsSell: [],
     };
     const volatilityPoints = [
@@ -583,9 +593,7 @@ describe("slow specs watch", () => {
     });
 
     // BOTH:AVERAGING_STOPS_AFTER_TARGET_VPOINT
-    expect(result.message).toContain(
-      "AVERAGING_STOPS_AFTER_TARGET_VPOINT",
-    );
+    expect(result.message).toContain("AVERAGING_STOPS_AFTER_TARGET_VPOINT");
     expect(watchState.steps[0].status).toBe("RESERVED");
     expect(modelMemory.positions[0].exposure.quantity).toBe(1);
     expect(exchangeMocks.getKlines).not.toHaveBeenCalled();
@@ -640,9 +648,7 @@ describe("slow specs watch", () => {
 
     // BOTH:AVERAGING_IMPROVES_RESCUE_PROJECTION
     expect(result.tradingDetail?.usdtSpent).toBe(-50);
-    expect(
-      modelMemory.positions[0].strategy.averaging.steps[0],
-    ).toMatchObject({
+    expect(modelMemory.positions[0].strategy.averaging.steps[0]).toMatchObject({
       marginUsdt: 50,
       reservedMarginUsdt: 20,
       allocationPct: 5,
@@ -659,14 +665,10 @@ describe("slow specs watch", () => {
       pctAlloc: 2,
     });
     const modelMemory: TradingModelMemory = {
-      positions: [
-        createWatchPosition({ watchState }),
-      ],
+      positions: [createWatchPosition({ watchState })],
       positionsSell: [],
     };
-    exchangeMocks.getKlines.mockResolvedValue([
-      [2, "8", "8", "8", "8", "100"],
-    ]);
+    exchangeMocks.getKlines.mockResolvedValue([[2, "8", "8", "8", "8", "100"]]);
 
     const result = await executeAveraging({
       symbol: "SUI",
@@ -710,9 +712,7 @@ describe("slow specs watch", () => {
       pctAlloc: 2,
     });
     const modelMemory: TradingModelMemory = {
-      positions: [
-        createWatchPosition({ watchState }),
-      ],
+      positions: [createWatchPosition({ watchState })],
       positionsSell: [],
     };
 
@@ -861,9 +861,7 @@ describe("slow specs watch", () => {
     });
     const modelMemoryMap: Record<string, TradingModelMemory> = {
       SUI: {
-        positions: [
-          createWatchPosition({ watchState }),
-        ],
+        positions: [createWatchPosition({ watchState })],
         positionsSell: [],
       },
     };
@@ -941,9 +939,7 @@ describe("slow specs watch", () => {
     });
     const modelMemoryMap: Record<string, TradingModelMemory> = {
       SUI: {
-        positions: [
-          createWatchPosition({ watchState }),
-        ],
+        positions: [createWatchPosition({ watchState })],
         positionsSell: [],
       },
     };
@@ -988,9 +984,7 @@ describe("slow specs watch", () => {
     });
     const modelMemoryMap: Record<string, TradingModelMemory> = {
       SUI: {
-        positions: [
-          createWatchPosition({ watchState }),
-        ],
+        positions: [createWatchPosition({ watchState })],
         positionsSell: [],
       },
     };
