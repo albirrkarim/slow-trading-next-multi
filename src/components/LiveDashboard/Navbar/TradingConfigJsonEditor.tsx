@@ -66,17 +66,6 @@ export default function TradingConfigJsonEditor({
 
   return (
     <Stack gap={1.5}>
-      <Box>
-        <Typography fontWeight={700} variant="subtitle1">
-          Trading Configuration JSON
-        </Typography>
-        <Typography color="text.secondary" variant="body2">
-          Contains only {accountName}&apos;s strategy notes and Trading settings.
-          Copy it, choose another account, and paste it there to reuse the same
-          strategy.
-        </Typography>
-      </Box>
-
       {message && <Alert severity={message.severity}>{message.text}</Alert>}
 
       <TextField
