@@ -78,7 +78,7 @@ are met:
 
 - The position has at least one persisted averaging execution.
 - The position has a valid persisted `pnl.markPrice` and its symbol has a valid
-  latest persisted vPoint price.
+  latest vPoint price from the shared persisted volatility cache.
 - Favorable drift from that latest vPoint is strictly greater than
   `VOLATILITY_THRESHOLD / 2`. For LONG, favorable drift rises toward TOP and is
   `(markPrice - vPoint.p) / vPoint.p * 100`. For SHORT, favorable drift falls
@@ -94,6 +94,14 @@ Therefore, Standard Monitoring first refreshes `pnl.markPrice`; a qualifying
 position moves to Speedup on the next Speedup pass. The existing post-average
 approach criterion remains an independent Speedup path, and a position returns
 to Standard only when no Speedup rule remains true.
+
+Before partitioning open positions into Speedup and Standard, the runner loads
+one shared volatility snapshot for the union of open-position symbols and uses
+it for every account. Compact account memory does not retain volatility after a
+cycle, so classification must use this shared snapshot rather than interpreting
+the absent transient field as an empty vPoint history.
+
+TC: `PROD:SPEEDUP_STAGE_SHARED_VOLATILITY_CLASSIFICATION`
 
 Standard Monitoring refreshes PnL and vPoint history on its normal pass. When
 that persisted state first satisfies any Speedup rule, the position becomes

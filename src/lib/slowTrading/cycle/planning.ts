@@ -23,6 +23,7 @@ import type {
   SlowTradingCyclePlan,
   SlowTradingCycleResult,
 } from "./types";
+import type { SlowTradingSharedMarketSnapshot } from "./shared-market";
 
 type SlowTradingCyclePlanningResult =
   | { completed: SlowTradingCycleResult; plan?: never }
@@ -44,6 +45,7 @@ function createSpeedupCriteria(storage: SlowTradingStorageData) {
 /** Selects account-owned symbols before any shared public market request. */
 function selectStageSymbols(params: {
   modeState: SlowTradingModeState;
+  sharedMarket?: SlowTradingSharedMarketSnapshot | null;
   stage?: RunSlowTradingCycleParams["stage"];
   storage: SlowTradingStorageData;
 }): string[] | null {
@@ -61,6 +63,7 @@ function selectStageSymbols(params: {
     stage: params.stage,
     takeProfitPercent: criteria.takeProfitPercent,
     useStopLossPlus: criteria.useStopLossPlus,
+    volatilityMemoryBySymbol: params.sharedMarket?.volatilityMemoryBySymbol,
     volatilityThresholdPct: criteria.volatilityThresholdPct,
   });
 }
@@ -73,6 +76,7 @@ async function prepare(params: {
   performanceEntries: SlowTradingCyclePerformanceEntry[];
   profiler: SlowTradingCycleProfiler;
   request?: RunSlowTradingCycleParams;
+  sharedMarket?: SlowTradingSharedMarketSnapshot | null;
   storage: SlowTradingStorageData;
 }): Promise<SlowTradingCyclePlanningResult> {
   const blackSwanProtectionActive =
@@ -82,6 +86,7 @@ async function prepare(params: {
   const speedupCriteria = createSpeedupCriteria(params.storage);
   const stageSymbols = selectStageSymbols({
     modeState: params.modeState,
+    sharedMarket: params.sharedMarket,
     stage,
     storage: params.storage,
   });
@@ -103,7 +108,9 @@ async function prepare(params: {
       }
 
       const volatilityPoints =
-        tradeSetting.model_memory.volatility?.lastVolatility ?? [];
+        params.sharedMarket?.volatilityMemoryBySymbol[symbol]?.lastVolatility ??
+        tradeSetting.model_memory.volatility?.lastVolatility ??
+        [];
       for (const position of (tradeSetting.model_memory.positions ??
         []) as Position[]) {
         if (position.closed) {

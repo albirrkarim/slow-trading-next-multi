@@ -229,6 +229,10 @@ function selectStageSymbols(params: {
   stage: SlowTradingStage;
   takeProfitPercent?: number;
   useStopLossPlus?: boolean;
+  volatilityMemoryBySymbol?: Record<
+    string,
+    { lastVolatility?: VolatilityPoint[] }
+  >;
   volatilityThresholdPct?: number;
 }): string[] {
   const normalizeSymbol = (value: unknown) =>
@@ -237,10 +241,10 @@ function selectStageSymbols(params: {
       .toUpperCase();
   const tradeSettingBySymbol = new Map(
     params.modeState.tradeSettings
-      .map((tradeSetting) => [
-        normalizeSymbol(tradeSetting.symbol),
-        tradeSetting,
-      ] as const)
+      .map(
+        (tradeSetting) =>
+          [normalizeSymbol(tradeSetting.symbol), tradeSetting] as const,
+      )
       .filter(([symbol]) => Boolean(symbol)),
   );
 
@@ -254,8 +258,8 @@ function selectStageSymbols(params: {
       new Set(params.configuredSymbols.map(normalizeSymbol).filter(Boolean)),
     ).filter(
       (symbol) =>
-        (tradeSettingBySymbol.get(symbol)?.model_memory.positions?.length ?? 0) ===
-        0,
+        (tradeSettingBySymbol.get(symbol)?.model_memory.positions?.length ??
+          0) === 0,
     );
   }
 
@@ -276,7 +280,9 @@ function selectStageSymbols(params: {
     }
 
     const volatilityPoints =
-      tradeSetting.model_memory.volatility?.lastVolatility ?? [];
+      params.volatilityMemoryBySymbol?.[symbol]?.lastVolatility ??
+      tradeSetting.model_memory.volatility?.lastVolatility ??
+      [];
     const latestVolatilityPoint = volatilityPoints.at(-1);
     const isSpeedup = positions.some((position) =>
       isSpeedupPosition({
@@ -293,8 +299,7 @@ function selectStageSymbols(params: {
     );
     // PROD:SPEEDUP_STAGE
     // PROD:STANDARD_MONITORING_STAGE
-    const belongsToStage =
-      params.stage === "speedup" ? isSpeedup : !isSpeedup;
+    const belongsToStage = params.stage === "speedup" ? isSpeedup : !isSpeedup;
     return belongsToStage ? [symbol] : [];
   });
 }

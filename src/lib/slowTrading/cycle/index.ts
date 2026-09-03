@@ -61,6 +61,7 @@ async function executeSlowTradingAccountCycle(
         performanceEntries,
         profiler,
         request: params,
+        sharedMarket: context.sharedMarket,
         storage,
       });
       if (planning.completed) {

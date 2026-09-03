@@ -5,7 +5,7 @@ import slowTradingPerformance, {
 } from "../performance";
 import slowTradingShared from "../shared";
 import slowTradingStorage from "../storage";
-import type { SlowTradingStorageData } from "../types";
+import type { SlowTradingModeState, SlowTradingStorageData } from "../types";
 import slowTradingCycleAccounts from "./accounts";
 import slowTradingCyclePlanning from "./planning";
 import slowTradingCycleSharedMarket, {
@@ -23,7 +23,21 @@ export interface SlowTradingCycleExecutionContext {
   storage: SlowTradingStorageData;
 }
 
-/** Selects the public symbols required by an account before market preparation. */
+/** Returns symbols with an open account position without requiring market data. */
+function selectOpenPositionSymbols(modeState: SlowTradingModeState): string[] {
+  return modeState.tradeSettings.flatMap((tradeSetting) => {
+    const hasOpenPosition = (tradeSetting.model_memory.positions ?? []).some(
+      (position) => !position.closed,
+    );
+    const symbol = String(tradeSetting.symbol || "")
+      .trim()
+      .toUpperCase();
+
+    return hasOpenPosition && symbol ? [symbol] : [];
+  });
+}
+
+/** Selects public symbols needed before exact volatility-aware stage partitioning. */
 function selectSharedSymbols(params: {
   request: RunSlowTradingCycleParams;
   storage: SlowTradingStorageData;
@@ -41,11 +55,16 @@ function selectSharedSymbols(params: {
     params.storage.config.symbols,
   );
   params.storage.modes[activeMode] = modeState;
-  const stageSymbols = slowTradingCyclePlanning.symbols.select({
-    modeState,
-    stage: params.request.stage,
-    storage: params.storage,
-  });
+  const isMonitoringStage =
+    params.request.stage === "speedup" ||
+    params.request.stage === "standard-monitoring";
+  const stageSymbols = isMonitoringStage
+    ? selectOpenPositionSymbols(modeState)
+    : slowTradingCyclePlanning.symbols.select({
+        modeState,
+        stage: params.request.stage,
+        storage: params.storage,
+      });
 
   return Array.from(
     new Set([

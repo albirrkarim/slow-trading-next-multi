@@ -61,11 +61,12 @@ Conceptually:
 begin stage cycle
 
 load the account catalog and required account states
-classify account eligibility and collect required symbols
+collect symbols that have open positions or can capture entries
 
 build or reuse one shared Binance Futures market snapshot
 
 for each eligible account in deterministic order
+  classify exact stage eligibility using account state and shared market data
   apply account-specific guards and decisions
   refresh required private exchange state
   execute account orders sequentially
@@ -143,10 +144,12 @@ position that the same pass just closed.
 
 TC: `PROD:MULTI_ACCOUNT_PRIVATE_STATE_ISOLATION`
 
-## 5. Stage Eligibility Before Market I/O
+## 5. Stage Eligibility and Market I/O
 
-The coordinator must load enough account state to classify stage eligibility
-before starting shared public market work.
+The coordinator must first use account state to determine whether a stage has
+any possible work. Exact Speedup and Standard classification may additionally
+depend on shared volatility, so that partition happens after the shared market
+snapshot is available and before any account execution begins.
 
 ### 5.1 Speedup and Standard Monitoring
 
@@ -157,7 +160,17 @@ When no eligible account owns an open position for the stage:
 - Persist the required compact successful empty-stage statistics for each
   account whose stage pass must be recorded.
 
+When at least one account has an open position, Speedup and Standard
+Monitoring prepare shared volatility once for the union of those open-position
+symbols. Each account then classifies its positions against that same snapshot.
+This ordering is required because volatility is stored in the shared
+`slow/<exchange>/volatility/` cache and intentionally removed from compact
+account memory after persistence. Stage classification must not treat that
+missing transient account field as an empty volatility history.
+
 TC: `PROD:EMPTY_MONITORING_NO_MARKET_IO`
+
+TC: `PROD:SPEEDUP_STAGE_SHARED_VOLATILITY_CLASSIFICATION`
 
 ### 5.2 Capture Entry
 

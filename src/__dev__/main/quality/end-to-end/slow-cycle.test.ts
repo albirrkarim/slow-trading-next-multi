@@ -379,6 +379,126 @@ describe("slow end-to-end cycle", () => {
     expect(beta.modes.sandbox.dynamicTradeMemory.quoteAsset).toBe(980);
   });
 
+  it("classifies a persisted averaged position with shared volatility", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const slowTradingStorage = slowTrading.storage;
+    const { createTestPosition } = await import("../fixtures/position");
+    const storage = slowTradingStorage.data.createDefault();
+    const position = createTestPosition({
+      direction: "LONG",
+      entryPrice: 100,
+      entryTime: e2eSignal.t - 60_000,
+      executionMode: "sandbox",
+      pnl: {
+        markPrice: 103,
+        maxDownPct: 0,
+        maxUpPct: 0,
+        netPct: 0,
+        netUsdt: 0,
+      },
+      symbol: "SUI",
+    });
+    position.strategy.averaging.executions = [
+      {
+        allocationPct: 3,
+        level: -3,
+        marginUsdt: 10,
+        price: 100,
+        t: e2eSignal.t,
+      },
+    ];
+
+    storage.config.symbols = ["SUI"];
+    storage.config.enableWatchLogic = false;
+    storage.config.modelConfig.takeProfitPercent = 20;
+    storage.config.modelConfig.useStopLossPlus = false;
+    storage.runtime.autoEntryEnabled = false;
+    storage.runtime.autoExitEnabled = false;
+    storage.runtime.runnerEnabled = true;
+    storage.runtime.sandboxEnabled = true;
+    storage.runtime.speedupStageNegativePnlThresholdPct = 10;
+    storage.runtime.speedupStagePositivePnlThresholdPct = 10;
+    storage.modes.sandbox = slowTradingStorage.mode.ensureTradeSettings(
+      storage.modes.sandbox,
+      storage.config.symbols,
+    );
+    storage.modes.sandbox.tradeSettings[0].model_memory.positions = [position];
+    delete storage.modes.sandbox.tradeSettings[0].model_memory.volatility;
+    await slowTradingStorage.data.save(storage);
+
+    const result = await slowTrading.service.runSlowTradingCycle({
+      stage: "speedup",
+    });
+    const persisted = await slowTradingStorage.data.load({
+      modeScope: "active",
+    });
+    const persistedPosition =
+      persisted.modes.sandbox.tradeSettings[0].model_memory.positions?.[0];
+
+    // PROD:SPEEDUP_STAGE_SHARED_VOLATILITY_CLASSIFICATION
+    expect(productionMocks.assignVolatility).toHaveBeenCalledTimes(1);
+    expect(result.symbols).toEqual(["SUI"]);
+    expect(persistedPosition?.lastMonitoringStage).toMatchObject({
+      reason: "post-average target approach",
+      stage: "speedup",
+    });
+  });
+
+  it("classifies a persisted position after its target vPoint", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const slowTradingStorage = slowTrading.storage;
+    const { createTestPosition } = await import("../fixtures/position");
+    const storage = slowTradingStorage.data.createDefault();
+    const position = createTestPosition({
+      direction: "SHORT",
+      entryPrice: 100,
+      entryTime: e2eSignal.t - 60_000,
+      executionMode: "sandbox",
+      pnl: {
+        markPrice: 100,
+        maxDownPct: 0,
+        maxUpPct: 0,
+        netPct: 0,
+        netUsdt: 0,
+      },
+      symbol: "SUI",
+    });
+
+    storage.config.symbols = ["SUI"];
+    storage.config.enableWatchLogic = false;
+    storage.config.modelConfig.takeProfitPercent = 20;
+    storage.config.modelConfig.useStopLossPlus = false;
+    storage.runtime.autoEntryEnabled = false;
+    storage.runtime.autoExitEnabled = false;
+    storage.runtime.runnerEnabled = true;
+    storage.runtime.sandboxEnabled = true;
+    storage.runtime.speedupStageNegativePnlThresholdPct = 10;
+    storage.runtime.speedupStagePositivePnlThresholdPct = 10;
+    storage.modes.sandbox = slowTradingStorage.mode.ensureTradeSettings(
+      storage.modes.sandbox,
+      storage.config.symbols,
+    );
+    storage.modes.sandbox.tradeSettings[0].model_memory.positions = [position];
+    delete storage.modes.sandbox.tradeSettings[0].model_memory.volatility;
+    await slowTradingStorage.data.save(storage);
+
+    const result = await slowTrading.service.runSlowTradingCycle({
+      stage: "speedup",
+    });
+    const persisted = await slowTradingStorage.data.load({
+      modeScope: "active",
+    });
+    const persistedPosition =
+      persisted.modes.sandbox.tradeSettings[0].model_memory.positions?.[0];
+
+    // PROD:SPEEDUP_STAGE_SHARED_VOLATILITY_CLASSIFICATION
+    expect(result.symbols).toEqual(["SUI"]);
+    expect(persistedPosition?.lastMonitoringStage).toMatchObject({
+      reason: "target vPoint hit",
+      stage: "speedup",
+    });
+  });
+
   it("does no market or private exchange I/O for empty monitoring", async () => {
     const slowTrading = (await import("@/lib/slowTrading")).default;
     const slowTradingStorage = slowTrading.storage;
