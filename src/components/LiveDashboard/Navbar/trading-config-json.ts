@@ -104,7 +104,7 @@ function parse(raw: string): SlowTradingAccountTradingConfig {
     );
   }
 
-  return structuredClone(parsed) as SlowTradingAccountTradingConfig;
+  return structuredClone(parsed) as unknown as SlowTradingAccountTradingConfig;
 }
 
 const tradingConfigJson = {
