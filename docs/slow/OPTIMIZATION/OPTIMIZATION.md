@@ -4,7 +4,7 @@ This document tracks how to keep the SLOW Railway deployment clean, efficient, a
 
 ## Optimization Score: 68/100
 
-Assessment date: September 4, 2026.
+Assessment date: September 6, 2026.
 
 The SLOW runtime has several meaningful optimizations: public market work is
 shared across accounts, account cycles are sequential, empty monitoring stages
@@ -12,11 +12,18 @@ avoid market I/O, runtime storage loads only the active mode, and closed history
 is split out of normal cycle memory. A cgroup-aware runtime memory monitor, cycle
 section profiler, and an 80-symbol production-shaped functional test now exist.
 
-The 100 MB Railway target is not currently met. The September 4 Railway graph
-showed approximately `232 MB` for `Multi Grail : Sub Machine gun` and `151 MB`
-for `Holy Grail : Sub Machine gun`. These are separate service series, not one
-combined process measurement. At that sample the two services used roughly
-`383 MB` in total.
+The 100 MB Railway target is not currently met. Before a September 4 restart,
+the Railway graph showed approximately `233 MB` for
+`Multi Grail : Sub Machine gun` and `151 MB` for
+`Holy Grail : Sub Machine gun`. Restarting only Multi Grail dropped it to about
+`116 MB`, while Holy Grail stayed at `151 MB`. These are separate service
+series, not one combined process measurement.
+
+That controlled restart is evidence of about `117 MB` of process-lifetime
+retention or high-water memory in Multi Grail. It also establishes a much more
+useful Railway fresh-process baseline of about `116 MB`. The runner continued
+to operate after restart in the observed window, so the old `233 MB` level was
+not required merely to execute a cycle.
 
 The current V8 flags were previously described too much like a process-memory
 cap. They are not. `--max-old-space-size` limits only V8 old-space; Railway
@@ -46,7 +53,10 @@ Desired steady-state Railway service memory:
 
 ```text
 Target: <= 100 MB per service
-Observed on September 4, 2026: 151-232 MB per service
+Fresh Railway process observed after restart: about 116 MB
+Same service immediately before restart: about 233 MB
+Retained/high-water delta released by restart: about 117 MB
+Other service, not restarted: about 151 MB
 Status: target not met
 ```
 
@@ -118,6 +128,33 @@ loading. A second run with `64/1` still reached approximately `103 MiB` after th
 same route load. This is macOS evidence, not a Railway benchmark, but it shows
 that lowering old-space alone does not proportionally lower total RSS and that a
 100 MB service target leaves almost no room for real SLOW data or cycle spikes.
+
+## What The Restart Proves
+
+The `233 MB -> 116 MB` drop proves that the extra `117 MB` belonged to the old
+process lifetime. It makes a fixed Railway platform baseline an insufficient
+explanation for Multi Grail's pre-restart level.
+
+It does not yet prove that all `117 MB` was unreachable JavaScript that failed
+to garbage-collect. A restart also clears:
+
+- Reachable module-level caches and unresolved async operations.
+- V8 heap pages retained for reuse after a high allocation peak.
+- Native allocator arenas and fragmentation.
+- Loaded route modules, compiled/JIT code, network pools, and buffers.
+- Container-accounted cache associated with the old process workload.
+
+The correct conclusion is:
+
+```text
+There is confirmed process-lifetime retention/high-water growth.
+There is not yet enough component data to call it a JavaScript memory leak.
+The fresh Railway baseline is about 116 MB, not 200+ MB.
+```
+
+Because the post-restart runner completed normally without immediately
+returning to `233 MB`, prioritize state that accumulates across cycles or
+requests over data required by one normal cycle.
 
 ## Dev/Backtest Exclusion
 
@@ -352,6 +389,69 @@ graph has not yet been measured. Add bounded eviction or expired-entry sweeping
 and a cache-entry-count diagnostic before calling it the cause of the 232 MB
 service.
 
+### Async Notification Retention Risk
+
+`src/lib/slowTrading/cycle/finalize.ts` starts open-position monitoring
+notifications without awaiting them:
+
+```ts
+void slowTradingNotifications.openPositions.notify({
+  positions,
+  volatilityPointsMap,
+  // ...
+});
+```
+
+The async task captures the full per-cycle `volatilityPointsMap` until every
+notification check and network send settles. Email delivery has a 30-second
+timeout, but Telegram delivery currently has no explicit Axios timeout. A
+stalled Telegram request can therefore retain the map and related closure for
+an unbounded time. Repeated eligible notification passes can leave multiple
+large cycle payloads alive concurrently.
+
+This path is a higher-priority retention candidate when Multi Grail has stale or
+long-open-position notifications enabled. It is not proven to explain the full
+`117 MB` delta because notification eligibility and pending request counts were
+not captured from Railway.
+
+Required direction:
+
+```text
+All notification transports have finite timeouts.
+Post-cycle notification work is awaited or placed on one bounded queue.
+The queued payload contains only the positions and per-position volatility
+points needed by the notification, not the entire symbol map.
+Runtime diagnostics expose pending notification task count and age.
+```
+
+Also audit every other `void promise` in cycle finalization. The balance-snapshot
+write has a much smaller payload, but it should still have bounded pending work
+and visible failures.
+
+### Expected High-Water Retention
+
+The cycle creates several JSON deep clones of trade settings, volatility maps,
+price-normalization maps, and account mode state. These temporary copies can be
+freed by JavaScript, while V8 or the native allocator keeps committed/resident
+pages available for reuse. That behavior is not a reachable-object leak, but it
+can keep Railway RAM above the post-restart level.
+
+Use a heap snapshot and the memory-component timeline to distinguish the cases:
+
+```text
+heapUsed rises every cycle and does not return
+  likely reachable JavaScript retention
+
+heapUsed returns but heapTotal/RSS stays high
+  V8 committed-heap or allocator high-water behavior
+
+RSS stays low but cgroup used stays high
+  container-level memory or file-cache attribution
+
+pending notification count/age rises with heapUsed
+  unresolved async notification retention
+```
+
 ## Client-Only Dashboard Pages
 
 Heavy dashboard pages should render as client-only UI:
@@ -457,9 +557,10 @@ stage and cycle profiler summary
 ```
 
 Compare `Multi Grail` and `Holy Grail` using the same commit and Node version.
-The current `81 MB` difference is useful evidence only after differences in
-account count, symbols, open positions, persistent file sizes, dashboard
-traffic, and environment flags are recorded.
+The pre-restart `82 MB` service difference and Multi Grail's `117 MB` restart
+drop are useful evidence only after differences in account count, symbols, open
+positions, notification eligibility, pending async work, persistent file sizes,
+dashboard traffic, and environment flags are recorded.
 
 ## Prioritized Work To Reach 100 MB
 
@@ -472,6 +573,18 @@ traffic, and environment flags are recorded.
   for a service.
 - Record the deployed Node version and the exact `NODE_OPTIONS` from each
   service.
+- Record memory before a cycle, at peak, after it settles, and after the next
+  cycle. A single post-restart point is not a leak trend.
+- Capture two heap snapshots after equivalent completed cycles. Compare retained
+  object types and retaining paths instead of comparing snapshot file sizes.
+
+### P0: Bound Async Cycle Work
+
+- Add a finite Telegram timeout.
+- Replace fire-and-forget open-position monitoring with awaited or bounded
+  queued execution.
+- Pass only the required symbols/points into notification work.
+- Expose pending task count, oldest task age, completion, and timeout counts.
 
 ### P0: Remove Backtest Code From Production Startup
 
@@ -516,6 +629,10 @@ traffic, and environment flags are recorded.
   distinguish JavaScript heap from process/container overhead.
 - The process-lifetime public-market cache has no global expiry sweep or size
   bound.
+- Fire-and-forget open-position notification work can retain a complete cycle's
+  volatility map, and Telegram delivery has no explicit request timeout.
+- Repeated JSON deep clones can create a high allocation peak even after all
+  cycle-local references become collectible.
 - The dashboard storage endpoint can hydrate/report combined multi-account
   state and may become a payload and peak-memory hotspot as history grows.
 - Exchange integration tests remain limited for Binance futures position
@@ -539,7 +656,9 @@ Current status:
 ```text
 Production safety: good
 Multi-account public-market reuse: good
-Runtime memory target: failed (151-232 MB observed vs <=100 MB target)
+Fresh-process target: close but failed (116 MB observed vs <=100 MB target)
+Long-lived process: failed (233 MB before restart)
+Restart-released delta: 117 MB, source not yet attributed
 Memory attribution: insufficient
 Production build boundary: needs improvement
 Optimization confidence score: 68/100
