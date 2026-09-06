@@ -71,6 +71,7 @@ describe("per-account trading configuration summary", () => {
 
     expect(screen.getByText("Overall system description")).toBeTruthy();
     expect(screen.getByText("Main account notes")).toBeTruthy();
+    expect(screen.getByTestId("account-icon-main")).toBeTruthy();
     expect(screen.queryByText("Account configuration summary")).toBeNull();
     expect(screen.queryByText("Second")).toBeNull();
     expect(screen.queryByTestId("account-config-summary-second")).toBeNull();

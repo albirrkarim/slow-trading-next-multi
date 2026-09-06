@@ -1,6 +1,7 @@
 "use client";
 
-import { Box, Typography } from "@mui/material";
+import AccountCircleRoundedIcon from "@mui/icons-material/AccountCircleRounded";
+import { Box, Stack, Typography } from "@mui/material";
 import type { SlowTradingAccount } from "@/lib/slowTrading/types";
 
 import HeaderMetrics from "../ui/HeaderMetrics";
@@ -41,18 +42,17 @@ function AccountSummary({
         py: 1.5,
       }}
     >
-      <Typography component="h2" id={headingId} variant="subtitle2">
-        {account.name}
-      </Typography>
-
-      <Typography
-        color="text.secondary"
-        component="p"
-        sx={{ mb: 0.5, mt: 1.5 }}
-        variant="caption"
-      >
-        Trading notes
-      </Typography>
+      <Stack alignItems="center" direction="row" gap={1} sx={{ mb: 1 }}>
+        <AccountCircleRoundedIcon
+          aria-hidden
+          color="action"
+          data-testid={`account-icon-${account.slug}`}
+          fontSize="small"
+        />
+        <Typography component="h2" id={headingId} fontWeight="bold" variant="subtitle2">
+          {account.name}
+        </Typography>
+      </Stack>
       <Typography
         color={notes ? "text.primary" : "text.secondary"}
         sx={{ overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}
@@ -69,7 +69,7 @@ function AccountSummary({
           sx={{ mt: 1 }}
           title={
             <Typography color="text.secondary" variant="caption">
-              Custom trading values
+              Details
             </Typography>
           }
         >
