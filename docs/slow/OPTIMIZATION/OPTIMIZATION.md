@@ -75,6 +75,8 @@ NODE_ENV=production
 NEXT_TELEMETRY_DISABLED=1
 PERSISTENT_STORAGE_ROOT=/storage/persistent/instances/3010
 NODE_OPTIONS=--max-old-space-size=96 --max-semi-space-size=2
+MEMORY_MONITOR_WARNING_MB=120
+MEMORY_MONITOR_DANGER_MB=180
 ```
 
 Treat these as V8 heap guardrails, not a Railway RAM limit. Do not lower them
@@ -365,11 +367,12 @@ backtest code.
 Instrumentation now imports only the runner singleton. Quick Backtest is no
 longer exported by the shared runtime facade, its API imports its focused module,
 and the heavy dynamic backtest implementation is imported only inside an
-authenticated Quick Backtest run.
+explicit Quick Backtest run.
 
-The production build now emits four warnings, confined to the explicitly
-demand-only Quick Backtest route and development backtest routes. Normal SLOW
-production routes no longer show the backtest import chain. In the local build:
+The production build now emits four warnings, confined to explicitly
+demand-only backtest/preview routes: Quick Backtest, Black Swan preview, and
+development backtest routes. Normal runner, dashboard, storage, and trading API
+routes no longer show the backtest import chain. In the local build:
 
 ```text
 Normal sampled route NFT: 1,290 -> 828 files
@@ -379,9 +382,10 @@ Whole-project warnings: 19 -> 4 demand-only/development routes
 ```
 
 Artifact size is not the same as RAM, so the trace reduction does not explain
-the full `117 MB` restart delta. The remaining Quick Backtest/development route
-warnings also mean those routes can still load heavy code when deliberately
-invoked. They are no longer part of normal server startup.
+the full `117 MB` restart delta. The remaining Quick Backtest, Black Swan
+preview, and development route warnings also mean those routes can still load
+heavy code when deliberately invoked. They are no longer part of normal server
+startup.
 
 ### Fixed Public-Market Cache Retention
 
@@ -397,17 +401,19 @@ graph remains to be measured after deployment.
 
 ### Fixed Async Notification Retention
 
-Cycle finalization now awaits open-position notification work, passes only the
-volatility points for currently open-position symbols, and catches/report its
-failure before the cycle returns. Email and Telegram transports both have a
-finite 30-second request timeout. The balance snapshot write is also awaited.
+The cycle now awaits open-position and high-volatility notification work. Open
+position checks receive only their symbols' volatility points, while the
+high-volatility check receives only the latest point for each symbol. Failures
+are caught and reported before the cycle returns. Email and Telegram transports
+both have a finite 30-second request timeout. The balance snapshot write is also
+awaited.
 
 As a result, completed cycles no longer leave unbounded notification or snapshot
-promises holding the full per-cycle volatility map. An eligible notification can
-extend cycle finalization by up to its transport timeout, which is intentional:
-only one bounded payload remains live and the failure is visible. Railway
-deployment observation is still required to measure how much memory this
-releases in the real workload.
+promises holding the full per-cycle volatility map. Eligible notifications can
+extend cycle finalization while bounded transport requests complete, which is
+intentional: only the reduced payload remains live and failures are visible.
+Railway deployment observation is still required to measure how much memory
+this releases in the real workload.
 
 ### Expected High-Water Retention
 
@@ -477,10 +483,11 @@ npm run build
 npm run quality
 ```
 
-Normal production routes must finish without the whole-project NFT trace
-warning and must not trace the Quick Backtest/dynamic backtest import chain. The
-explicit Quick Backtest and guarded development routes may still emit the known
-warning because requesting those routes intentionally loads the implementation.
+Normal runner, dashboard, storage, and trading API routes must finish without
+the whole-project NFT trace warning and must not trace the Quick Backtest/dynamic
+backtest import chain. Explicit Quick Backtest, Black Swan preview, and guarded
+development routes may still emit the known warning because requesting those
+routes intentionally loads the implementation.
 
 Then verify the build route list:
 
@@ -565,8 +572,10 @@ dashboard traffic, and environment flags are recorded.
 - **Implemented:** Telegram and email have a finite 30-second timeout.
 - **Implemented:** open-position notification and balance snapshot work is
   awaited before cycle completion.
-- **Implemented:** notification work receives only open-position symbols and
-  their volatility points.
+- **Implemented:** high-volatility notification work is also awaited.
+- **Implemented:** notification work receives reduced volatility data: only
+  open-position symbols for position checks and the latest point per symbol for
+  high-volatility checks.
 - Add notification completion and timeout counters if transport reliability
   needs longer-term operational diagnosis.
 
@@ -614,8 +623,9 @@ dashboard traffic, and environment flags are recorded.
 - Component memory diagnostics are emitted on threshold alerts, but there is no
   persistent stage-by-stage time series.
 - The public-market cache cap is based on entry count, not estimated bytes.
-- Quick Backtest and guarded development routes still intentionally load the
-  heavy implementation if invoked and retain their known build-trace warnings.
+- Quick Backtest, Black Swan preview, and guarded development routes still
+  intentionally load heavy implementations if invoked and retain their known
+  build-trace warnings.
 - Repeated JSON deep clones can create a high allocation peak even after all
   cycle-local references become collectible.
 - The dashboard storage endpoint can hydrate/report combined multi-account

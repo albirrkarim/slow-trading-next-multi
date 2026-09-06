@@ -85,6 +85,12 @@ describe("slow specs notification", () => {
       "await slowTradingNotifications.openPositions",
       "await slowTradingStorage.balanceSnapshots.upsert",
     ]);
+    await expectSourceContains("src/lib/slowTrading/cycle/entry.ts", [
+      // PROD:BOUNDED_POST_CYCLE_ASYNC_WORK
+      "PROD:BOUNDED_POST_CYCLE_ASYNC_WORK",
+      "await slowTradingNotifications.highVolatility",
+      "latestVolatilityPointsMap",
+    ]);
   });
 
   it("marks the n8n CRM email delivery path", async () => {

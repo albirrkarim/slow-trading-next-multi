@@ -45,10 +45,18 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
   } = runtime;
   const executionModeState = { ...modeState, tradeSettings };
 
-  void slowTradingNotifications.highVolatility
+  const latestVolatilityPointsMap = Object.fromEntries(
+    Object.entries(volatilityPointsMap).map(([symbol, points]) => {
+      const latestPoint = points.at(-1);
+      return [symbol, latestPoint ? [latestPoint] : []];
+    }),
+  );
+
+  // PROD:BOUNDED_POST_CYCLE_ASYNC_WORK
+  await slowTradingNotifications.highVolatility
     .notify({
       modeState,
-      volatilityPointsMap,
+      volatilityPointsMap: latestVolatilityPointsMap,
       exchangeType,
       notification: storage.runtime.notification,
     })

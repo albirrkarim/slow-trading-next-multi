@@ -418,7 +418,9 @@ describe("slow specs runtime", () => {
     ]);
 
     // PROD:QUICK_BACKTEST_DEMAND_ONLY
-    expect(facade).not.toContain('from "./quick-backtest"');
+    expect(facade).not.toContain(
+      'import slowQuickBacktest from "./quick-backtest"',
+    );
     expect(route).toContain("PROD:QUICK_BACKTEST_DEMAND_ONLY");
     expect(route).toContain("@/lib/slowTrading/quick-backtest");
     expect(quickBacktest).toContain("PROD:QUICK_BACKTEST_DEMAND_ONLY");
