@@ -405,8 +405,26 @@ describe("slow specs runtime", () => {
 
     // PROD:RUNNER_BOOTSTRAP_ON_SERVER_START
     expect(source).toContain("PROD:RUNNER_BOOTSTRAP_ON_SERVER_START");
-    expect(source).toContain("@/lib/slowTrading");
-    expect(source).toContain("slowTrading.default.runner.get()");
+    expect(source).toContain("@/lib/slowTrading/singleton");
+    expect(source).toContain("getSlowTradingRunner()");
+    expect(source).not.toContain('import("@/lib/slowTrading")');
+  });
+
+  it("keeps Quick Backtest out of the shared production runtime facade", async () => {
+    const [facade, quickBacktest, route] = await Promise.all([
+      fs.readFile("src/lib/slowTrading/index.ts", "utf8"),
+      fs.readFile("src/lib/slowTrading/quick-backtest.ts", "utf8"),
+      fs.readFile("src/pages/api/slow-trading/quick-backtest.ts", "utf8"),
+    ]);
+
+    // PROD:QUICK_BACKTEST_DEMAND_ONLY
+    expect(facade).not.toContain('from "./quick-backtest"');
+    expect(route).toContain("PROD:QUICK_BACKTEST_DEMAND_ONLY");
+    expect(route).toContain("@/lib/slowTrading/quick-backtest");
+    expect(quickBacktest).toContain("PROD:QUICK_BACKTEST_DEMAND_ONLY");
+    expect(quickBacktest).toContain(
+      'await import(\n    "../dynamic/backtest-volatility"',
+    );
   });
 
   it("reuses the dev runner singleton unless the implementation changes", async () => {

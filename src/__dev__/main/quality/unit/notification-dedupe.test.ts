@@ -36,6 +36,8 @@ describe("notification dedupe", () => {
     delete process.env.APP_NAME;
     delete process.env.N8N_EMAIL_PROXY_TOKEN;
     delete process.env.N8N_EMAIL_PROXY_URL;
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_CHAT_ID;
   });
 
   it("prefixes email subjects with APP_NAME", async () => {
@@ -123,6 +125,21 @@ describe("notification dedupe", () => {
         headers: { Authorization: "Bearer proxy-token" },
         timeout: 30_000,
       }),
+    );
+  });
+
+  it("bounds Telegram delivery with the notification request timeout", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "bot-token";
+    process.env.TELEGRAM_CHAT_ID = "chat-id";
+    const { notif } = await import("@/lib/notification");
+
+    await notif.telegram({ body: "body text", subject: "subject" });
+
+    // PROD:NOTIFICATION_REQUEST_TIMEOUT
+    expect(axiosPostMock).toHaveBeenCalledWith(
+      "https://api.telegram.org/botbot-token/sendMessage",
+      expect.objectContaining({ chat_id: "chat-id" }),
+      expect.objectContaining({ timeout: 30_000 }),
     );
   });
 });

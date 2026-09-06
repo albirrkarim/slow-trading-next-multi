@@ -26,6 +26,9 @@ type MemoryMonitorConfig = {
 };
 
 type MemorySample = {
+  arrayBuffersMb: number;
+  externalMb: number;
+  heapTotalMb: number;
   heapUsedMb: number;
   limitMb?: number;
   rssMb: number;
@@ -118,6 +121,9 @@ async function readMemory(): Promise<MemorySample> {
       : undefined;
 
   return {
+    arrayBuffersMb: processMemory.arrayBuffers / BYTES_PER_MB,
+    externalMb: processMemory.external / BYTES_PER_MB,
+    heapTotalMb: processMemory.heapTotal / BYTES_PER_MB,
     heapUsedMb: processMemory.heapUsed / BYTES_PER_MB,
     ...(limitBytes && { limitMb: limitBytes / BYTES_PER_MB }),
     rssMb: processMemory.rss / BYTES_PER_MB,
@@ -145,7 +151,15 @@ function formatAlert(alert: MemoryAlert) {
   const stateLabel =
     alert.level === "normal" ? "RECOVERED" : alert.level.toUpperCase();
   return {
-    body: "",
+    body: [
+      `Source: ${alert.sample.source}`,
+      `Container/process used: ${formatMb(alert.sample.usedMb)}`,
+      `Process RSS: ${formatMb(alert.sample.rssMb)}`,
+      `V8 heap: ${formatMb(alert.sample.heapUsedMb)} used / ${formatMb(alert.sample.heapTotalMb)} committed`,
+      `External: ${formatMb(alert.sample.externalMb)}`,
+      `ArrayBuffers: ${formatMb(alert.sample.arrayBuffersMb)}`,
+      `Container limit: ${formatMb(alert.sample.limitMb)}`,
+    ].join("\n"),
     subject: `[RAM ${stateLabel}] ${alert.sample.usedMb.toFixed(0)} MB / ${formatMb(alert.sample.limitMb)}`,
   };
 }

@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import slowTrading from "@/lib/slowTrading";
+import slowQuickBacktest from "@/lib/slowTrading/quick-backtest";
 import { runBacktestVolatilityDynamic } from "@/lib/dynamic/backtest-volatility";
 import { TradingMode } from "@/lib/exchange";
 import { createTestPosition } from "../fixtures/position";
 
-const slowQuickBacktest = slowTrading.quickBacktest;
 const {
   combineQuickGrowthSeries,
   combineQuickSimulationSeries,
@@ -15,7 +14,7 @@ const {
   growthOvertimeToQuickSeries,
   positionsToQuickSimulationSeries,
   positionsToQuickTradeHistory,
-} = slowTrading.quickBacktest.report;
+} = slowQuickBacktest.report;
 
 describe("slow quick backtest report helpers", () => {
   it("converts growth snapshots into dashboard balance series", () => {

@@ -37,6 +37,8 @@ type NotificationDedupeRecord = {
 
 type NotificationDedupeStore = Record<string, NotificationDedupeRecord>;
 const inFlightDedupeKeys = new Set<string>();
+// PROD:NOTIFICATION_REQUEST_TIMEOUT
+const NOTIFICATION_REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_N8N_EMAIL_PROXY_URL =
   "https://crm.reinventwp.com/webhook/trading-email-proxy-railway-fallback";
 
@@ -146,7 +148,7 @@ async function sendEmailViaN8nProxy(
     },
     {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      timeout: 30_000,
+      timeout: NOTIFICATION_REQUEST_TIMEOUT_MS,
     },
   );
 }
@@ -196,6 +198,7 @@ async function telegram({ subject, body }: LegacyNotifParam): Promise<void> {
         text: message,
         parse_mode: "HTML",
       },
+      { timeout: NOTIFICATION_REQUEST_TIMEOUT_MS },
     );
 
     if (!res.data.ok) {

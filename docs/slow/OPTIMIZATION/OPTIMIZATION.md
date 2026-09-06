@@ -2,7 +2,7 @@
 
 This document tracks how to keep the SLOW Railway deployment clean, efficient, and production-focused.
 
-## Optimization Score: 68/100
+## Optimization Score: 78/100
 
 Assessment date: September 6, 2026.
 
@@ -114,12 +114,11 @@ cgroup memory
 `NODE_OPTIONS=--max-old-space-size=96` constrains only one portion of
 `heapTotal`. It does not constrain `rss` or total cgroup memory to 96 MB.
 
-The repository's runtime monitor already reads both `process.memoryUsage()` and
-Linux cgroup usage. However, its notification currently reports only the total
-`usedMb`. Until the alert/log includes `heapUsedMb`, `rssMb`, `usedMb`, source,
-and container limit together, the Railway graph alone cannot prove whether the
-extra memory is JavaScript retention, native/framework RSS, allocator behavior,
-or container-accounted file cache.
+The repository's runtime monitor reads both `process.memoryUsage()` and Linux
+cgroup usage. Memory alerts now report `heapUsed`, committed heap, RSS,
+`external`, `arrayBuffers`, cgroup usage source, and the container limit
+together. This makes the next Railway alert useful for attribution, although a
+single alert still cannot establish a trend or prove a JavaScript leak.
 
 Local reproduction on September 4, 2026 used Node `24.18.0`, Next `16.2.9`, the
 standalone server, empty temporary storage, and the `96/2` flags. Sampled process
@@ -128,6 +127,12 @@ loading. A second run with `64/1` still reached approximately `103 MiB` after th
 same route load. This is macOS evidence, not a Railway benchmark, but it shows
 that lowering old-space alone does not proportionally lower total RSS and that a
 100 MB service target leaves almost no room for real SLOW data or cycle spikes.
+
+After isolating Quick Backtest from startup, the same local standalone process
+sampled about `98 MiB` at startup and about `115 MiB` after an authenticated
+storage request. The roughly `8 MiB` lower startup sample is encouraging but is
+not a controlled Railway result; allocator and operating-system variation make
+deployment observation the deciding test.
 
 ## What The Restart Proves
 
@@ -338,10 +343,10 @@ These remain good architecture, but may not visibly reduce idle memory:
 - Running `npm run build:railway` to remove unnecessary runtime files after the
   standalone build.
 
-### Current Build-Trace Regression
+### Fixed Production Startup Boundary
 
-The September 4 production build completed, but Turbopack warned that the whole
-project was traced unintentionally. The repeated import trace was:
+Before this change, the production build emitted 19 whole-project trace
+warnings. The repeated import trace was:
 
 ```text
 next.config.ts
@@ -352,81 +357,57 @@ src/lib/slowTrading/index.ts
 production API route
 ```
 
-Sampled production route NFT manifests each contained `1,290` files, and the
-generated standalone directory was about `106 MB`. `src/instrumentation.ts`
-imports the grouped `@/lib/slowTrading` facade during server startup, while that
-facade statically imports `quick-backtest.ts`. This defeats the intended runtime
-boundary between production orchestration and backtest code.
+`src/instrumentation.ts` imported the grouped `@/lib/slowTrading` facade during
+server startup, while that facade statically imported `quick-backtest.ts`. This
+defeated the intended runtime boundary between production orchestration and
+backtest code.
 
-Artifact size is not the same as RAM, so this trace does not by itself explain
-all `151-232 MB`. It is still the first code boundary to fix because it is
-confirmed by the build, is loaded from the startup path, and makes clean memory
-attribution harder.
+Instrumentation now imports only the runner singleton. Quick Backtest is no
+longer exported by the shared runtime facade, its API imports its focused module,
+and the heavy dynamic backtest implementation is imported only inside an
+authenticated Quick Backtest run.
 
-Required direction:
-
-```text
-Production instrumentation imports only the runner/runtime entry point.
-Production APIs import focused SLOW modules where one capability is needed.
-Quick Backtest dynamically imports its implementation only after its route is
-authenticated and invoked.
-Normal production route traces do not include devBacktest datasets or
-dynamic backtest implementations.
-```
-
-Do not remove Quick Backtest behavior. Isolate its load boundary.
-
-### Cache-Retention Risk
-
-`src/lib/slowTrading/public-market-cache.ts` removes an expired completed value
-only when the exact same key is requested again. It does not sweep expired keys,
-bound the map, or expose cache size in runtime diagnostics. Keys include symbol
-sets and configuration values, so configuration or account/symbol changes can
-leave expired shared snapshots reachable for the life of the process.
-
-This is a confirmed retention behavior, but its contribution to the Railway
-graph has not yet been measured. Add bounded eviction or expired-entry sweeping
-and a cache-entry-count diagnostic before calling it the cause of the 232 MB
-service.
-
-### Async Notification Retention Risk
-
-`src/lib/slowTrading/cycle/finalize.ts` starts open-position monitoring
-notifications without awaiting them:
-
-```ts
-void slowTradingNotifications.openPositions.notify({
-  positions,
-  volatilityPointsMap,
-  // ...
-});
-```
-
-The async task captures the full per-cycle `volatilityPointsMap` until every
-notification check and network send settles. Email delivery has a 30-second
-timeout, but Telegram delivery currently has no explicit Axios timeout. A
-stalled Telegram request can therefore retain the map and related closure for
-an unbounded time. Repeated eligible notification passes can leave multiple
-large cycle payloads alive concurrently.
-
-This path is a higher-priority retention candidate when Multi Grail has stale or
-long-open-position notifications enabled. It is not proven to explain the full
-`117 MB` delta because notification eligibility and pending request counts were
-not captured from Railway.
-
-Required direction:
+The production build now emits four warnings, confined to the explicitly
+demand-only Quick Backtest route and development backtest routes. Normal SLOW
+production routes no longer show the backtest import chain. In the local build:
 
 ```text
-All notification transports have finite timeouts.
-Post-cycle notification work is awaited or placed on one bounded queue.
-The queued payload contains only the positions and per-position volatility
-points needed by the notification, not the entire symbol map.
-Runtime diagnostics expose pending notification task count and age.
+Normal sampled route NFT: 1,290 -> 828 files
+.next/server: about 58 MB -> 48 MB
+.next/standalone before Railway cleanup: about 106 MB -> 103 MB
+Whole-project warnings: 19 -> 4 demand-only/development routes
 ```
 
-Also audit every other `void promise` in cycle finalization. The balance-snapshot
-write has a much smaller payload, but it should still have bounded pending work
-and visible failures.
+Artifact size is not the same as RAM, so the trace reduction does not explain
+the full `117 MB` restart delta. The remaining Quick Backtest/development route
+warnings also mean those routes can still load heavy code when deliberately
+invoked. They are no longer part of normal server startup.
+
+### Fixed Public-Market Cache Retention
+
+`src/lib/slowTrading/public-market-cache.ts` now sweeps all expired completed
+entries on every access, caps completed entries at `256`, and exposes cache
+entry statistics. This prevents old symbol/configuration key combinations from
+remaining reachable for the process lifetime merely because that exact key is
+never requested again.
+
+The cap is entry-based rather than byte-based, so unusually large entries can
+still have a significant footprint. Its actual contribution to the Railway
+graph remains to be measured after deployment.
+
+### Fixed Async Notification Retention
+
+Cycle finalization now awaits open-position notification work, passes only the
+volatility points for currently open-position symbols, and catches/report its
+failure before the cycle returns. Email and Telegram transports both have a
+finite 30-second request timeout. The balance snapshot write is also awaited.
+
+As a result, completed cycles no longer leave unbounded notification or snapshot
+promises holding the full per-cycle volatility map. An eligible notification can
+extend cycle finalization by up to its transport timeout, which is intentional:
+only one bounded payload remains live and the failure is visible. Railway
+deployment observation is still required to measure how much memory this
+releases in the real workload.
 
 ### Expected High-Water Retention
 
@@ -496,9 +477,10 @@ npm run build
 npm run quality
 ```
 
-The build must finish without the whole-project NFT trace warning. Sample
-production routes must not trace `next.config.ts`, `src/lib/devBacktest/**`, or
-the dynamic backtest implementation.
+Normal production routes must finish without the whole-project NFT trace
+warning and must not trace the Quick Backtest/dynamic backtest import chain. The
+explicit Quick Backtest and guarded development routes may still emit the known
+warning because requesting those routes intentionally loads the implementation.
 
 Then verify the build route list:
 
@@ -566,8 +548,8 @@ dashboard traffic, and environment flags are recorded.
 
 ### P0: Measure the Correct Memory Components
 
-- Include `heapUsed`, `heapTotal`, `rss`, `external`, `arrayBuffers`, cgroup
-  usage, and cgroup limit in memory-monitor diagnostics.
+- **Implemented:** alerts include `heapUsed`, `heapTotal`, RSS, `external`,
+  `arrayBuffers`, cgroup usage/source, and cgroup limit.
 - Save time-series samples by stage instead of relying on one Railway tooltip.
 - Verify each service has exactly one replica; Railway aggregates replica memory
   for a service.
@@ -580,24 +562,28 @@ dashboard traffic, and environment flags are recorded.
 
 ### P0: Bound Async Cycle Work
 
-- Add a finite Telegram timeout.
-- Replace fire-and-forget open-position monitoring with awaited or bounded
-  queued execution.
-- Pass only the required symbols/points into notification work.
-- Expose pending task count, oldest task age, completion, and timeout counts.
+- **Implemented:** Telegram and email have a finite 30-second timeout.
+- **Implemented:** open-position notification and balance snapshot work is
+  awaited before cycle completion.
+- **Implemented:** notification work receives only open-position symbols and
+  their volatility points.
+- Add notification completion and timeout counters if transport reliability
+  needs longer-term operational diagnosis.
 
 ### P0: Remove Backtest Code From Production Startup
 
-- Stop importing the complete SLOW facade from instrumentation.
-- Lazy-load Quick Backtest at its API boundary.
+- **Implemented:** instrumentation imports only the runner singleton.
+- **Implemented:** Quick Backtest is isolated at its API/module boundary and
+  dynamically loads the heavy backtest implementation on demand.
 - Make the whole-project NFT trace warning a build failure or budget check.
-- Rebuild and compare startup RSS before changing heap limits again.
+- Repeat the startup RSS comparison in Railway before changing heap limits.
 
 ### P1: Bound Process-Lifetime Caches
 
-- Sweep expired completed public-market cache entries.
-- Add a maximum entry/byte policy for configuration-dependent keys.
-- Expose entry counts and estimated payload size in diagnostics.
+- **Implemented:** sweep expired completed public-market cache entries on every
+  access.
+- **Implemented:** cap completed entries at `256` and expose entry counts.
+- Add estimated payload bytes and consider a byte-based cap.
 - Confirm Black Swan, funding, exchange-info, PIN-attempt, and request-weight
   caches remain bounded by stable keys.
 
@@ -625,12 +611,11 @@ dashboard traffic, and environment flags are recorded.
   cycle. The 80-symbol test does not measure memory.
 - There is no route-trace, standalone-size, server-chunk, or client-bundle budget
   in the normal quality workflow.
-- Production memory notifications omit the component breakdown needed to
-  distinguish JavaScript heap from process/container overhead.
-- The process-lifetime public-market cache has no global expiry sweep or size
-  bound.
-- Fire-and-forget open-position notification work can retain a complete cycle's
-  volatility map, and Telegram delivery has no explicit request timeout.
+- Component memory diagnostics are emitted on threshold alerts, but there is no
+  persistent stage-by-stage time series.
+- The public-market cache cap is based on entry count, not estimated bytes.
+- Quick Backtest and guarded development routes still intentionally load the
+  heavy implementation if invoked and retain their known build-trace warnings.
 - Repeated JSON deep clones can create a high allocation peak even after all
   cycle-local references become collectible.
 - The dashboard storage endpoint can hydrate/report combined multi-account
@@ -659,15 +644,18 @@ Multi-account public-market reuse: good
 Fresh-process target: close but failed (116 MB observed vs <=100 MB target)
 Long-lived process: failed (233 MB before restart)
 Restart-released delta: 117 MB, source not yet attributed
-Memory attribution: insufficient
-Production build boundary: needs improvement
-Optimization confidence score: 68/100
+Memory attribution: component alerts added; Railway trend still required
+Production build boundary: isolated for normal runtime
+Optimization confidence score: 78/100
 ```
 
-The next meaningful improvement is to separate production startup from Quick
-Backtest/dev imports, then capture cgroup, RSS, and heap components through real
-stages. Only after that comparison should the 100 MB target be accepted as
-achievable for this single-process Next.js dashboard-and-runner architecture.
+The suspected process-lifetime retention paths are now bounded and Quick
+Backtest is removed from normal startup. Deploy this commit, restart once to
+establish a clean baseline, then capture cgroup, RSS, and heap components through
+real stages for at least 24 hours. Only that comparison can show whether the
+service stays near the fresh `116 MB` baseline or whether another retained path
+remains. The `<=100 MB` target is still unproven for a single Next.js process
+that hosts both the dashboard and the runner.
 
 ## References
 

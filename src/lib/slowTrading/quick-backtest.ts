@@ -7,7 +7,6 @@ import type { Position } from "@/lib/trading/models";
 import tradingPosition from "@/lib/trading/position";
 import type { SlowTradingHistoryPosition } from "./types";
 
-import { runBacktestVolatilityDynamic } from "../dynamic/backtest-volatility";
 import type { GrowthOvertimeDetail } from "../dynamic/backtest-volatility/type";
 import type { DynamicTradeConfig } from "../dynamic/type-dynamic";
 import { windowsMs } from "../dynamic/constants-time";
@@ -603,6 +602,10 @@ async function runSingle({
     DECISION_ENGINE_MAP[
       config.decisionEngineVersion ?? PRODUCTION_DECISION_ENGINE
     ] ?? DECISION_ENGINE_MAP[PRODUCTION_DECISION_ENGINE];
+  // PROD:QUICK_BACKTEST_DEMAND_ONLY
+  const { runBacktestVolatilityDynamic } = await import(
+    "../dynamic/backtest-volatility",
+  );
 
   const backtest = await runWithExchangeAccount(
     {

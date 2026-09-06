@@ -80,6 +80,10 @@ describe("slow specs notification", () => {
     ]);
     await expectSourceContains("src/lib/slowTrading/cycle/finalize.ts", [
       "dailyPerformance.notify",
+      // PROD:BOUNDED_POST_CYCLE_ASYNC_WORK
+      "PROD:BOUNDED_POST_CYCLE_ASYNC_WORK",
+      "await slowTradingNotifications.openPositions",
+      "await slowTradingStorage.balanceSnapshots.upsert",
     ]);
   });
 

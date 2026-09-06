@@ -80,12 +80,25 @@ async function execute(
     ),
   }));
 
-  void slowTradingNotifications.openPositions
+  const openPositions = slowTradingPositions.active.withTradeSymbols(
+    modeState.tradeSettings,
+  );
+  const openPositionSymbols = new Set(
+    openPositions.map((position) =>
+      slowTradingPositions.symbol.normalize(position.symbol),
+    ),
+  );
+  const openPositionVolatilityPoints = Object.fromEntries(
+    [...openPositionSymbols]
+      .filter(Boolean)
+      .map((symbol) => [symbol, volatilityPointsMap[symbol] ?? []]),
+  );
+
+  // PROD:BOUNDED_POST_CYCLE_ASYNC_WORK
+  await slowTradingNotifications.openPositions
     .notify({
-      positions: slowTradingPositions.active.withTradeSymbols(
-        modeState.tradeSettings,
-      ),
-      volatilityPointsMap,
+      positions: openPositions,
+      volatilityPointsMap: openPositionVolatilityPoints,
       exchangeType,
       mode: activeMode,
       notification: storage.runtime.notification,
@@ -234,7 +247,8 @@ async function execute(
     (modeState.dynamicTradeMemory.safeHaven ?? 0);
   const snapshotTotal = availableQuoteAsset + totalLockedQuoteAsset;
 
-  void slowTradingStorage.balanceSnapshots.upsert({
+  // PROD:BOUNDED_POST_CYCLE_ASYNC_WORK
+  await slowTradingStorage.balanceSnapshots.upsert({
     mode: activeMode,
     total: snapshotTotal,
     timestamp: currentTimeMs,

@@ -1,4 +1,5 @@
-import slowTrading from "@/lib/slowTrading";
+// PROD:QUICK_BACKTEST_DEMAND_ONLY
+import slowQuickBacktest from "@/lib/slowTrading/quick-backtest";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 export default async function handler(
@@ -21,7 +22,7 @@ export default async function handler(
   }
 
   try {
-    const result = await slowTrading.quickBacktest.run(req.body);
+    const result = await slowQuickBacktest.run(req.body);
     res.status(200).json(result);
   } catch (error: any) {
     res.status(500).json({
