@@ -43,6 +43,7 @@ import WorkerEntrySequenceMetrics from "./Feature/WorkerEntrySequenceMetrics";
 import WorkerNeededEstimation from "./Feature/WorkerNeededEstimation";
 import LiveDashboardNavbar from "./Navbar";
 import BlackSwanStatusSection from "./BlackSwanStatusSection";
+import SystemAccountSummary from "./SystemAccountSummary";
 import DateSelectionDialog from "./Navbar/DateSelectionDialog";
 import { DASHBOARD_POLL_INTERVAL_MS } from "./constants";
 import { applyTimeWindowClient, calculateTimeRange, makeSeries } from "./utils";
@@ -813,10 +814,11 @@ export default function DynamicTradeHistoryPage({
       )}
 
       <Box sx={{ m: 1 }}>
-        {dashboardState?.config.description?.trim() && (
-          <Typography sx={{ mb: 1, whiteSpace: "pre-wrap" }} variant="body1">
-            {dashboardState.config.description.trim()}
-          </Typography>
+        {dashboardState && (
+          <SystemAccountSummary
+            accounts={dashboardState.runtime.exchangeAccounts}
+            description={dashboardState.config.description}
+          />
         )}
 
         {!isMobile && (

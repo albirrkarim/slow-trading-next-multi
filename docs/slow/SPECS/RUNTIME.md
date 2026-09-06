@@ -26,6 +26,21 @@ Calendar, formats positive and zero values with `+` and negative values with
 
 TC: `PROD:DAILY_PNL_META_TITLE`
 
+### A.0.2 Per-Account Trading Configuration Summary
+
+The top dashboard summary uses two columns on desktop and stacks on smaller
+screens. The left column shows the shared system description. The right column
+shows every enabled account's Trading notes and only Trading configuration
+values that differ from the canonical production defaults. Disabled accounts
+are omitted entirely.
+
+Default-valued fields are recursively removed, including fields nested inside
+`modelConfig` and other configuration objects. Custom `false` and `0` values
+remain visible when they differ from their defaults. Trading notes are displayed
+separately and are never included in the configuration difference.
+
+TC: `PROD:MULTI_ACCOUNT_TRADING_CONFIG_SUMMARY`
+
 ### A.1 Production stages
 
 The production runner is split into four independently scheduled stages. The
