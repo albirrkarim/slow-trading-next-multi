@@ -2,18 +2,28 @@
 
 This document tracks how to keep the SLOW Railway deployment clean, efficient, and production-focused.
 
-## Optimization Score: 78/100
+## Optimization Score: 68/100
 
-Assessment date: June 29, 2026.
+Assessment date: September 4, 2026.
 
-The current SLOW production shape is reasonably optimized for a small Railway
-deployment. Dev/backtest routes are guarded, the `/slow` dashboard is client
-lazy-loaded, runtime storage loads only the active mode, closed trade history is
-split out of normal memory, and several runtime caches are persisted outside the
-hot storage object. The remaining optimization gap is mostly measurement: there
-is no regular memory budget report, no bundle-size budget, and no automated
-production-cycle load test that proves the memory cap is safe across larger
-symbol counts.
+The SLOW runtime has several meaningful optimizations: public market work is
+shared across accounts, account cycles are sequential, empty monitoring stages
+avoid market I/O, runtime storage loads only the active mode, and closed history
+is split out of normal cycle memory. A cgroup-aware runtime memory monitor, cycle
+section profiler, and an 80-symbol production-shaped functional test now exist.
+
+The 100 MB Railway target is not currently met. The September 4 Railway graph
+showed approximately `232 MB` for `Multi Grail : Sub Machine gun` and `151 MB`
+for `Holy Grail : Sub Machine gun`. These are separate service series, not one
+combined process measurement. At that sample the two services used roughly
+`383 MB` in total.
+
+The current V8 flags were previously described too much like a process-memory
+cap. They are not. `--max-old-space-size` limits only V8 old-space; Railway
+reports service RAM, which also includes the young heap, executable code, native
+allocations, buffers, thread stacks, allocator overhead, and other resident
+memory. A `96 MB` old-space limit therefore cannot guarantee a service stays
+below `100 MB`.
 
 The main rule:
 
@@ -32,6 +42,14 @@ Development backtest pages/APIs should not be available or loaded in Railway pro
 
 ## Current Production Target
 
+Desired steady-state Railway service memory:
+
+```text
+Target: <= 100 MB per service
+Observed on September 4, 2026: 151-232 MB per service
+Status: target not met
+```
+
 Railway production should run the standalone Next.js server:
 
 ```bash
@@ -46,18 +64,60 @@ PORT=8080
 NODE_ENV=production
 NEXT_TELEMETRY_DISABLED=1
 PERSISTENT_STORAGE_ROOT=/storage/persistent/instances/3010
-NODE_OPTIONS=--max-old-space-size=128 --max-semi-space-size=4
-```
-
-This is a conservative production cap. If memory is still stable after normal
-runner cycles, dashboard use, and withdrawal scans, a tighter cap can be tested:
-
-```bash
 NODE_OPTIONS=--max-old-space-size=96 --max-semi-space-size=2
 ```
 
-Use the tighter cap only after observing that the app does not restart during
-normal runner cycles.
+Treat these as V8 heap guardrails, not a Railway RAM limit. Do not lower them
+only to make the graph approach 100 MB. A smaller old-space can increase garbage
+collection and cause JavaScript heap out-of-memory failures while leaving most
+of the framework/native RSS unchanged.
+
+The previous conservative setting remains a fallback if the `96/2` setting
+cannot finish representative cycles:
+
+```bash
+NODE_OPTIONS=--max-old-space-size=128 --max-semi-space-size=4
+```
+
+Do not claim either setting is safe until it finishes Capture Entry, Speedup,
+Standard Monitoring, Black Swan, dashboard initialization, and withdrawal
+scans with the production account and symbol counts.
+
+## Why 96 MB Old-Space Can Show as 200+ MB
+
+The important memory measurements are different:
+
+```text
+heapUsed
+  JavaScript objects currently used by V8
+
+heapTotal
+  V8 heap currently committed
+
+rss
+  Whole Node process resident memory, including V8 and native/code memory
+
+cgroup memory
+  Container memory used for Railway monitoring and limits
+```
+
+`NODE_OPTIONS=--max-old-space-size=96` constrains only one portion of
+`heapTotal`. It does not constrain `rss` or total cgroup memory to 96 MB.
+
+The repository's runtime monitor already reads both `process.memoryUsage()` and
+Linux cgroup usage. However, its notification currently reports only the total
+`usedMb`. Until the alert/log includes `heapUsedMb`, `rssMb`, `usedMb`, source,
+and container limit together, the Railway graph alone cannot prove whether the
+extra memory is JavaScript retention, native/framework RSS, allocator behavior,
+or container-accounted file cache.
+
+Local reproduction on September 4, 2026 used Node `24.18.0`, Next `16.2.9`, the
+standalone server, empty temporary storage, and the `96/2` flags. Sampled process
+RSS was approximately `89-107 MiB` around startup and authenticated storage
+loading. A second run with `64/1` still reached approximately `103 MiB` after the
+same route load. This is macOS evidence, not a Railway benchmark, but it shows
+that lowering old-space alone does not proportionally lower total RSS and that a
+100 MB service target leaves almost no room for real SLOW data or cycle spikes.
 
 ## Dev/Backtest Exclusion
 
@@ -66,10 +126,12 @@ The backtest page is useful locally but should not be part of normal Railway pro
 ```text
 /dev/dynamic-trade
 /dev/coins
+/dev/black-swan
 /api/dev/dynamic-trade
 /api/dev/dynamic-trade/leaderboards
 /api/dev/coins
 /api/dev/coin-tags
+/api/dev/black-swan
 ```
 
 These routes are not expected to consume a large amount of idle memory just because they exist in the build. Next.js usually loads route code when the route is requested. However, excluding or guarding them still matters because it:
@@ -99,9 +161,11 @@ Implemented behavior:
 
 - `/dev/dynamic-trade` is force-dynamic and returns `notFound()` in production unless dev backtest is enabled.
 - `/dev/coins` returns `notFound()` in production unless dev backtest is enabled.
+- `/dev/black-swan` returns `notFound()` in production unless dev backtest is enabled.
 - `/api/dev/dynamic-trade` is a tiny route stub that returns `404` in production unless dev backtest is enabled.
 - `/api/dev/dynamic-trade/leaderboards` is a tiny route stub that returns `404` in production unless dev backtest is enabled.
 - `/api/dev/coins` and `/api/dev/coin-tags` return `404` in production unless dev backtest is enabled.
+- `/api/dev/black-swan` returns `404` in production unless dev backtest is enabled.
 - Heavy dev API implementations live outside `src/pages/api` under `src/lib/devBacktest/api`.
 - Heavy dev API implementations are dynamically imported only after the API guard passes.
 - The SLOW settings page lazy-loads the dev leaderboard picker.
@@ -166,9 +230,11 @@ Expected production behavior:
 ENABLE_DEV_BACKTEST unset:
   /dev/dynamic-trade -> not found
   /dev/coins -> not found
+  /dev/black-swan -> not found
   /api/dev/dynamic-trade -> not found
   /api/dev/coins -> not found
   /api/dev/coin-tags -> not found
+  /api/dev/black-swan -> not found
 
 ENABLE_DEV_BACKTEST=1:
   dev pages/APIs are available
@@ -179,6 +245,14 @@ ENABLE_DEV_BACKTEST=1:
 These are already implemented or partly implemented and are more likely to
 reduce actual Railway runtime memory:
 
+- A multi-account stage prepares one shared immutable public-market snapshot
+  and then executes eligible accounts sequentially, instead of rebuilding the
+  same volatility, price-normalization, price, funding, and volume inputs for
+  every account.
+- Speedup and Standard Monitoring select the union of open-position symbols,
+  and an empty monitoring pass avoids public and private market I/O.
+- Public latest-price, stage-candle, funding-rate, and 24-hour-volume work uses
+  bounded freshness or single-flight reuse.
 - Runner and withdrawal flows load storage with `modeScope: "active"`, so the
   inactive mode is not hydrated into normal runtime memory.
 - Closed production history is persisted in split per-symbol files and is not
@@ -195,7 +269,11 @@ reduce actual Railway runtime memory:
 - Dev/backtest routes and APIs are guarded so expensive local-only flows cannot
   be accidentally triggered in Railway production.
 - `NODE_OPTIONS` old-space and semi-space caps are available for controlling
-  worst-case memory growth.
+  V8 heap growth, but not total service RAM.
+- The runtime resource monitor samples every 15 seconds and reads cgroup memory
+  on Railway before falling back to process RSS.
+- Cycle section timing is persisted for diagnostics, and the quality suite has
+  an 80-symbol production-shaped functional cycle test.
 
 Still important operational habits:
 
@@ -213,7 +291,7 @@ That flag can save memory and CPU, but it changes behavior because SLOW will no 
 
 ## Build Cleanliness Wins
 
-These are good architecture, but may not visibly reduce idle memory:
+These remain good architecture, but may not visibly reduce idle memory:
 
 - Removing dev routes from production access.
 - Excluding `src/__dev__` from standalone traces.
@@ -222,6 +300,57 @@ These are good architecture, but may not visibly reduce idle memory:
 - Keeping backtest helpers out of shared production components unless they are type-only imports.
 - Running `npm run build:railway` to remove unnecessary runtime files after the
   standalone build.
+
+### Current Build-Trace Regression
+
+The September 4 production build completed, but Turbopack warned that the whole
+project was traced unintentionally. The repeated import trace was:
+
+```text
+next.config.ts
+src/lib/devBacktest/volatility-dataset/index.ts
+src/lib/dynamic/backtest-volatility/index.ts
+src/lib/slowTrading/quick-backtest.ts
+src/lib/slowTrading/index.ts
+production API route
+```
+
+Sampled production route NFT manifests each contained `1,290` files, and the
+generated standalone directory was about `106 MB`. `src/instrumentation.ts`
+imports the grouped `@/lib/slowTrading` facade during server startup, while that
+facade statically imports `quick-backtest.ts`. This defeats the intended runtime
+boundary between production orchestration and backtest code.
+
+Artifact size is not the same as RAM, so this trace does not by itself explain
+all `151-232 MB`. It is still the first code boundary to fix because it is
+confirmed by the build, is loaded from the startup path, and makes clean memory
+attribution harder.
+
+Required direction:
+
+```text
+Production instrumentation imports only the runner/runtime entry point.
+Production APIs import focused SLOW modules where one capability is needed.
+Quick Backtest dynamically imports its implementation only after its route is
+authenticated and invoked.
+Normal production route traces do not include devBacktest datasets or
+dynamic backtest implementations.
+```
+
+Do not remove Quick Backtest behavior. Isolate its load boundary.
+
+### Cache-Retention Risk
+
+`src/lib/slowTrading/public-market-cache.ts` removes an expired completed value
+only when the exact same key is requested again. It does not sweep expired keys,
+bound the map, or expose cache size in runtime diagnostics. Keys include symbol
+sets and configuration values, so configuration or account/symbol changes can
+leave expired shared snapshots reachable for the life of the process.
+
+This is a confirmed retention behavior, but its contribution to the Railway
+graph has not yet been measured. Add bounded eviction or expired-entry sweeping
+and a cache-entry-count diagnostic before calling it the cause of the 232 MB
+service.
 
 ## Client-Only Dashboard Pages
 
@@ -264,13 +393,12 @@ After optimization changes:
 ```bash
 npm run type
 npm run build
-```
-
-For normal code changes, also run:
-
-```bash
 npm run quality
 ```
+
+The build must finish without the whole-project NFT trace warning. Sample
+production routes must not trace `next.config.ts`, `src/lib/devBacktest/**`, or
+the dynamic backtest implementation.
 
 Then verify the build route list:
 
@@ -279,9 +407,11 @@ Then verify the build route list:
 /api/slow-trading/* exists
 /dev/dynamic-trade is unavailable or guarded in production
 /dev/coins is unavailable or guarded in production
+/dev/black-swan is unavailable or guarded in production
 /api/dev/dynamic-trade is unavailable or guarded in production
 /api/dev/coins is unavailable or guarded in production
 /api/dev/coin-tags is unavailable or guarded in production
+/api/dev/black-swan is unavailable or guarded in production
 ```
 
 On Railway, watch:
@@ -300,21 +430,96 @@ npm run start:local
 npm run monitor:local
 ```
 
-Repeat with representative symbol counts such as 9, 15, and 50 coins. Record
-idle memory after startup and memory after at least one runner cycle.
+Repeat with representative symbol counts such as 9, 15, 50, and the actual
+production count. Use the actual production account count. Record all of these
+states separately:
+
+```text
+fresh startup before dashboard access
+after /slow and dashboard API loading
+peak during every scheduled stage
+five minutes after cycle completion
+after 6 hours
+after 24 hours
+```
+
+For every sample capture:
+
+```text
+cgroup used MB and limit MB
+process RSS MB
+heapUsed MB and heapTotal MB
+external and arrayBuffers MB
+public-market cache entry count
+configured/enabled/eligible account counts
+symbol count and open-position count
+stage and cycle profiler summary
+```
+
+Compare `Multi Grail` and `Holy Grail` using the same commit and Node version.
+The current `81 MB` difference is useful evidence only after differences in
+account count, symbols, open positions, persistent file sizes, dashboard
+traffic, and environment flags are recorded.
+
+## Prioritized Work To Reach 100 MB
+
+### P0: Measure the Correct Memory Components
+
+- Include `heapUsed`, `heapTotal`, `rss`, `external`, `arrayBuffers`, cgroup
+  usage, and cgroup limit in memory-monitor diagnostics.
+- Save time-series samples by stage instead of relying on one Railway tooltip.
+- Verify each service has exactly one replica; Railway aggregates replica memory
+  for a service.
+- Record the deployed Node version and the exact `NODE_OPTIONS` from each
+  service.
+
+### P0: Remove Backtest Code From Production Startup
+
+- Stop importing the complete SLOW facade from instrumentation.
+- Lazy-load Quick Backtest at its API boundary.
+- Make the whole-project NFT trace warning a build failure or budget check.
+- Rebuild and compare startup RSS before changing heap limits again.
+
+### P1: Bound Process-Lifetime Caches
+
+- Sweep expired completed public-market cache entries.
+- Add a maximum entry/byte policy for configuration-dependent keys.
+- Expose entry counts and estimated payload size in diagnostics.
+- Confirm Black Swan, funding, exchange-info, PIN-attempt, and request-weight
+  caches remain bounded by stable keys.
+
+### P1: Measure Real Data And File-Cache Effects
+
+- Compare persistent `memory.json`, price-normalization, volatility, history,
+  and dashboard payload sizes between the two Railway services.
+- Record memory before and after each large JSON read.
+- Keep runtime endpoints on active-mode, no-history loads unless history is
+  explicitly required.
+- Split `/api/slow-trading/storage` if dashboard history causes a measurable
+  retained or peak-memory increase.
+
+### P2: Enforce Budgets
+
+- Add a standalone startup-RSS budget and a representative-cycle peak budget in
+  an environment close to Railway Linux.
+- Add route-trace and standalone artifact-size budgets.
+- Keep the existing 80-symbol cycle test, but do not call it a memory test; it
+  verifies behavior and persistence, not RSS.
 
 ## Remaining Optimization Risks
 
-- There is no automated memory regression test for a full production SLOW cycle.
-- There is no bundle-size budget or bundle analyzer report checked into the
-  normal quality workflow.
-- The dashboard still has limited rendering tests, so UI changes may
-  accidentally increase client bundle size without an obvious test failure.
-- Exchange integration tests are limited, especially for Binance futures, which
-  is important for production-like position reconciliation.
-- JSON writes are mostly compact in hot paths, but some cache/history helpers
-  still use `fs.writeJSON`; verify generated files stay compact when storage
-  size becomes a problem.
+- There is no automated RSS/cgroup regression test for a full production SLOW
+  cycle. The 80-symbol test does not measure memory.
+- There is no route-trace, standalone-size, server-chunk, or client-bundle budget
+  in the normal quality workflow.
+- Production memory notifications omit the component breakdown needed to
+  distinguish JavaScript heap from process/container overhead.
+- The process-lifetime public-market cache has no global expiry sweep or size
+  bound.
+- The dashboard storage endpoint can hydrate/report combined multi-account
+  state and may become a payload and peak-memory hotspot as history grows.
+- Exchange integration tests remain limited for Binance futures position
+  reconciliation.
 
 ## Decision
 
@@ -333,11 +538,21 @@ Current status:
 
 ```text
 Production safety: good
-Runtime memory posture: good for small/medium symbol counts
-Measurement discipline: needs improvement
-Optimization confidence score: 78/100
+Multi-account public-market reuse: good
+Runtime memory target: failed (151-232 MB observed vs <=100 MB target)
+Memory attribution: insufficient
+Production build boundary: needs improvement
+Optimization confidence score: 68/100
 ```
 
-The next meaningful improvement is not another small route guard. It is adding
-repeatable measurement: bundle analysis, memory samples under realistic symbol
-counts, and a deterministic production-cycle load test.
+The next meaningful improvement is to separate production startup from Quick
+Backtest/dev imports, then capture cgroup, RSS, and heap components through real
+stages. Only after that comparison should the 100 MB target be accepted as
+achievable for this single-process Next.js dashboard-and-runner architecture.
+
+## References
+
+- Node.js CLI documentation for `--max-old-space-size` and
+  `--max-semi-space-size`: <https://nodejs.org/api/cli.html>
+- Node.js process memory definitions: <https://nodejs.org/api/process.html#processmemoryusage>
+- Railway metrics and replica aggregation: <https://docs.railway.com/observability/metrics>
