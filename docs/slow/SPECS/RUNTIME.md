@@ -283,6 +283,15 @@ shows a Speedup or Standard icon. Hovering that icon shows the persisted
 
 TC: `PROD:TRADE_HISTORY_EXIT_MONITORING_STAGE`
 
+Trade History receives the configured account profiles and resolves each
+position's immutable `account` slug to its current account name. The symbol
+cell renders that name as a compact account chip. Hovering or focusing the chip
+shows the account's `trading.notes`; an account without notes shows
+`No trading notes.`. A history row whose account profile is unavailable falls
+back to its persisted account slug.
+
+TC: `PROD:TRADE_HISTORY_ACCOUNT_CHIP`
+
 The Trade History JSON detail uses a read-only interactive tree. The root is
 expanded with nested objects collapsed initially. Every nested object or array
 can be expanded or collapsed independently with its disclosure control or the

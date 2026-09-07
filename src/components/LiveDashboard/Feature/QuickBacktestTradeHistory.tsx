@@ -14,7 +14,11 @@ import type {
 const COMBINED_ACCOUNT_VALUE = "";
 
 interface QuickBacktestTradeHistoryProps {
-  accounts: Pick<SlowTradingAccount, "name" | "slug">[];
+  accounts: Array<
+    Pick<SlowTradingAccount, "name" | "slug"> & {
+      trading?: Pick<SlowTradingAccount["trading"], "notes">;
+    }
+  >;
   exchangeType: ExchangeType;
   history: SlowQuickBacktestResult["tradeHistory"];
 }
@@ -92,6 +96,7 @@ export default function QuickBacktestTradeHistory({
       </Box>
 
       <TradesTableSection
+        accounts={accounts}
         exchangeType={exchangeType}
         history={visibleHistory}
         mode="sandbox"

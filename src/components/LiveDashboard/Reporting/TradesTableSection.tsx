@@ -33,6 +33,7 @@ import { EXCHANGE_COLOR_MAP } from "@/components/LiveDashboard/Shared/constants"
 import { buildTradeMarkersFromHistory } from "@/components/LiveDashboard/Shared/trade-chart-markers";
 import type { ExchangeType } from "@/lib/exchange";
 import type {
+  SlowTradingAccount,
   SlowTradingDashboardState,
   SlowTradingMode,
 } from "@/lib/slowTrading";
@@ -56,6 +57,10 @@ type SortKey =
   | "maxDrawdownUsdt"
   | "maxRunUpUsdt"
   | "netProfitUSDT";
+
+type TradeHistoryAccount = Pick<SlowTradingAccount, "name" | "slug"> & {
+  trading?: Pick<SlowTradingAccount["trading"], "notes">;
+};
 
 const metricTooltipSlotProps = {
   tooltip: {
@@ -353,6 +358,7 @@ function FeatureCell({ row }: { row: SlowTradingReportRow }) {
 }
 
 export function TradesTableSection({
+  accounts = [],
   exchangeType,
   history,
   mode,
@@ -360,6 +366,7 @@ export function TradesTableSection({
   readOnly = false,
   reserveMultiplier = 2,
 }: {
+  accounts?: TradeHistoryAccount[];
   exchangeType: ExchangeType;
   history: SlowTradingReportRow[];
   mode: SlowTradingMode;
@@ -376,6 +383,10 @@ export function TradesTableSection({
   const [sortKey, setSortKey] = useState<SortKey>("exitTime");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const accountBySlug = useMemo(
+    () => new Map(accounts.map((account) => [account.slug, account])),
+    [accounts],
+  );
 
   const safePage = useMemo(() => {
     const maxPage = Math.max(0, Math.ceil(history.length / rowsPerPage) - 1);
@@ -617,6 +628,9 @@ export function TradesTableSection({
               const pnlUsdt = row.pnl.netUsdt ?? 0;
               const entryMarginUsdt = getEntryMarginUsdt(row);
               const lastMonitoringStage = row.lastMonitoringStage;
+              const account = accountBySlug.get(row.account);
+              const accountName = account?.name.trim() || row.account;
+              const tradingNotes = account?.trading?.notes.trim();
 
               return (
                 <TableRow key={buildRowKey(row, index)} hover>
@@ -649,14 +663,26 @@ export function TradesTableSection({
                         />
                       ) : null}
                     </Typography>
+                    <br />
 
-                    <Typography
-                      color="text.secondary"
-                      display="block"
-                      variant="caption"
+                    {/* PROD:TRADE_HISTORY_ACCOUNT_CHIP */}
+                    <MetricTooltip
+                      title={tradingNotes || "No trading notes."}
                     >
-                      Account: {row.account}
-                    </Typography>
+                      <Chip
+                        aria-label={`Account ${accountName}`}
+                        label={accountName}
+                        size="small"
+                        sx={{
+                          fontSize: "0.65rem",
+                          height: 20,
+                          mb: 0.25,
+                          "& .MuiChip-label": { px: 0.75 },
+                        }}
+                        tabIndex={0}
+                        variant="outlined"
+                      />
+                    </MetricTooltip>
 
                     {lastMonitoringStage?.stage === "standard" && (
                       <>

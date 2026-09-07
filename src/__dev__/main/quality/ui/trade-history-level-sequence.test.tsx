@@ -19,6 +19,38 @@ vi.mock(
 );
 
 describe("trade-history level sequence", () => {
+  it("shows the configured account name as a chip with trading notes", async () => {
+    const position = createTestPosition({ account: "main", symbol: "SUI" });
+
+    render(
+      <SnackbarProvider>
+        <TradesTableSection
+          accounts={[
+            {
+              name: "Main",
+              slug: "main",
+              trading: { notes: "Common trade levels 1-3." },
+            },
+          ]}
+          exchangeType="binance"
+          history={[{ ...position, mode: "sandbox" }]}
+          mode="sandbox"
+          onHistoryChange={vi.fn()}
+          readOnly
+        />
+      </SnackbarProvider>,
+    );
+
+    // PROD:TRADE_HISTORY_ACCOUNT_CHIP
+    const accountChip = screen.getByLabelText("Account Main");
+    expect(accountChip.closest(".MuiChip-root")).toBeTruthy();
+    expect(screen.queryByText("Account: main")).toBeNull();
+    fireEvent.mouseOver(accountChip);
+    expect((await screen.findByRole("tooltip")).textContent).toBe(
+      "Common trade levels 1-3.",
+    );
+  });
+
   it("shows the Standard stage text and reason on its exit icon", async () => {
     const position = createTestPosition({
       closed: {
