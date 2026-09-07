@@ -12,6 +12,7 @@ import {
   type NotificationChannel,
   type NotificationDashboard,
 } from "./config";
+import { appendSlowTradingErrorLog } from "@/lib/slowTrading/storage/logs";
 import { tradeLog } from "@/lib/trading/helper/log";
 
 dotenv.config();
@@ -39,8 +40,65 @@ type NotificationDedupeStore = Record<string, NotificationDedupeRecord>;
 const inFlightDedupeKeys = new Set<string>();
 // PROD:NOTIFICATION_REQUEST_TIMEOUT
 const NOTIFICATION_REQUEST_TIMEOUT_MS = 30_000;
+// PROD:NOTIFICATION_DELIVERY_RETRY
+const NOTIFICATION_RETRY_DELAY_MS = 5_000;
+const NOTIFICATION_MAX_RETRIES = 3;
 const DEFAULT_N8N_EMAIL_PROXY_URL =
   "https://crm.reinventwp.com/webhook/trading-email-proxy-railway-fallback";
+
+class NotificationConfigurationError extends Error {
+  name = "NotificationConfigurationError";
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Retries one notification transport and persists its final delivery failure. */
+async function deliverWithRetry(params: {
+  channel: NotificationChannel;
+  deliver: () => Promise<void>;
+  subject?: string;
+}): Promise<boolean> {
+  let retries = 0;
+
+  while (retries <= NOTIFICATION_MAX_RETRIES) {
+    try {
+      await params.deliver();
+      return true;
+    } catch (error) {
+      const isRetryable = !(error instanceof NotificationConfigurationError);
+      if (isRetryable && retries < NOTIFICATION_MAX_RETRIES) {
+        retries += 1;
+        await wait(NOTIFICATION_RETRY_DELAY_MS);
+        continue;
+      }
+
+      tradeLog.error(
+        `[notification] ${params.channel} delivery failed after ${retries} retries`,
+        error,
+      );
+      await appendSlowTradingErrorLog({
+        source: `notification.${params.channel}`,
+        error,
+        details: {
+          attempts: retries + 1,
+          maxRetries: NOTIFICATION_MAX_RETRIES,
+          retryDelayMs: NOTIFICATION_RETRY_DELAY_MS,
+          subject: params.subject,
+        },
+      }).catch((logError) => {
+        tradeLog.error(
+          `[notification] failed to persist ${params.channel} delivery error`,
+          logError,
+        );
+      });
+      return false;
+    }
+  }
+
+  return false;
+}
 
 function getAppNamePrefix() {
   const appName = String(process.env.APP_NAME ?? "").trim();
@@ -153,22 +211,23 @@ async function sendEmailViaN8nProxy(
   );
 }
 
-async function email({ subject, body }: LegacyNotifParam): Promise<void> {
+async function email({ subject, body }: LegacyNotifParam): Promise<boolean> {
   const mailOptions = {
     to: process.env.EMAIL_TO ?? "albirkarim2@gmail.com",
     subject: prefixEmailSubject(subject),
     text: body,
   };
 
-  try {
-    await sendEmailViaN8nProxy({
-      body: mailOptions.text ?? "",
-      subject: mailOptions.subject,
-      to: mailOptions.to,
-    });
-  } catch (error) {
-    tradeLog.error("Error sending email via CRM:", error);
-  }
+  return deliverWithRetry({
+    channel: "email",
+    subject: mailOptions.subject,
+    deliver: () =>
+      sendEmailViaN8nProxy({
+        body: mailOptions.text ?? "",
+        subject: mailOptions.subject,
+        to: mailOptions.to,
+      }),
+  });
 }
 
 function escapeHtml(text: string): string {
@@ -178,61 +237,66 @@ function escapeHtml(text: string): string {
     .replace(/>/g, "&gt;");
 }
 
-async function telegram({ subject, body }: LegacyNotifParam): Promise<void> {
-  const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-  const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-
-  if (!BOT_TOKEN || !CHAT_ID) {
-    throw new Error(
-      "Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID in environment variables.",
-    );
-  }
-
+async function telegram({ subject, body }: LegacyNotifParam): Promise<boolean> {
   const message = `<b>${prefixEmailSubject(escapeHtml(subject ?? ""))}</b>\n\n${escapeHtml(body ?? "")}`;
 
-  try {
-    const res = await axios.post(
-      `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
-      {
-        chat_id: CHAT_ID,
-        text: message,
-        parse_mode: "HTML",
-      },
-      { timeout: NOTIFICATION_REQUEST_TIMEOUT_MS },
-    );
+  return deliverWithRetry({
+    channel: "telegram",
+    subject,
+    deliver: async () => {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = process.env.TELEGRAM_CHAT_ID;
 
-    if (!res.data.ok) {
-      tradeLog.error("Telegram API error:", res.data);
-    }
-  } catch (error) {
-    tradeLog.error("Failed to send Telegram message:", error);
-  }
+      if (!botToken || !chatId) {
+        throw new NotificationConfigurationError(
+          "Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID in environment variables.",
+        );
+      }
+
+      const res = await axios.post(
+        `https://api.telegram.org/bot${botToken}/sendMessage`,
+        {
+          chat_id: chatId,
+          text: message,
+          parse_mode: "HTML",
+        },
+        { timeout: NOTIFICATION_REQUEST_TIMEOUT_MS },
+      );
+
+      if (!res.data.ok) {
+        throw new Error("Telegram API returned an unsuccessful response");
+      }
+    },
+  });
 }
 
 async function sendToChannel(
   payload: LegacyNotifParam,
   channel: NotificationChannel,
-): Promise<void> {
+): Promise<boolean> {
   if (channel === "email") {
-    await email(payload);
-    return;
+    return email(payload);
   }
 
-  await telegram(payload);
+  return telegram(payload);
 }
 
 async function send(
   payload: LegacyNotifParam,
   channels?: NotificationChannel[] | null,
-): Promise<void> {
+): Promise<boolean> {
   if (channels == null) {
-    await sendToChannel(payload, "telegram");
-    return;
+    return sendToChannel(payload, "telegram");
   }
 
+  let delivered = true;
   for (const channel of channels) {
-    await sendToChannel(payload, channel);
+    if (!(await sendToChannel(payload, channel))) {
+      delivered = false;
+    }
   }
+
+  return delivered;
 }
 
 async function central(
@@ -273,7 +337,7 @@ async function central(
         return;
       }
 
-      await send(
+      const delivered = await send(
         {
           subject: payload.title,
           body: payload.message,
@@ -281,7 +345,7 @@ async function central(
         channels,
       );
 
-      if (payload.dedupeKey) {
+      if (payload.dedupeKey && delivered) {
         await rememberSentNotification({
           dedupeKey: payload.dedupeKey,
           subject: payload.title,

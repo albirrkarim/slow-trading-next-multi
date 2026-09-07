@@ -168,3 +168,15 @@ does not open direct SMTP connections. The webhook receives the same
 notification failure remains non-fatal to the trading cycle.
 
 TC: `PROD:NOTIF_EMAIL_CRM_PROXY`
+
+- Delivery retry
+
+Email and Telegram delivery make one initial request and retry a failed request
+up to three times. Each retry waits five seconds. After the fourth failed
+attempt, delivery remains non-fatal and the failure is appended to the
+persistent SLOW `errors.json` log with the channel, attempt count, retry delay,
+and notification subject. A failed delivery is not stored as a successful
+notification dedupe record. Non-transient configuration errors, such as missing
+Telegram credentials, skip retries and are logged immediately.
+
+TC: `PROD:NOTIFICATION_DELIVERY_RETRY`

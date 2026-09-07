@@ -99,6 +99,8 @@ describe("slow specs notification", () => {
       "sendEmailViaN8nProxy",
       "N8N_EMAIL_PROXY_URL",
       "PROD:NOTIF_EMAIL_CRM_PROXY",
+      // PROD:NOTIFICATION_DELIVERY_RETRY
+      "PROD:NOTIFICATION_DELIVERY_RETRY",
     ]);
   });
 
