@@ -27,6 +27,7 @@ export interface PositionLevelSequenceItem {
   averagingMultiplier?: number;
   coveredMarginUsdt: number;
   driftPct?: number;
+  exitMonitoringState?: PositionLastMonitoringStage;
   isAveraged: boolean;
   isEntry: boolean;
   isExit?: boolean;
@@ -181,6 +182,42 @@ function MonitoringStateIcon({
   );
 }
 
+function ExitMonitoringStageIcon({
+  level,
+  monitoringState,
+}: {
+  level: number;
+  monitoringState: PositionLastMonitoringStage;
+}) {
+  const isSpeedup = monitoringState.stage === "speedup";
+  const stageLabel = isSpeedup ? "Speedup" : "Standard";
+  const Icon = isSpeedup ? SpeedRoundedIcon : ScheduleRoundedIcon;
+
+  return (
+    <Tooltip
+      arrow
+      placement="top"
+      title={monitoringState.reason.trim() || "No monitoring reason recorded."}
+    >
+      <Box
+        aria-label={`${stageLabel} monitoring stage at exit level ${levelKey(level)}`}
+        component="span"
+        role="img"
+        sx={{
+          alignItems: "center",
+          color: isSpeedup ? "warning.light" : "inherit",
+          cursor: "help",
+          display: "inline-flex",
+          ml: 0.375,
+        }}
+        tabIndex={0}
+      >
+        <Icon aria-hidden sx={{ fontSize: 12 }} />
+      </Box>
+    </Tooltip>
+  );
+}
+
 /** Builds the hover explanation for one sequence chip. */
 function buildTooltip(
   item: PositionLevelSequenceItem,
@@ -285,6 +322,7 @@ export function buildHistoryPositionLevelSequence(
       items.push({
         coveredMarginUsdt: 0,
         averagingMultiplier: execution?.allocationPct,
+        exitMonitoringState: position.lastMonitoringStage,
         isAveraged: execution !== undefined,
         isEntry: false,
         isExit: true,
@@ -337,11 +375,13 @@ export function buildHistoryPositionLevelSequence(
       position.closed?.reason === "VOLATILITY_TARGET_TP" ||
       position.closed?.reason === "VOLATILITY_TARGET_SL";
     if (matchingItem) {
+      matchingItem.exitMonitoringState = position.lastMonitoringStage;
       matchingItem.isExit = true;
       matchingItem.state = isTargetExit ? "target" : "exit";
     } else {
       items.push({
         coveredMarginUsdt: 0,
+        exitMonitoringState: position.lastMonitoringStage,
         isAveraged: false,
         isEntry: false,
         isExit: true,
@@ -395,6 +435,15 @@ export default function PositionLevelSequence({
           const averagingMultiplierLabel = formatAveragingMultiplier(
             item.averagingMultiplier,
           );
+          const exitMonitoringState =
+            item.isExit || item.state === "exit"
+              ? item.exitMonitoringState
+              : undefined;
+          const exitStageLabel = exitMonitoringState
+            ? exitMonitoringState.stage === "speedup"
+              ? "Speedup monitoring stage"
+              : "Standard monitoring stage"
+            : null;
           const statusLabel = [
             `Level ${levelKey(item.level)}`,
             stateLabels[item.state],
@@ -402,6 +451,7 @@ export default function PositionLevelSequence({
             item.isExit && item.state !== "exit" ? "Exit" : null,
             item.isAveraged ? "Averaged" : null,
             reachedWithoutAveraging ? "Not averaged" : null,
+            exitStageLabel,
             reachedWithoutAveraging && driftLabel
               ? `Drift ${driftLabel}`
               : null,
@@ -427,6 +477,39 @@ export default function PositionLevelSequence({
               ? ` drift ${driftLabel}`
               : "",
           ].join("");
+          const chipLabel = `L${levelKey(item.level)}${chipSuffix}`;
+          const chip = (
+            <Chip
+              {...chipProps}
+              aria-label={statusLabel}
+              label={
+                exitMonitoringState ? (
+                  <Box
+                    component="span"
+                    sx={{ alignItems: "center", display: "inline-flex" }}
+                  >
+                    {chipLabel}
+                    {/* PROD:TRADE_HISTORY_EXIT_MONITORING_STAGE */}
+                    <ExitMonitoringStageIcon
+                      level={item.level}
+                      monitoringState={exitMonitoringState}
+                    />
+                  </Box>
+                ) : (
+                  chipLabel
+                )
+              }
+              size="small"
+              sx={{
+                borderStyle:
+                  item.state === "unreserved" ? "dashed" : "solid",
+                fontSize: "0.6rem",
+                fontWeight: 700,
+                height: 18,
+                "& .MuiChip-label": { px: 0.75 },
+              }}
+            />
+          );
 
           return (
             <Box
@@ -445,26 +528,17 @@ export default function PositionLevelSequence({
                   monitoringState={item.monitoringState}
                 />
               )}
-              <Tooltip
-                arrow
-                placement="top"
-                title={buildTooltip(item, targetWasHit, reserveMultiplier)}
-              >
-                <Chip
-                  {...chipProps}
-                  aria-label={statusLabel}
-                  label={`L${levelKey(item.level)}${chipSuffix}`}
-                  size="small"
-                  sx={{
-                    borderStyle:
-                      item.state === "unreserved" ? "dashed" : "solid",
-                    fontSize: "0.6rem",
-                    fontWeight: 700,
-                    height: 18,
-                    "& .MuiChip-label": { px: 0.75 },
-                  }}
-                />
-              </Tooltip>
+              {exitMonitoringState ? (
+                chip
+              ) : (
+                <Tooltip
+                  arrow
+                  placement="top"
+                  title={buildTooltip(item, targetWasHit, reserveMultiplier)}
+                >
+                  {chip}
+                </Tooltip>
+              )}
             </Box>
           );
         })}

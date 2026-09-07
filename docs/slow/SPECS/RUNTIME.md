@@ -274,10 +274,14 @@ diagnostic. New entries do not claim a monitoring stage before their first
 successful monitoring pass. The field remains on a position after close so
 trade history preserves its latest monitoring diagnostic.
 
-The Trade History symbol cell omits coin tags and shows the closed position's
-last monitoring stage. When that stage is `standard`, the cell also shows the
-persisted classification reason. Legacy rows without the optional diagnostic
-show an em dash for the stage.
+The Trade History symbol cell omits coin tags. It shows the closed position's
+last monitoring stage and persisted classification reason only when that stage
+is `standard`; `speedup` and legacy rows do not add stage text to the symbol
+cell. When the diagnostic exists, the EXIT chip in the position level sequence
+shows a Speedup or Standard icon. Hovering that icon shows the persisted
+`position.lastMonitoringStage.reason`.
+
+TC: `PROD:TRADE_HISTORY_EXIT_MONITORING_STAGE`
 
 The Trade History JSON detail uses a read-only interactive tree. The root is
 expanded with nested objects collapsed initially. Every nested object or array

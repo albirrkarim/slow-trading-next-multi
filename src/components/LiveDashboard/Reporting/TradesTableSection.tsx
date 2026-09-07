@@ -658,26 +658,29 @@ export function TradesTableSection({
                       Account: {row.account}
                     </Typography>
 
-                    <Typography
-                      color="text.secondary"
-                      display="block"
-                      variant="caption"
-                    >
-                      Last stage: {lastMonitoringStage?.stage ?? "—"}
-                    </Typography>
                     {lastMonitoringStage?.stage === "standard" && (
-                      <Typography
-                        color="text.secondary"
-                        display="block"
-                        variant="caption"
-                        sx={{
-                          lineHeight: 1.4,
-                          mt: 0.25,
-                          overflowWrap: "anywhere",
-                        }}
-                      >
-                        Reason: {lastMonitoringStage.reason.trim() || "—"}
-                      </Typography>
+                      <>
+                        {/* PROD:TRADE_HISTORY_EXIT_MONITORING_STAGE */}
+                        <Typography
+                          color="text.secondary"
+                          display="block"
+                          variant="caption"
+                        >
+                          Last stage: standard
+                        </Typography>
+                        <Typography
+                          color="text.secondary"
+                          display="block"
+                          variant="caption"
+                          sx={{
+                            lineHeight: 1.4,
+                            mt: 0.25,
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          Reason: {lastMonitoringStage.reason.trim() || "—"}
+                        </Typography>
+                      </>
                     )}
                     {/* <Chip label={row.tradingMode} size="small" variant="outlined" /> */}
                   </TableCell>

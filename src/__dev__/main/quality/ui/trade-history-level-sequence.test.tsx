@@ -19,8 +19,17 @@ vi.mock(
 );
 
 describe("trade-history level sequence", () => {
-  it("shows the last monitoring stage and the Standard classification reason", () => {
-    const position = createTestPosition({ symbol: "SUI" });
+  it("shows the Standard stage text and reason on its exit icon", async () => {
+    const position = createTestPosition({
+      closed: {
+        feeUsdt: 0,
+        price: 11,
+        reason: "TAKE_PROFIT",
+        t: 300,
+        vPoint: { id: "B_EXIT", lvl: -4 },
+      },
+      symbol: "SUI",
+    });
     position.lastMonitoringStage = {
       stage: "standard",
       lastUpdated: 200,
@@ -47,6 +56,58 @@ describe("trade-history level sequence", () => {
         "Reason: No Speedup rule matched: canonical net PnL 0.2%; PnL rules require >= +1.5% or <= -1.5%",
       ),
     ).toBeTruthy();
+    // PROD:TRADE_HISTORY_EXIT_MONITORING_STAGE
+    const exitStageIcon = screen.getByLabelText(
+      "Standard monitoring stage at exit level 4",
+    );
+    expect(exitStageIcon.getAttribute("tabindex")).toBe("0");
+    fireEvent.mouseOver(exitStageIcon);
+    expect((await screen.findByRole("tooltip")).textContent).toBe(
+      position.lastMonitoringStage.reason,
+    );
+  });
+
+  it("hides Speedup stage text and identifies it on the exit chip", async () => {
+    const position = createTestPosition({
+      closed: {
+        feeUsdt: 0,
+        price: 11,
+        reason: "TAKE_PROFIT",
+        t: 300,
+        vPoint: { id: "B_EXIT", lvl: -4 },
+      },
+      symbol: "SUI",
+    });
+    position.lastMonitoringStage = {
+      stage: "speedup",
+      lastUpdated: 200,
+      reason: "Positive PnL threshold matched",
+    };
+
+    render(
+      <SnackbarProvider>
+        <TradesTableSection
+          exchangeType="binance"
+          history={[{ ...position, mode: "sandbox" }]}
+          mode="sandbox"
+          onHistoryChange={vi.fn()}
+          readOnly
+        />
+      </SnackbarProvider>,
+    );
+
+    // PROD:TRADE_HISTORY_EXIT_MONITORING_STAGE
+    expect(screen.queryByText("Last stage: speedup")).toBeNull();
+    expect(screen.queryByText(/Reason: Positive PnL threshold/)).toBeNull();
+
+    const exitStageIcon = screen.getByLabelText(
+      "Speedup monitoring stage at exit level 4",
+    );
+    expect(exitStageIcon.closest(".MuiChip-root")).toBeTruthy();
+    fireEvent.mouseOver(exitStageIcon);
+    expect((await screen.findByRole("tooltip")).textContent).toBe(
+      position.lastMonitoringStage.reason,
+    );
   });
 
   it("shows the persisted entry, averaging, and exit path below the PnL chart", async () => {
