@@ -114,7 +114,7 @@ describe("trade history views", () => {
       history,
       runtime: {
         exchangeAccounts: [],
-      } as SlowTradingDashboardState["runtime"],
+      } as unknown as SlowTradingDashboardState["runtime"],
     } as SlowTradingDashboardState;
 
     render(
