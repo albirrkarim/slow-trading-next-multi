@@ -282,6 +282,7 @@ export function buildSlowTradingDailyPerformanceNotification(params: {
 
 /** Sends the previous completed UTC day's performance once per enabled channel. */
 export async function notifySlowTradingDailyPerformance(params: {
+  account: string;
   currentTimeMs?: number;
   exchangeType: SlowTradingStorageData["config"]["exchangeType"];
   mode: SlowTradingMode;
@@ -313,11 +314,15 @@ export async function notifySlowTradingDailyPerformance(params: {
   try {
     const [history, balanceSnapshots] = await Promise.all([
       slowTradingStorage.history.readRange({
+        account: params.account,
         endTime: period.dayEndMs,
         mode: params.mode,
         startTime: period.dayStartMs,
       }),
-      slowTradingStorage.balanceSnapshots.read(params.mode),
+      slowTradingStorage.balanceSnapshots.read({
+        account: params.account,
+        mode: params.mode,
+      }),
     ]);
     const report = slowTradingDailyPerformance.report.create({
       balanceSnapshots,

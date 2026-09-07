@@ -305,7 +305,10 @@ describe("slow end-to-end cycle", () => {
     );
     expect(
       await fs.pathExists(
-        path.join(tmpRoot!, "slow/sandbox/balance_snapshots.json"),
+        path.join(
+          tmpRoot!,
+          "slow/sandbox/balance_snapshots/binance-1.json",
+        ),
       ),
     ).toBe(true);
     expect(dashboard.activeMode).toBe("sandbox");

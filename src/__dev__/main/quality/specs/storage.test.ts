@@ -63,6 +63,106 @@ describe("slow specs storage", () => {
     expect(loaded.modes.live.stageRuns).toEqual({});
   });
 
+  it("stores account balances independently and aggregates selected accounts", async () => {
+    const { FILES } = await import("@/components/storage");
+    const slowTradingStorage = (await import("@/lib/slowTrading")).default
+      .storage;
+
+    await fs.outputJSON(FILES.slow.prod.balanceSnapshots, [
+      {
+        day: "2026-06-01",
+        timestamp: Date.UTC(2026, 5, 1, 20),
+        total: 999,
+      },
+    ]);
+    await slowTradingStorage.balanceSnapshots.upsert({
+      account: "main",
+      mode: "live",
+      timestamp: Date.UTC(2026, 5, 1, 23),
+      total: 100,
+    });
+    await slowTradingStorage.balanceSnapshots.upsert({
+      account: "main",
+      mode: "live",
+      timestamp: Date.UTC(2026, 5, 3, 23),
+      total: 110,
+    });
+    await slowTradingStorage.balanceSnapshots.upsert({
+      account: "second",
+      mode: "live",
+      timestamp: Date.UTC(2026, 5, 2, 23),
+      total: 50,
+    });
+    await slowTradingStorage.balanceSnapshots.upsert({
+      account: "second",
+      mode: "live",
+      timestamp: Date.UTC(2026, 5, 3, 22),
+      total: 55,
+    });
+    await slowTradingStorage.balanceSnapshots.upsert({
+      account: "disabled",
+      mode: "live",
+      timestamp: Date.UTC(2026, 5, 1, 21),
+      total: 500,
+    });
+
+    const main = await slowTradingStorage.balanceSnapshots.read({
+      account: "main",
+      mode: "live",
+    });
+    const second = await slowTradingStorage.balanceSnapshots.read({
+      account: "second",
+      mode: "live",
+    });
+    const combined = await slowTradingStorage.balanceSnapshots.readCombined({
+      accounts: ["main", "second"],
+      mode: "live",
+    });
+
+    // PROD:MULTI_ACCOUNT_DAILY_BALANCE_SNAPSHOTS
+    expect(main.map(({ total }) => total)).toEqual([100, 110]);
+    expect(second.map(({ total }) => total)).toEqual([50, 55]);
+    expect(combined).toEqual([
+      {
+        day: "2026-06-01",
+        timestamp: Date.UTC(2026, 5, 1, 23),
+        total: 100,
+      },
+      {
+        day: "2026-06-02",
+        timestamp: Date.UTC(2026, 5, 2, 23),
+        total: 150,
+      },
+      {
+        day: "2026-06-03",
+        timestamp: Date.UTC(2026, 5, 3, 23),
+        total: 165,
+      },
+    ]);
+  });
+
+  it("uses the shared balance file only before account snapshots exist", async () => {
+    const { FILES } = await import("@/components/storage");
+    const slowTradingStorage = (await import("@/lib/slowTrading")).default
+      .storage;
+    const legacy = [
+      {
+        day: "2026-06-01",
+        timestamp: Date.UTC(2026, 5, 1, 23),
+        total: 100,
+      },
+    ];
+    await fs.outputJSON(FILES.slow.sandbox.balanceSnapshots, legacy);
+
+    // PROD:MULTI_ACCOUNT_DAILY_BALANCE_SNAPSHOTS
+    await expect(
+      slowTradingStorage.balanceSnapshots.readCombined({
+        accounts: ["main", "second"],
+        mode: "sandbox",
+      }),
+    ).resolves.toEqual(legacy);
+  });
+
   it("loads an existing account file without rewriting it", async () => {
     const { FILES } = await import("@/components/storage");
     const slowTradingStorage = (await import("@/lib/slowTrading")).default

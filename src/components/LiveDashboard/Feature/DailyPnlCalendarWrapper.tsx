@@ -8,29 +8,59 @@ import DailyPnlCalendarDialog, {
 } from "@/components/LiveDashboard/Shared/DailyPnlCalendarDialog";
 import { endpoints } from "@/components/endpoints";
 import type {
+  SlowTradingDashboardAccountSummary,
   SlowTradingHistoryPosition,
   SlowTradingMode,
 } from "@/lib/slowTrading";
 
 export interface DailyPnlCalendarWrapperProps {
+  accountSummaries: SlowTradingDashboardAccountSummary[];
   activeMode: SlowTradingMode;
   history: SlowTradingHistoryPosition[];
-  startingBalanceUSDT: number;
+}
+
+/** Selects the enabled-account history and summed starting balance. */
+export function selectEnabledAccountCalendarInputs(params: {
+  accountSummaries: SlowTradingDashboardAccountSummary[];
+  history: SlowTradingHistoryPosition[];
+}) {
+  // PROD:MULTI_ACCOUNT_DAILY_BALANCE_SNAPSHOTS
+  const enabledAccountSlugs = new Set(
+    params.accountSummaries
+      .filter((account) => account.enabled)
+      .map((account) => account.slug),
+  );
+
+  return {
+    history: params.history.filter((position) =>
+      enabledAccountSlugs.has(position.account),
+    ),
+    startingBalanceUSDT: params.accountSummaries
+      .filter((account) => account.enabled)
+      .reduce(
+        (total, account) => total + account.balances.startingBalanceUSDT,
+        0,
+      ),
+  };
 }
 
 export default function DailyPnlCalendarWrapper({
+  accountSummaries,
   activeMode,
   history,
-  startingBalanceUSDT,
 }: DailyPnlCalendarWrapperProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [balanceSnapshots, setBalanceSnapshots] = useState<
     DailyPnlCalendarBalanceSnapshot[] | null
   >(null);
+  const enabledInputs = useMemo(
+    () => selectEnabledAccountCalendarInputs({ accountSummaries, history }),
+    [accountSummaries, history],
+  );
   const calendarHistory = useMemo(
-    () => history.map(toDailyPnlCalendarTrade),
-    [history],
+    () => enabledInputs.history.map(toDailyPnlCalendarTrade),
+    [enabledInputs.history],
   );
 
   useEffect(() => {
@@ -89,7 +119,7 @@ export default function DailyPnlCalendarWrapper({
     <DailyPnlCalendarDialog
       history={calendarHistory}
       balanceSnapshots={balanceSnapshots}
-      startingBalanceUSDT={startingBalanceUSDT}
+      startingBalanceUSDT={enabledInputs.startingBalanceUSDT}
     />
   );
 }

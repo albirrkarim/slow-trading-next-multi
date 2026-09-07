@@ -7,9 +7,39 @@ import {
   getTradeSharpeColor,
   toDailyPnlCalendarTrade,
 } from "@/components/LiveDashboard/Shared/DailyPnlCalendarDialog";
+import { selectEnabledAccountCalendarInputs } from "@/components/LiveDashboard/Feature/DailyPnlCalendarWrapper";
 import { createTestPosition } from "../fixtures/position";
 
 describe("daily pnl calendar", () => {
+  it("uses history and starting balances from enabled accounts only", () => {
+    const mainPosition = createTestPosition({ account: "main" });
+    const pausedPosition = createTestPosition({ account: "paused" });
+    const result = selectEnabledAccountCalendarInputs({
+      accountSummaries: [
+        {
+          slug: "main",
+          enabled: true,
+          balances: { startingBalanceUSDT: 100 },
+        },
+        {
+          slug: "second",
+          enabled: true,
+          balances: { startingBalanceUSDT: 50 },
+        },
+        {
+          slug: "paused",
+          enabled: false,
+          balances: { startingBalanceUSDT: 500 },
+        },
+      ] as any,
+      history: [mainPosition, pausedPosition] as any,
+    });
+
+    // PROD:MULTI_ACCOUNT_DAILY_BALANCE_SNAPSHOTS
+    expect(result.startingBalanceUSDT).toBe(150);
+    expect(result.history).toEqual([mainPosition]);
+  });
+
   it("calculates unannualized Sharpe from daily trade returns", () => {
     // BOTH:MONTHLY_TRADE_SHARPE
     expect(calculateMonthlyTradeSharpe([1, 2])).toBeCloseTo(3, 6);

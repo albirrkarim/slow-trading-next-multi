@@ -6,6 +6,9 @@ import {
   saveSlowTradingExchangeAccounts,
 } from "./account";
 import {
+  aggregateSlowTradingBalanceSnapshots,
+  readCombinedSlowTradingBalanceSnapshots,
+  readLegacySlowTradingBalanceSnapshots,
   readSlowTradingBalanceSnapshots,
   upsertSlowTradingBalanceSnapshot,
 } from "./balance-snapshots";
@@ -107,6 +110,9 @@ const slowTradingStorage = {
     buildCombinedStateRealtime: buildCombinedSlowTradingDashboardStateRealtime,
   },
   balanceSnapshots: {
+    aggregate: aggregateSlowTradingBalanceSnapshots,
+    readCombined: readCombinedSlowTradingBalanceSnapshots,
+    readLegacy: readLegacySlowTradingBalanceSnapshots,
     read: readSlowTradingBalanceSnapshots,
     upsert: upsertSlowTradingBalanceSnapshot,
   },

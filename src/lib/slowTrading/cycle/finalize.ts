@@ -210,6 +210,7 @@ async function execute(
 
   // Report the previous fully closed UTC day after its trades are archived.
   await slowTradingNotifications.dailyPerformance.notify({
+    account: storage.account.slug,
     currentTimeMs: Date.now(),
     exchangeType,
     mode: activeMode,
@@ -249,6 +250,7 @@ async function execute(
 
   // PROD:BOUNDED_POST_CYCLE_ASYNC_WORK
   await slowTradingStorage.balanceSnapshots.upsert({
+    account: storage.account.slug,
     mode: activeMode,
     total: snapshotTotal,
     timestamp: currentTimeMs,

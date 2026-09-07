@@ -1,9 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import fs from "fs-extra";
-import { FILES } from "@/components/storage";
-import slowTrading, {
-  type SlowTradingBalanceSnapshot,
-} from "@/lib/slowTrading";
+import slowTrading from "@/lib/slowTrading";
 import { tradeLog } from "@/lib/trading/helper/log";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -17,22 +13,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const requestedMode = Array.isArray(requestedModeRaw)
       ? requestedModeRaw[0]
       : requestedModeRaw;
+    const storage = await slowTrading.storage.data.load({ modeScope: "active" });
     const resolvedMode =
       requestedMode === "sandbox" || requestedMode === "live"
         ? requestedMode
-        : slowTrading.storage.mode.getActive(await slowTrading.storage.data.load());
-    
-    const balanceSnapshotsFile =
-      FILES.slow[resolvedMode === "sandbox" ? "sandbox" : "prod"].balanceSnapshots;
-
-    let snapshots: SlowTradingBalanceSnapshot[] = [];
-    if (await fs.pathExists(balanceSnapshotsFile)) {
-      snapshots = (await fs.readJSON(
-        balanceSnapshotsFile,
-      )) as SlowTradingBalanceSnapshot[];
-    }
-
-    snapshots.sort((a, b) => a.day.localeCompare(b.day));
+        : slowTrading.storage.mode.getActive(storage);
+    const enabledAccounts = storage.runtime.exchangeAccounts
+      .filter((account) => account.enabled)
+      .map((account) => account.slug);
+    const snapshots =
+      await slowTrading.storage.balanceSnapshots.readCombined({
+        accounts: enabledAccounts,
+        mode: resolvedMode,
+      });
 
     return res.status(200).json(snapshots);
   } catch (error: any) {

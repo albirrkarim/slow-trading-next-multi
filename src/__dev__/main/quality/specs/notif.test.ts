@@ -144,11 +144,13 @@ describe("slow specs notification", () => {
     ];
     await slowTrading.storage.mode.saveState("live", storage.modes.live);
     await slowTrading.storage.balanceSnapshots.upsert({
+      account: storage.account.slug,
       mode: "live",
       timestamp: Date.UTC(2026, 5, 8, 23, 55),
       total: 100,
     });
     await slowTrading.storage.balanceSnapshots.upsert({
+      account: storage.account.slug,
       mode: "live",
       timestamp: Date.UTC(2026, 5, 9, 23, 55),
       total: 104.53,
@@ -160,6 +162,7 @@ describe("slow specs notification", () => {
       .mockResolvedValue(undefined);
 
     await slowTrading.notifications.dailyPerformance.notify({
+      account: loaded.account.slug,
       currentTimeMs: Date.UTC(2026, 5, 10, 1),
       exchangeType: loaded.config.exchangeType,
       mode: "live",
@@ -185,6 +188,7 @@ describe("slow specs notification", () => {
     );
 
     await slowTrading.notifications.dailyPerformance.notify({
+      account: loaded.account.slug,
       currentTimeMs: Date.UTC(2026, 5, 10, 12),
       exchangeType: loaded.config.exchangeType,
       mode: "live",

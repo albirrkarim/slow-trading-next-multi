@@ -112,6 +112,8 @@ export async function readHistoryForAccounts(params: {
 
 /** Reads closed positions whose closing time falls within a half-open range. */
 export async function readHistoryRange(params: {
+  /** Restricts the range to one immutable account slug when provided. */
+  account?: string;
   endTime: number;
   mode: SlowTradingMode;
   startTime: number;
@@ -132,6 +134,7 @@ export async function readHistoryRange(params: {
       ...positions.filter((position) => {
         const closedAt = position.closed?.t;
         return (
+          (!params.account || position.account === params.account) &&
           typeof closedAt === "number" &&
           Number.isFinite(closedAt) &&
           closedAt >= params.startTime &&

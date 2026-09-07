@@ -465,11 +465,9 @@ export function NavbarActionsSection({
             {() =>
               dashboardState ? (
                 <DailyPnlCalendarWrapper
+                  accountSummaries={dashboardState.accountSummaries}
                   activeMode={dashboardState.activeMode}
                   history={dashboardState.history}
-                  startingBalanceUSDT={
-                    dashboardState.balances.startingBalanceUSDT
-                  }
                 />
               ) : (
                 <Box sx={{ p: 2 }}>

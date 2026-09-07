@@ -54,6 +54,21 @@ neutral.
 
 TC: `BOTH:MONTHLY_TRADE_SHARPE`
 
+### C.3.2 Multi-account Daily Balance Snapshots
+
+Each account writes its own live and sandbox UTC-day balance snapshot. The
+Daily PnL Calendar aggregates snapshots, starting balances, and closed-trade
+history for enabled accounts only. For an account without a snapshot on an
+observed day, the calendar carries forward that account's latest earlier
+balance; it does not include an account before that account's first snapshot.
+
+The former mode-wide snapshot file is a read-only compatibility fallback and
+is used only while none of the enabled accounts has account-scoped snapshot
+data. It must not be assigned to a particular account or combined with new
+account-scoped data.
+
+TC: `PROD:MULTI_ACCOUNT_DAILY_BALANCE_SNAPSHOTS`
+
 ## C.4 Live Exchange Account Storage
 
 SLOW stores live exchange accounts in `accounts.json`, separate from strategy
