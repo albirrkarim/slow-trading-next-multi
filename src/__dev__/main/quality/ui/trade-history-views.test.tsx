@@ -112,6 +112,9 @@ describe("trade history views", () => {
         watchReservePctAlloc: 2,
       },
       history,
+      runtime: {
+        exchangeAccounts: [],
+      } as SlowTradingDashboardState["runtime"],
     } as SlowTradingDashboardState;
 
     render(
