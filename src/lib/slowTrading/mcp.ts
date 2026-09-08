@@ -255,7 +255,24 @@ async function revealMcpToken(id: string) {
 }
 
 async function authenticateMcpToken(rawToken: string) {
+  // PROD:MCP_SYNC_TOKEN_SUPER_USER
   const tokenHash = hashToken(rawToken);
+  const syncToken = String(process.env.SYNC_TOKEN ?? "").trim();
+  if (syncToken && safeEqualHash(tokenHash, hashToken(syncToken))) {
+    const token: SlowTradingMcpTokenRecord = {
+      id: "sync-token-super-user",
+      name: "SYNC_TOKEN super user",
+      enabled: true,
+      permissions: [...SLOW_TRADING_MCP_PERMISSIONS],
+      tokenHash,
+      tokenSecretEncrypted: "",
+      createdAt: 0,
+    };
+    return {
+      token,
+      permissions: new Set(SLOW_TRADING_MCP_PERMISSIONS),
+    } satisfies SlowTradingMcpAuthenticatedToken;
+  }
   const tokens = await loadTokens();
   const token = tokens.find(
     (item) =>

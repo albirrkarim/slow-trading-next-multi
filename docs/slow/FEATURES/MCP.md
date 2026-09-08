@@ -18,6 +18,13 @@ project APIs.
 MCP is disabled until at least one token exists, is enabled, and has the
 permission required by the requested tool.
 
+`SYNC_TOKEN` is also accepted as a server-to-server MCP bearer token. It is a
+super-user credential with every MCP permission, is read directly from the
+environment, and does not depend on persisted MCP-token storage. Use it only
+between trusted services and rotate it across every consumer if exposed.
+
+TC: `PROD:MCP_SYNC_TOKEN_SUPER_USER`
+
 For local development, `.env` usually sets `APP_NAME=localhost`, so agents can
 tell they are connected to the local SLOW instance instead of `fast`, `holy`, or
 `wealth`.
