@@ -1,11 +1,11 @@
 import slowTradingStorage from "../storage";
-import type { SlowTradingHistoryPosition } from "../types";
+import type { SlowTradingAccount, SlowTradingHistoryPosition } from "../types";
 import slowTradingMcpAccountScope from "./account-scope";
 
 export interface SlowTradingMcpHistoryAccount {
-  mode: "live" | "sandbox";
   name: string;
   slug: string;
+  type: SlowTradingAccount["type"];
 }
 
 export interface SlowTradingMcpCombinedHistory {
@@ -48,10 +48,11 @@ async function read(params: {
   }
 
   return {
+    // PROD:MCP_ACCOUNT_IDENTITY_REDACTION
     accounts: scope.accounts.map((account) => ({
-      mode: scope.mode,
       name: account.name,
       slug: account.slug,
+      type: account.type,
     })),
     activeMode: scope.activeMode,
     closed,

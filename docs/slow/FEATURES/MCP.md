@@ -117,8 +117,9 @@ Trade history is read-only. It can return closed history and optional open
 positions for the active, live, or sandbox mode. It concatenates positions from
 every enabled account, globally sorts the combined rows, and applies the symbol
 filter and result limit after aggregation. Every position retains its immutable
-account slug. The response also identifies the included accounts. Disabled
-accounts are excluded.
+account slug. The response identifies included accounts using only `slug`,
+`name`, and `type`. Credentials, trading configuration, sandbox configuration,
+and timestamps are never included. Disabled accounts are excluded.
 
 `slow_finance_summary` accepts an inclusive UTC `start`/`end` range of at most
 731 days and defaults to live mode. It returns realized net P&L, winning and
@@ -134,6 +135,8 @@ accounts do not contribute trades or P&L.
 TC: `PROD:MCP_FINANCE_SUMMARY`
 
 TC: `PROD:MULTI_ACCOUNT_COMBINED_MCP_DATA`
+
+TC: `PROD:MCP_ACCOUNT_IDENTITY_REDACTION`
 
 ### Balance
 

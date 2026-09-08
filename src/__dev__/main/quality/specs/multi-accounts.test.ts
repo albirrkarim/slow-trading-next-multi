@@ -487,9 +487,10 @@ describe("SLOW multi-account specs", () => {
     };
 
     // PROD:MULTI_ACCOUNT_COMBINED_MCP_DATA
+    // PROD:MCP_ACCOUNT_IDENTITY_REDACTION
     expect(history.accounts).toEqual([
-      expect.objectContaining({ name: "Alpha", slug: "alpha" }),
-      expect.objectContaining({ name: "Beta", slug: "beta" }),
+      { name: "Alpha", slug: "alpha", type: template.type },
+      { name: "Beta", slug: "beta", type: template.type },
     ]);
     expect(history.history.map((position) => position.account).sort()).toEqual([
       "alpha",
