@@ -79,6 +79,26 @@ function TradingAccountSettings({
           <SettingsGroup title="Entry">
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 6 }}>
+                <SettingsCheckbox
+                  checked={
+                    configDraft.lateEntryVPointPriceDriftEnabled !== false
+                  }
+                  info="When ON, production and sandbox entries are blocked after price moves too far in the profitable direction from the source vPoint. This setting belongs only to the selected account."
+                  label="Late Entry vPoint Price Drift Guard"
+                  onChange={(checked) =>
+                    setConfigDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            lateEntryVPointPriceDriftEnabled: checked,
+                          }
+                        : prev,
+                    )
+                  }
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
                 <SettingsInfoField
                   label="Max Open Positions"
                   type="number"

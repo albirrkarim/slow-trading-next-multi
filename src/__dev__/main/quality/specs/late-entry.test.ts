@@ -179,6 +179,37 @@ describe("production late entry vPoint drift guard", () => {
   );
 
   it.each(["live", "sandbox"] as const)(
+    "allows a late %s entry when the account guard is disabled",
+    async (executionMode) => {
+      entryMocks.dynamicEntry.mockResolvedValueOnce({
+        action: "HOLD",
+        reason: "entry model reached",
+      });
+      const signal = createSignal();
+
+      const result = await executeEntry({
+        balanceOverride: { baseAsset: 0, quoteAsset: 1_000 },
+        current: createKline(98.9),
+        dynamicTradeConfig: {
+          lateEntryVPointPriceDriftEnabled: false,
+        } as any,
+        entrySignal: signal,
+        exchangeType: "binance",
+        executionMode,
+        investAmount: 100,
+        modelConfig: {} as any,
+        modelMemory: createMemory(signal),
+        simulate: executionMode === "sandbox",
+        tradingMode: TradingMode.FUTURES,
+      });
+
+      // PROD:LATE_ENTRY_VPOINT_PRICE_DRIFT_PCT
+      expect(result.message).toBe("entry model reached");
+      expect(entryMocks.dynamicEntry).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["live", "sandbox"] as const)(
     "blocks a new %s entry when the active mode reaches its position cap",
     async (executionMode) => {
       const signal = createSignal();

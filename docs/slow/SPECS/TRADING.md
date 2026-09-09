@@ -531,6 +531,12 @@ so distance PCT the entry.price to the next vpoint.price is just a little.
 
 so i need guard before entry.
 
+Each account owns `trading.lateEntryVPointPriceDriftEnabled`. It defaults to
+`true`. When `false`, both the entry-decision check and the final execution
+check skip this guard for that account only. Other enabled accounts retain
+their own setting. This remains production/runtime behavior and applies to
+both live and sandbox entries; backtest is unchanged.
+
 The maximum profitable drift depends on `VOLATILITY_THRESHOLD`:
 
 - When `VOLATILITY_THRESHOLD < 5`, block drift greater than `0.5%`.

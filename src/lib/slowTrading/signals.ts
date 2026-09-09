@@ -800,6 +800,8 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
           const lateEntryGuard = lateEntryVPointDrift.evaluate({
             currentPrice,
             direction,
+            enabled:
+              storage.config.lateEntryVPointPriceDriftEnabled !== false,
             vPointPrice: entrySignal.p,
           });
 

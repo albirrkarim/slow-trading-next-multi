@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import SettingsDialog from "@/components/LiveDashboard/Navbar/SettingsDialog";
 import SettingsDialogRuntimeTab from "@/components/LiveDashboard/Navbar/SettingsDialogRuntimeTab";
+import SettingsDialogTradingTab from "@/components/LiveDashboard/Navbar/SettingsDialogTradingTab";
 import { NavbarIdentitySection } from "@/components/LiveDashboard/Navbar/NavbarSections";
 import { makeConfigDraft } from "@/components/LiveDashboard/Navbar/helpers";
 import type {
@@ -348,6 +349,59 @@ describe("multi-account settings UI", () => {
         .value,
     ).toBe("220");
     expect(screen.getByText("2 / 7")).toBeTruthy();
+  });
+
+  it("keeps the late-entry drift guard isolated per account", async () => {
+    const user = userEvent.setup();
+    const state = createState();
+    state.runtime.exchangeAccounts[0].trading.lateEntryVPointPriceDriftEnabled =
+      true;
+    state.runtime.exchangeAccounts[1].trading.lateEntryVPointPriceDriftEnabled =
+      false;
+
+    function Harness() {
+      const [draft, setDraft] = useState<ConfigDraft | null>(
+        makeConfigDraft(state),
+      );
+      if (!draft) return null;
+
+      return (
+        <SettingsDialogTradingTab
+          configDraft={draft}
+          dashboardState={state}
+          setConfigDraft={setDraft}
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    const guardName = "Late Entry vPoint Price Drift Guard";
+    expect(
+      (screen.getByRole("checkbox", { name: guardName }) as HTMLInputElement)
+        .checked,
+    ).toBe(true);
+
+    await user.click(screen.getByRole("combobox", { name: "Editing Account" }));
+    await user.click(screen.getByRole("option", { name: "Beta" }));
+    expect(
+      (screen.getByRole("checkbox", { name: guardName }) as HTMLInputElement)
+        .checked,
+    ).toBe(false);
+
+    await user.click(screen.getByRole("checkbox", { name: guardName }));
+    expect(
+      (screen.getByRole("checkbox", { name: guardName }) as HTMLInputElement)
+        .checked,
+    ).toBe(true);
+
+    await user.click(screen.getByRole("combobox", { name: "Editing Account" }));
+    await user.click(screen.getByRole("option", { name: "Alpha" }));
+    // PROD:LATE_ENTRY_VPOINT_PRICE_DRIFT_PCT
+    expect(
+      (screen.getByRole("checkbox", { name: guardName }) as HTMLInputElement)
+        .checked,
+    ).toBe(true);
   });
 
   it("renders and updates one Sandbox section per account", async () => {

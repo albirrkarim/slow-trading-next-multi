@@ -54,6 +54,32 @@ describe("SLOW multi-account specs", () => {
     ]);
   });
 
+  it("defaults and persists the per-account late-entry drift guard", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const defaults = slowTrading.storage.data.createDefault();
+    const template = defaults.runtime.exchangeAccounts[0];
+
+    expect(template.trading.lateEntryVPointPriceDriftEnabled).toBe(true);
+    await slowTrading.storage.account.saveAccounts(
+      [
+        {
+          ...template,
+          trading: {
+            ...template.trading,
+            lateEntryVPointPriceDriftEnabled: false,
+          },
+        },
+      ],
+      defaults.sharedConfig,
+    );
+    const accounts = await slowTrading.storage.account.loadAccounts(
+      defaults.sharedConfig,
+    );
+
+    // PROD:LATE_ENTRY_VPOINT_PRICE_DRIFT_PCT
+    expect(accounts[0].trading.lateEntryVPointPriceDriftEnabled).toBe(false);
+  });
+
   it("keeps live and sandbox memory isolated by account slug", async () => {
     const slowTrading = (await import("@/lib/slowTrading")).default;
     const defaults = slowTrading.storage.data.createDefault();

@@ -4,6 +4,7 @@ const BOOLEAN_KEYS = [
   "averagingRescueProjectionGuardEnabled",
   "enableWatchLogic",
   "exitSidewaysToFreeWorkersForStrongCandidates",
+  "lateEntryVPointPriceDriftEnabled",
 ] as const satisfies ReadonlyArray<keyof SlowTradingAccountTradingConfig>;
 
 const NUMBER_KEYS = [

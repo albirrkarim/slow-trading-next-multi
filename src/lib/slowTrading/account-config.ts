@@ -12,6 +12,7 @@ const TRADING_CONFIG_KEYS = [
   "enableWatchLogic",
   "exactLeverage",
   "exitSidewaysToFreeWorkersForStrongCandidates",
+  "lateEntryVPointPriceDriftEnabled",
   "maxEntryBased24HourVolPct",
   "maxEntryMargin",
   "maxEntryMarginPct",

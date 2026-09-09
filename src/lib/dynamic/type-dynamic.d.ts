@@ -84,6 +84,9 @@ export interface DynamicTradeConfig {
    */
   tradingMode: TradingMode;
 
+  /** Enables the production guard that rejects entries after price drifts too far from the source vPoint. */
+  lateEntryVPointPriceDriftEnabled?: boolean;
+
   /**
    * When ON, the strategy can run the decision watch logic such as v17 averaging add-position actions.
    * When OFF, it will skip all automatic watch/add-position behavior.

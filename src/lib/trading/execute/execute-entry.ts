@@ -275,6 +275,7 @@ export async function executeEntry({
   const lateEntryGuard = lateEntryVPointDrift.evaluate({
     currentPrice: price,
     direction,
+    enabled: dynamicTradeConfig.lateEntryVPointPriceDriftEnabled !== false,
     vPointPrice: entrySignal.p,
   });
 

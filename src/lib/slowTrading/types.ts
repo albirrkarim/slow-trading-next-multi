@@ -428,6 +428,7 @@ export interface SlowTradingAccountTradingConfig
     | "enableWatchLogic"
     | "exactLeverage"
     | "exitSidewaysToFreeWorkersForStrongCandidates"
+    | "lateEntryVPointPriceDriftEnabled"
     | "maxEntryBased24HourVolPct"
     | "maxEntryMargin"
     | "maxEntryMarginPct"
@@ -438,6 +439,8 @@ export interface SlowTradingAccountTradingConfig
     | "watchReserveLevels"
     | "watchReservePctAlloc"
   > {
+  /** Whether production entries enforce the vPoint price-drift guard. */
+  lateEntryVPointPriceDriftEnabled?: boolean;
   /** User-authored reminder describing this account's trading strategy. */
   notes: string;
   modelConfig: SlowTradingAccountModelConfig;

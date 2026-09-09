@@ -160,6 +160,8 @@ export function makeConfigDraft(state: DashboardState): ConfigDraft {
     exchangeAccounts,
     exchangeType: state.config.exchangeType,
     tradingMode: state.config.tradingMode,
+    lateEntryVPointPriceDriftEnabled:
+      state.config.lateEntryVPointPriceDriftEnabled !== false,
     symbolsText: state.config.symbols.join(", "),
     modelConfig: cloneModelConfig(
       state.config.modelConfig ??
@@ -273,6 +275,8 @@ export function applyAccountProfileToConfigDraft(
     averagingRescueProjectionGuardEnabled:
       trading.averagingRescueProjectionGuardEnabled,
     enableWatchLogic: trading.enableWatchLogic,
+    lateEntryVPointPriceDriftEnabled:
+      trading.lateEntryVPointPriceDriftEnabled !== false,
     exactLeverage: trading.exactLeverage,
     exitSidewaysToFreeWorkersForStrongCandidates:
       trading.exitSidewaysToFreeWorkersForStrongCandidates,

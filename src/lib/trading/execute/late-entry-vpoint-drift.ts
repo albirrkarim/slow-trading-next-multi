@@ -7,6 +7,7 @@ const DEFAULT_MAX_PROFIT_DRIFT_PCT = 1;
 interface LateEntryVPointDriftParams {
   currentPrice: number;
   direction: "LONG" | "SHORT";
+  enabled?: boolean;
   vPointPrice: number;
 }
 
@@ -50,6 +51,10 @@ function evaluate(
   params: LateEntryVPointDriftParams,
   volatilityThreshold = VOLATILITY_THRESHOLD,
 ) {
+  if (params.enabled === false) {
+    return { blocked: false, reason: undefined };
+  }
+
   const maxProfitDriftPct =
     resolveMaxProfitDriftPct(volatilityThreshold);
   const profitDriftPct = calculateProfitDriftPct(params);

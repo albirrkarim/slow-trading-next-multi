@@ -229,6 +229,11 @@ protection continue. An account error is logged and does not stop later
 accounts. Empty monitoring stages perform no public or private exchange I/O
 when no eligible account owns an applicable open position.
 
+The per-account Trading configuration also includes
+`lateEntryVPointPriceDriftEnabled`. It defaults to `true`, and each account can
+independently enable or disable the production late-entry vPoint price-drift
+guard.
+
 Black Swan follows the same boundary: BTC and market-breadth evidence is
 captured once, then applied sequentially to each eligible account. Application
 remains per account because Black Swan state, recovery acknowledgement,

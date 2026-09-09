@@ -54,6 +54,7 @@ export interface ConfigDraft {
   exchangeAccounts: SlowTradingAccount[];
   exchangeType: ExchangeType;
   tradingMode: TradingMode;
+  lateEntryVPointPriceDriftEnabled?: boolean;
   symbolsText: string;
   modelConfig: TradingModelConfig;
   runnerEnabled: boolean;

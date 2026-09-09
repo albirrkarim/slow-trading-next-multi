@@ -169,6 +169,8 @@ export function useLiveDashboardNavbar({
           decisionEngineVersion: configDraft.decisionEngineVersion,
           exchangeType: configDraft.exchangeType,
           tradingMode: configDraft.tradingMode,
+          lateEntryVPointPriceDriftEnabled:
+            configDraft.lateEntryVPointPriceDriftEnabled !== false,
           symbols: symbolsParsed,
           modelConfig: configDraft.modelConfig,
           enableWatchLogic: configDraft.enableWatchLogic,
