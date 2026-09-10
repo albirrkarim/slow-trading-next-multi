@@ -2,7 +2,7 @@ I need to add new kind of stop loss
 
 stop loss that activated when volatility absolute level reached.
 
-it will have config enabled / disable and multi condition like this:
+it will have config on / off (defauly is off) and multi condition like this:
 
 ```
 [
