@@ -8,6 +8,7 @@ import type { TradingModelConfig } from "@/lib/trading/models";
 import adaptiveAveraging from "@/lib/trading/adaptive-averaging";
 import postAverageRescue from "@/lib/trading/post-average-rescue";
 import postAverageStopLoss from "@/lib/trading/post-average-stop-loss";
+import levelBasedPctDriftStopLoss from "@/lib/trading/level-based-pct-drift-stop-loss";
 import blackSwan from "@/lib/trading/black-swan";
 import type { Theme } from "@mui/material";
 
@@ -45,6 +46,7 @@ export function cloneModelConfig(
     volatilityTargetStopLossPercent,
     postAverageRescueExit,
     postAverageStopLoss: rawPostAverageStopLoss,
+    levelBasedPctDriftStopLoss: rawLevelBasedPctDriftStopLoss,
     maxHoldMinutes,
     orderType,
     useStopLossPlus,
@@ -73,6 +75,10 @@ export function cloneModelConfig(
     postAverageStopLoss: postAverageStopLoss.config.normalize(
       rawPostAverageStopLoss,
     ),
+    levelBasedPctDriftStopLoss:
+      levelBasedPctDriftStopLoss.config.normalize(
+        rawLevelBasedPctDriftStopLoss,
+      ),
     maxHoldMinutes,
     orderType,
     useStopLossPlus,

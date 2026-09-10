@@ -544,11 +544,13 @@ descriptions in tooltips on their formulas instead of repeating description
 lines in the preview. Each stage arranges its calculations in a two-column
 grid when space allows and stacks them on narrow screens.
 
-Each stage also shows the applicable post-average stop-loss tier. A distinct
-`FIRST STOP OUTCOME` compares the unconditional hard-percent, fixed net-USDT,
-and active post-average boundaries and identifies the smallest estimated loss.
-This matches the volatility-point backtest's rail back-thinking when one rail
-crosses multiple stops at once.
+Each stage also shows the applicable post-average stop-loss tier and any
+level-based vPoint price-drift condition whose exact absolute level matches
+that stage. A distinct `FIRST STOP OUTCOME` compares the unconditional
+hard-percent, fixed net-USDT, active post-average, and active level-based drift
+boundaries and identifies the smallest estimated loss. This matches the
+volatility-point backtest's rail back-thinking when one rail crosses multiple
+stops at once.
 
 The preview also lists the largest `UNRESERVED` watch step from each applicable
 open position, shows the

@@ -11,6 +11,7 @@ import type {
   ConfigDraft,
   DashboardState,
 } from "@/components/LiveDashboard/Navbar/types";
+import { VOLATILITY_THRESHOLD } from "@/lib/brain/constants";
 import { TradingMode } from "@/lib/exchange";
 import type { SlowTradingAccount } from "@/lib/slowTrading";
 
@@ -372,7 +373,7 @@ describe("SettingsDialogTradingTab", () => {
 
     fireEvent.click(
       screen
-        .getByText("8. StopLoss+ trailing exit")
+        .getByText("9. StopLoss+ trailing exit")
         .closest("button") as HTMLButtonElement,
     );
     fireEvent.click(screen.getByRole("checkbox", { name: "Use StopLoss+" }));
@@ -461,20 +462,24 @@ describe("SettingsDialogTradingTab", () => {
     expect(
       screen.getByText("2. Exit on absolute vPoint level"),
     ).toBeDefined();
-    expect(screen.getByText("3. Stop loss by net USDT loss")).toBeDefined();
-    expect(screen.getByText("4. Hard stop loss")).toBeDefined();
     expect(
-      screen.getByText("5. Volatility target-zone stop loss"),
+      screen.getByText("3. Level-based vPoint drift stop loss"),
     ).toBeDefined();
-    expect(screen.getByText("6. Post-average rescue exit")).toBeDefined();
-    expect(screen.getByText("7. Post-average stop loss")).toBeDefined();
-    expect(screen.getByText("8. StopLoss+ trailing exit")).toBeDefined();
-    expect(screen.getByText("9. Volatility target-zone TP")).toBeDefined();
-    expect(screen.getByText("10. Traditional TP fallback")).toBeDefined();
+    expect(screen.getByText("4. Stop loss by net USDT loss")).toBeDefined();
+    expect(screen.getByText("5. Hard stop loss")).toBeDefined();
+    expect(
+      screen.getByText("6. Volatility target-zone stop loss"),
+    ).toBeDefined();
+    expect(screen.getByText("7. Post-average rescue exit")).toBeDefined();
+    expect(screen.getByText("8. Post-average stop loss")).toBeDefined();
+    expect(screen.getByText("9. StopLoss+ trailing exit")).toBeDefined();
+    expect(screen.getByText("10. Volatility target-zone TP")).toBeDefined();
+    expect(screen.getByText("11. Traditional TP fallback")).toBeDefined();
 
     for (const tc of [
       "TC: BOTH:EXIT_SIDEWAYS_TO_ENTRY_STRONG_CANDIDATES",
       "TC: PROD:EXIT_ON_VPOINT_LEVEL",
+      "TC: BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS",
       "TC: BOTH:STOP_LOSS_BY_USDT_LOSS",
       "TC: BOTH:POST_AVERAGE_RESCUE_EXIT",
       "TC: BOTH:POST_AVERAGE_STOP_LOSS",
@@ -486,7 +491,7 @@ describe("SettingsDialogTradingTab", () => {
     expect(screen.getAllByText("TC: BOTH:TRADITIONAL_TP_SL")).toHaveLength(2);
 
     const postAverageSummary = screen
-      .getByText("6. Post-average rescue exit")
+      .getByText("7. Post-average rescue exit")
       .closest("button");
     expect(postAverageSummary?.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(postAverageSummary as HTMLButtonElement);
@@ -512,7 +517,7 @@ describe("SettingsDialogTradingTab", () => {
 
     fireEvent.click(
       screen
-        .getByText("6. Post-average rescue exit")
+        .getByText("7. Post-average rescue exit")
         .closest("button") as HTMLButtonElement,
     );
     fireEvent.change(screen.getAllByLabelText("Minimum Net PnL (%)")[0], {
@@ -532,6 +537,49 @@ describe("SettingsDialogTradingTab", () => {
     });
   });
 
+  it("edits per-level vPoint drift conditions and defaults new percentages", () => {
+    const setConfigDraft = vi.fn();
+    const draft = {
+      ...configDraft,
+      modelConfig: {
+        ...configDraft.modelConfig,
+        levelBasedPctDriftStopLoss: {
+          enabled: true,
+          conditions: [{ absoluteLevel: 2, adverseDriftPct: 4 }],
+        },
+      },
+    } satisfies ConfigDraft;
+    render(
+      <SettingsDialogTradingTab
+        configDraft={draft}
+        dashboardState={dashboardState}
+        setConfigDraft={setConfigDraft}
+      />,
+    );
+
+    fireEvent.click(
+      screen
+        .getByText("3. Level-based vPoint drift stop loss")
+        .closest("button") as HTMLButtonElement,
+    );
+    fireEvent.change(screen.getByLabelText("Adverse Drift (%)"), {
+      target: { value: "3" },
+    });
+    const updatePct = setConfigDraft.mock.calls.at(-1)?.[0];
+    expect(
+      updatePct(draft).modelConfig.levelBasedPctDriftStopLoss?.conditions[0],
+    ).toEqual({ absoluteLevel: 2, adverseDriftPct: 3 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add condition" }));
+    const addCondition = setConfigDraft.mock.calls.at(-1)?.[0];
+    expect(
+      addCondition(draft).modelConfig.levelBasedPctDriftStopLoss?.conditions[1],
+    ).toEqual({
+      absoluteLevel: 3,
+      adverseDriftPct: VOLATILITY_THRESHOLD,
+    });
+  });
+
   it("updates post-average stop loss thresholds", () => {
     const setConfigDraft = vi.fn();
     render(
@@ -544,7 +592,7 @@ describe("SettingsDialogTradingTab", () => {
 
     fireEvent.click(
       screen
-        .getByText("7. Post-average stop loss")
+        .getByText("8. Post-average stop loss")
         .closest("button") as HTMLButtonElement,
     );
     fireEvent.click(

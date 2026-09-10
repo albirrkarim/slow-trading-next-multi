@@ -7,6 +7,7 @@ import {
 } from "@/lib/notification/config";
 import adaptiveAveraging from "@/lib/trading/adaptive-averaging";
 import blackSwan from "@/lib/trading/black-swan";
+import levelBasedPctDriftStopLoss from "@/lib/trading/level-based-pct-drift-stop-loss";
 import fs from "fs-extra";
 import {
   createDefaultSlowTradingAccounts,
@@ -130,6 +131,10 @@ function normalizeExitModelConfigDefaults(
     exitOnVPointAbsLevel:
       value.exitOnVPointAbsLevel ?? defaults.exitOnVPointAbsLevel,
     stopLossUSDT: value.stopLossUSDT ?? defaults.stopLossUSDT,
+    levelBasedPctDriftStopLoss:
+      levelBasedPctDriftStopLoss.config.normalize(
+        value.levelBasedPctDriftStopLoss,
+      ),
   };
 }
 

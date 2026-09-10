@@ -5,6 +5,7 @@ import { Box, Grid, Stack, Typography } from "@mui/material";
 
 import PostAverageRescueExitSettings from "./PostAverageRescueExitSettings";
 import PostAverageStopLossSettings from "./PostAverageStopLossSettings";
+import LevelBasedPctDriftStopLossSettings from "./LevelBasedPctDriftStopLossSettings";
 import ReadMoreDialogButton from "./ReadMoreDialogButton";
 import SettingsCheckbox from "./SettingsCheckbox";
 import SettingsInfoField from "./SettingsInfoField";
@@ -100,6 +101,8 @@ export default function ExitStrategyReference({
   );
   const postAverageRescueExit = configDraft.modelConfig.postAverageRescueExit;
   const postAverageStopLoss = configDraft.modelConfig.postAverageStopLoss;
+  const levelBasedPctDriftStopLoss =
+    configDraft.modelConfig.levelBasedPctDriftStopLoss;
   const updateModelConfig = (
     patch: Partial<typeof configDraft.modelConfig>,
   ) => {
@@ -233,9 +236,26 @@ export default function ExitStrategyReference({
           </SettingsRuleAccordion>
 
           <SettingsRuleAccordion
+            behavior="At an exactly configured absolute vPoint level, exits when price drifts by the configured percentage in the adverse direction from that vPoint price."
+            name="Level-based vPoint drift stop loss"
+            number={3}
+            status={
+              levelBasedPctDriftStopLoss?.enabled ? "Enabled" : "Disabled"
+            }
+            tc="BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS"
+          >
+            <LevelBasedPctDriftStopLossSettings
+              onChange={(nextConfig) =>
+                updateModelConfig({ levelBasedPctDriftStopLoss: nextConfig })
+              }
+              value={levelBasedPctDriftStopLoss}
+            />
+          </SettingsRuleAccordion>
+
+          <SettingsRuleAccordion
             behavior="Exits when fee-adjusted net USDT PnL reaches the configured loss amount."
             name="Stop loss by net USDT loss"
-            number={3}
+            number={4}
             status={stopLossUSDT > 0 ? `At -$${stopLossUSDT}` : "Disabled"}
             tc="BOTH:STOP_LOSS_BY_USDT_LOSS"
           >
@@ -264,7 +284,7 @@ export default function ExitStrategyReference({
           <SettingsRuleAccordion
             behavior="Exits when fee-adjusted net PnL reaches the configured negative stop-loss percentage."
             name="Hard stop loss"
-            number={4}
+            number={5}
             status={stopLossPct ? `At -${stopLossPct}%` : "Disabled"}
             tc="BOTH:TRADITIONAL_TP_SL"
           >
@@ -294,7 +314,7 @@ export default function ExitStrategyReference({
           <SettingsRuleAccordion
             behavior="After the opposite volatility target zone is hit, exits when fee-adjusted unlevered PnL reaches this tighter negative threshold."
             name="Volatility target-zone stop loss"
-            number={5}
+            number={6}
             status={
               targetZoneStopLossPct > 0
                 ? `At -${targetZoneStopLossPct}%`
@@ -330,7 +350,7 @@ export default function ExitStrategyReference({
           <SettingsRuleAccordion
             behavior="When favorable distance reaches the global volatility threshold, exits when fee-aware net PnL reaches the configured threshold for the completed averaging count."
             name="Post-average rescue exit"
-            number={6}
+            number={7}
             status={
               postAverageRescueExit?.enabled === false ? "Disabled" : "Enabled"
             }
@@ -347,7 +367,7 @@ export default function ExitStrategyReference({
           <SettingsRuleAccordion
             behavior="After averaging, exits at the first active fee-aware net PnL percentage or USDT loss boundary selected for the completed averaging count."
             name="Post-average stop loss"
-            number={7}
+            number={8}
             status={postAverageStopLoss?.enabled ? "Enabled" : "Disabled"}
             tc="BOTH:POST_AVERAGE_STOP_LOSS"
           >
@@ -362,7 +382,7 @@ export default function ExitStrategyReference({
           <SettingsRuleAccordion
             behavior={`Activates at TP ${takeProfitPct}% and exits after profit retraces ${stopLossPlusTriggerPct}% from the recorded peak.`}
             name="StopLoss+ trailing exit"
-            number={8}
+            number={9}
             status={stopLossPlusEnabled ? "Enabled" : "Disabled"}
             tc="PROD:SL_PLUS"
           >
@@ -407,7 +427,7 @@ export default function ExitStrategyReference({
           <SettingsRuleAccordion
             behavior="Exits with remaining positive fee-adjusted profit after the opposite volatility target zone appears following entry."
             name="Volatility target-zone TP"
-            number={9}
+            number={10}
             status="Automatic"
             tc="BOTH:VOLATILITY_TARGET_TP"
           />
@@ -415,7 +435,7 @@ export default function ExitStrategyReference({
           <SettingsRuleAccordion
             behavior="Final fallback when StopLoss+ is off: TP must be reached and the opposite volatility target zone must be confirmed."
             name="Traditional TP fallback"
-            number={10}
+            number={11}
             status={stopLossPlusEnabled ? "Disabled by StopLoss+" : "Enabled"}
             tc="BOTH:TRADITIONAL_TP_SL"
           />

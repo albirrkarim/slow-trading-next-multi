@@ -3,6 +3,7 @@ import { TradingMode } from "../exchange/types";
 import adaptiveAveraging from "../trading/adaptive-averaging";
 import postAverageRescue from "../trading/post-average-rescue";
 import postAverageStopLoss from "../trading/post-average-stop-loss";
+import levelBasedPctDriftStopLoss from "../trading/level-based-pct-drift-stop-loss";
 import { DESCISION_MODELS } from "./constants-clients";
 
 export const DEFAULT_DYNAMIC_TRADING_MEMORY: DynamicTradeMemory = {
@@ -28,6 +29,8 @@ export const DEFAULT_DYNAMIC_TRADE_CONFIG_PRODUCTION: DynamicTradeConfig = {
     volatilityTargetStopLossPercent: 0,
     postAverageRescueExit: postAverageRescue.config.createDefault(),
     postAverageStopLoss: postAverageStopLoss.config.createDefault(),
+    levelBasedPctDriftStopLoss:
+      levelBasedPctDriftStopLoss.config.createDefault(),
     useStopLossPlus: false,
     stopLossPlusTrigger: 1,
     safePercentPerMonth: 0.1,

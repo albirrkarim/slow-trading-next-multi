@@ -60,6 +60,10 @@ describe("slow specs storage", () => {
     expect(loaded.config.maxOpenPositions).toBe(0);
     expect(loaded.config.modelConfig.exitOnVPointAbsLevel).toBe(0);
     expect(loaded.config.modelConfig.stopLossUSDT).toBe(50);
+    expect(loaded.config.modelConfig.levelBasedPctDriftStopLoss).toEqual({
+      enabled: false,
+      conditions: [],
+    });
     expect(loaded.modes.live.stageRuns).toEqual({});
   });
 

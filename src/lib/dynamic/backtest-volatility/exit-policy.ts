@@ -2,7 +2,9 @@ import { TRADE_MESSAGE } from "@/lib/trading/message";
 import type { Position, TradingModelConfig } from "@/lib/trading/models";
 import postAverageRescue from "@/lib/trading/post-average-rescue";
 import postAverageStopLoss from "@/lib/trading/post-average-stop-loss";
+import levelBasedPctDriftStopLoss from "@/lib/trading/level-based-pct-drift-stop-loss";
 import volatilityTargetStopLoss from "@/lib/trading/volatility-target-stop-loss";
+import type { VolatilityPoint } from "../utils/volatility";
 import {
   BACKTEST_ONE_SIDE_FEE_RATIO,
   BACKTEST_ROUND_TRIP_FEE_PERCENT,
@@ -25,6 +27,7 @@ interface ResolveBacktestExitDecisionProps {
   globalLiquidation: boolean;
   hasHitTargetZone?: boolean;
   lastVolatilityPrice?: number;
+  lastVolatilityPoint?: VolatilityPoint;
   modelConfig: TradingModelConfig;
   exitFeeRatio?: number;
 }
@@ -152,11 +155,35 @@ export function resolveBacktestFeeAdjustedExitPrice({
 /** Selects the smallest active loss already crossed by the current vPoint rail. */
 function selectFirstReachedRailLossBoundary(
   boundaries: BacktestRailLossBoundary[],
+  railAnchorPrice?: number,
+  railEndPrice?: number,
 ) {
-  return boundaries.slice().sort((left, right) => {
+  const bySmallestLoss = (
+    left: BacktestRailLossBoundary,
+    right: BacktestRailLossBoundary,
+  ) => {
     const lossDifference =
       Math.abs(left.targetNetPnlUsdt) - Math.abs(right.targetNetPnlUsdt);
     return lossDifference || left.priority - right.priority;
+  };
+  if (!Number.isFinite(railAnchorPrice) || !Number.isFinite(railEndPrice)) {
+    return boundaries.slice().sort(bySmallestLoss)[0];
+  }
+
+  const anchor = railAnchorPrice ?? 0;
+  const end = railEndPrice ?? anchor;
+  const movesDown = end < anchor;
+  const alreadyCrossed = boundaries.filter((boundary) =>
+    movesDown ? boundary.exitPrice >= anchor : boundary.exitPrice <= anchor,
+  );
+  if (alreadyCrossed.length > 0) {
+    return alreadyCrossed.sort(bySmallestLoss)[0];
+  }
+
+  return boundaries.slice().sort((left, right) => {
+    const distanceDifference =
+      Math.abs(left.exitPrice - anchor) - Math.abs(right.exitPrice - anchor);
+    return distanceDifference || bySmallestLoss(left, right);
   })[0];
 }
 
@@ -167,6 +194,7 @@ export function resolveBacktestExitDecision({
   globalLiquidation,
   hasHitTargetZone = false,
   lastVolatilityPrice,
+  lastVolatilityPoint,
   modelConfig,
   exitFeeRatio,
 }: ResolveBacktestExitDecisionProps): BacktestExitDecision {
@@ -200,6 +228,41 @@ export function resolveBacktestExitDecision({
   }
 
   const lossBoundaries: BacktestRailLossBoundary[] = [];
+  const levelBasedDriftStop = levelBasedPctDriftStopLoss.evaluate({
+    config: modelConfig.levelBasedPctDriftStopLoss,
+    currentPrice,
+    direction: position.direction,
+    vPoint: lastVolatilityPoint,
+  });
+
+  // BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS
+  if (
+    levelBasedDriftStop.shouldExit &&
+    levelBasedDriftStop.condition &&
+    levelBasedDriftStop.triggerPrice !== null
+  ) {
+    const exitPrice = levelBasedDriftStop.triggerPrice;
+    const targetNetPnlUsdt = calculateBacktestFeeAdjustedNetProfitUSDT(
+      position,
+      exitPrice,
+      exitFeeRatio,
+    );
+    lossBoundaries.push({
+      category: TRADE_MESSAGE.sell.SL,
+      exitPrice,
+      message:
+        "BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS" +
+        ` | absoluteLevel:${levelBasedDriftStop.condition.absoluteLevel}` +
+        ` | adverseDriftPct:${levelBasedDriftStop.condition.adverseDriftPct}` +
+        ` | anchorPrice:${lastVolatilityPoint?.p}`,
+      netProfitPercent:
+        entryNotionalUsdt > 0
+          ? (targetNetPnlUsdt / entryNotionalUsdt) * 100
+          : calculateBacktestNetProfitPercent(position, exitPrice),
+      priority: 1,
+      targetNetPnlUsdt,
+    });
+  }
   const configuredStopLossUSDT = Number(modelConfig.stopLossUSDT ?? 50);
   const stopLossUSDT =
     Number.isFinite(configuredStopLossUSDT) && configuredStopLossUSDT > 0
@@ -224,7 +287,7 @@ export function resolveBacktestExitDecision({
         entryNotionalUsdt > 0
           ? (targetNetPnlUsdt / entryNotionalUsdt) * 100
           : feeAdjustedNetProfitPercent,
-      priority: 1,
+      priority: 2,
       targetNetPnlUsdt,
     });
   }
@@ -242,7 +305,7 @@ export function resolveBacktestExitDecision({
       exitPrice,
       netProfitPercent: -hardStopLossPercent,
       message: "BOTH:TRADITIONAL_TP_SL",
-      priority: 2,
+      priority: 3,
       targetNetPnlUsdt: calculateBacktestFeeAdjustedNetProfitUSDT(
         position,
         exitPrice,
@@ -276,7 +339,7 @@ export function resolveBacktestExitDecision({
         "BOTH:VOLATILITY_TARGET_SL_VALUE" +
         ` | railNetPnlUsdt:${feeAdjustedNetProfitUSDT.toFixed(2)}` +
         ` | backthinkNetPnlUsdt:${targetNetPnlUsdt.toFixed(2)}`,
-      priority: 3,
+      priority: 4,
       targetNetPnlUsdt,
     });
   }
@@ -334,7 +397,7 @@ export function resolveBacktestExitDecision({
         entryNotionalUsdt > 0
           ? (targetNetPnlUsdt / entryNotionalUsdt) * 100
           : feeAdjustedNetProfitPercent,
-      priority: 4,
+      priority: 5,
       targetNetPnlUsdt,
     });
   }
@@ -352,7 +415,7 @@ export function resolveBacktestExitDecision({
       exitPrice,
       message: TRADE_MESSAGE.sell.LIQUIDATED_ISOLATED,
       netProfitPercent: -100,
-      priority: 5,
+      priority: 6,
       targetNetPnlUsdt: calculateBacktestFeeAdjustedNetProfitUSDT(
         position,
         exitPrice,
@@ -363,7 +426,11 @@ export function resolveBacktestExitDecision({
 
   // BTEST:VPOINT_RAIL_BACKTHINK_LOSS_BOUNDARY
   const firstReachedLossBoundary =
-    selectFirstReachedRailLossBoundary(lossBoundaries);
+    selectFirstReachedRailLossBoundary(
+      lossBoundaries,
+      lastVolatilityPoint?.p,
+      currentPrice,
+    );
   if (firstReachedLossBoundary) {
     return {
       category: firstReachedLossBoundary.category,

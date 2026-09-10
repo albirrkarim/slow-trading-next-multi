@@ -100,6 +100,7 @@ export function tryToExit({
         hasHitTargetZone,
         // BOTH:POST_AVERAGE_RESCUE_EXIT
         lastVolatilityPrice: lastVolatility?.p,
+        lastVolatilityPoint: lastVolatility,
         modelConfig: exitModelConfig,
         exitFeeRatio: BACKTEST_ONE_SIDE_FEE_RATIO,
       });
@@ -242,6 +243,9 @@ function resolveBacktestCloseReason(params: {
   }
 
   const message = String(params.message ?? "");
+  if (message.includes("LEVEL_BASED_PCT_DRIFT_STOP_LOSS")) {
+    return "LEVEL_BASED_PCT_DRIFT_STOP_LOSS";
+  }
   if (message.includes("STOP_LOSS_BY_USDT_LOSS")) {
     return "STOP_LOSS_BY_USDT_LOSS";
   }

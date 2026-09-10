@@ -7,6 +7,7 @@ import slowTradingClient, {
 import { resolveEntryLeverage } from "@/lib/trading/execute/entry-leverage";
 import type { TradingModelConfig } from "@/lib/trading/models";
 import postAverageStopLoss from "@/lib/trading/post-average-stop-loss";
+import levelBasedPctDriftStopLoss from "@/lib/trading/level-based-pct-drift-stop-loss";
 
 export interface TradingLivePreviewConfig {
   adaptiveAveraging?: AdaptiveAveragingConfig;
@@ -32,7 +33,19 @@ export interface TradingLivePreviewBailoutCandidate {
 
 export interface TradingLivePreviewFirstStopLoss {
   estimatedLossUsdt: number;
-  type: "HARD_STOP_PERCENT" | "NET_USDT" | "POST_AVERAGE";
+  type:
+    | "HARD_STOP_PERCENT"
+    | "LEVEL_BASED_PCT_DRIFT"
+    | "NET_USDT"
+    | "POST_AVERAGE";
+}
+
+export interface TradingLivePreviewLevelBasedPctDriftStopLoss {
+  absoluteLevel: number;
+  adverseDriftPct: number;
+  anchorPrice: number;
+  estimatedLossUsdt: number;
+  triggerPrice: number;
 }
 
 export interface TradingLivePreviewPostAverageStopLoss {
@@ -50,6 +63,7 @@ export interface TradingLivePreviewExitStage {
   estimatedNotionalUsdt: number;
   estimatedProfitUsdt: number;
   firstStopLoss: TradingLivePreviewFirstStopLoss | null;
+  levelBasedPctDriftStopLoss: TradingLivePreviewLevelBasedPctDriftStopLoss | null;
   postAverageStopLoss: TradingLivePreviewPostAverageStopLoss | null;
   stopLossUSDTEquivalentPct: number | null;
   estimatedTargetZoneLossUsdt: number | null;
@@ -106,6 +120,7 @@ export function resolveTradingLivePreviewFirstStopLoss(params: {
   estimatedHardStopLossUsdt: number | null;
   netUsdtStopLossUsdt: number | null;
   postAverageStopLossUsdt: number | null;
+  levelBasedPctDriftStopLossUsdt?: number | null;
 }): TradingLivePreviewFirstStopLoss | null {
   const candidates: Array<TradingLivePreviewFirstStopLoss & { priority: number }> = [];
   if (params.netUsdtStopLossUsdt !== null) {
@@ -127,6 +142,13 @@ export function resolveTradingLivePreviewFirstStopLoss(params: {
       estimatedLossUsdt: params.postAverageStopLossUsdt,
       priority: 3,
       type: "POST_AVERAGE",
+    });
+  }
+  if (params.levelBasedPctDriftStopLossUsdt != null) {
+    candidates.push({
+      estimatedLossUsdt: params.levelBasedPctDriftStopLossUsdt,
+      priority: 1,
+      type: "LEVEL_BASED_PCT_DRIFT",
     });
   }
 
@@ -442,6 +464,48 @@ export function buildTradingLivePreview(params: {
         : slowTradingClient.watchReserve.money.roundUsdt(
             estimatedNotionalUsdt * (stopLossPct / 100),
           );
+    const entryAbsoluteLevel = Math.max(
+      1,
+      Math.floor(Number(config.minActionableAbsoluteLevel) || 2),
+    );
+    const absoluteLevel = entryAbsoluteLevel + index;
+    const levelBasedCondition = levelBasedPctDriftStopLoss.condition.get(
+      absoluteLevel,
+      config.modelConfig.levelBasedPctDriftStopLoss,
+    );
+    const stagePrices = marginParts.slice(0, index + 1).map((_, priceIndex) =>
+      NORMALIZED_ENTRY_PRICE *
+      Math.pow(1 - volatilityThresholdPct / 100, priceIndex),
+    );
+    const estimatedQuantity = marginParts
+      .slice(0, index + 1)
+      .reduce(
+        (quantity, marginUsdt, priceIndex) =>
+          quantity + (marginUsdt * leverage) / stagePrices[priceIndex],
+        0,
+      );
+    const weightedEntryPrice =
+      estimatedQuantity > 0
+        ? estimatedNotionalUsdt / estimatedQuantity
+        : NORMALIZED_ENTRY_PRICE;
+    const levelBasedAnchorPrice = stagePrices[index];
+    const levelBasedTriggerPrice = levelBasedCondition
+      ? levelBasedPctDriftStopLoss.triggerPrice.resolve(
+          levelBasedAnchorPrice,
+          levelBasedCondition.adverseDriftPct,
+          "LONG",
+        )
+      : null;
+    const levelBasedLossUsdt =
+      levelBasedTriggerPrice === null
+        ? null
+        : slowTradingClient.watchReserve.money.roundUsdt(
+            Math.max(
+              0,
+              (weightedEntryPrice - levelBasedTriggerPrice) *
+                estimatedQuantity,
+            ),
+          );
     const postAverageThreshold = postAverageStopLoss.threshold.get(
       index,
       config.modelConfig.postAverageStopLoss,
@@ -467,6 +531,7 @@ export function buildTradingLivePreview(params: {
       estimatedHardStopLossUsdt: estimatedLossUsdt,
       netUsdtStopLossUsdt: stopLossUSDT,
       postAverageStopLossUsdt: postAverageFirstLossUsdt,
+      levelBasedPctDriftStopLossUsdt: levelBasedLossUsdt,
     });
 
     return {
@@ -479,6 +544,18 @@ export function buildTradingLivePreview(params: {
           estimatedNotionalUsdt * (takeProfitPct / 100),
         ),
       firstStopLoss,
+      levelBasedPctDriftStopLoss:
+        levelBasedCondition &&
+        levelBasedTriggerPrice !== null &&
+        levelBasedLossUsdt !== null
+          ? {
+              absoluteLevel,
+              adverseDriftPct: levelBasedCondition.adverseDriftPct,
+              anchorPrice: levelBasedAnchorPrice,
+              estimatedLossUsdt: levelBasedLossUsdt,
+              triggerPrice: levelBasedTriggerPrice,
+            }
+          : null,
       postAverageStopLoss: postAverageThreshold
         ? {
             estimatedPercentLossUsdt: postAveragePercentLossUsdt,

@@ -200,14 +200,26 @@ function ExitStagePreview({
     postAverageStopParts.length > 0
       ? postAverageStopParts.join(" OR ")
       : "Both boundaries disabled for this tier";
+  const levelBasedDriftStop = stage.levelBasedPctDriftStopLoss;
+  const levelBasedDriftFormula = levelBasedDriftStop
+    ? `${levelBasedDriftStop.anchorPrice.toFixed(2)} x (1 - ${
+        levelBasedDriftStop.adverseDriftPct
+      }%) = ${levelBasedDriftStop.triggerPrice.toFixed(2)} · estimated loss ${formatUsdt(
+        levelBasedDriftStop.estimatedLossUsdt,
+      )}`
+    : "No condition for this absolute vPoint level";
   const firstStopLabel =
-    stage.firstStopLoss?.type === "POST_AVERAGE"
+    stage.firstStopLoss?.type === "LEVEL_BASED_PCT_DRIFT"
+      ? "Level-based vPoint drift stop reaches first"
+      : stage.firstStopLoss?.type === "POST_AVERAGE"
       ? "Post-average stop reaches first"
       : stage.firstStopLoss?.type === "NET_USDT"
         ? "Net USDT stop reaches first"
         : "Hard stop reaches first";
   const firstStopFormula =
-    stage.firstStopLoss?.type === "POST_AVERAGE"
+    stage.firstStopLoss?.type === "LEVEL_BASED_PCT_DRIFT"
+      ? levelBasedDriftFormula
+      : stage.firstStopLoss?.type === "POST_AVERAGE"
       ? postAverageStopFormula
       : stage.firstStopLoss?.type === "NET_USDT"
         ? `Position exits at -${formatUsdt(stage.firstStopLoss.estimatedLossUsdt)}`
@@ -246,6 +258,14 @@ function ExitStagePreview({
           formula={marginFormula}
           label="Cumulative margin"
         />
+        {levelBasedDriftStop && (
+          <PreviewCalculation
+            color="error.dark"
+            detail="projected LONG stop from the exact stage vPoint anchor; production and backtest reverse the adverse direction for SHORT"
+            formula={levelBasedDriftFormula}
+            label={`Level ${levelBasedDriftStop.absoluteLevel} vPoint drift stop (${levelBasedDriftStop.adverseDriftPct}%)`}
+          />
+        )}
         <PreviewCalculation
           detail="cumulative margin x leverage"
           formula={notionalFormula}

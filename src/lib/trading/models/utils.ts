@@ -182,6 +182,9 @@ function exitPosition({
 
 function inferCloseReason(message?: string): PositionCloseReason {
   const normalized = String(message ?? "").toUpperCase();
+  if (normalized.includes("LEVEL_BASED_PCT_DRIFT_STOP_LOSS")) {
+    return "LEVEL_BASED_PCT_DRIFT_STOP_LOSS";
+  }
   if (normalized.includes("EXIT_ON_VPOINT_LEVEL")) {
     return "EXIT_ON_VPOINT_LEVEL";
   }

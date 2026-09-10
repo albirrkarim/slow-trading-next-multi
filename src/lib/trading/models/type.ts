@@ -50,6 +50,20 @@ export interface PostAverageStopLossConfig {
   thresholds: PostAverageStopLossThreshold[];
 }
 
+/** One exact absolute vPoint level and its adverse price-drift boundary. */
+export interface LevelBasedPctDriftStopLossCondition {
+  /** Exact absolute vPoint level that activates this condition. */
+  absoluteLevel: number;
+  /** Adverse price drift from that vPoint price, expressed as a percentage. */
+  adverseDriftPct: number;
+}
+
+/** Configures stop loss boundaries anchored to exact absolute vPoint levels. */
+export interface LevelBasedPctDriftStopLossConfig {
+  enabled: boolean;
+  conditions: LevelBasedPctDriftStopLossCondition[];
+}
+
 interface TradingModelConfigAccumulator {
   /**
    * Decimal drop from the last buy price required to trigger a DCA buy.
@@ -137,6 +151,9 @@ export interface TradingModelConfig
 
   /** Tiered fee-aware loss boundaries enabled after averaging. */
   postAverageStopLoss?: PostAverageStopLossConfig;
+
+  /** Exact-level adverse price-drift stop loss; disabled by default. */
+  levelBasedPctDriftStopLoss?: LevelBasedPctDriftStopLossConfig;
 
   /**
    * The maximum amount of time (in minutes) a position should be held before closing it.
@@ -377,6 +394,7 @@ export type PositionCloseReason =
   | "STOP_LOSS"
   | "EXIT_ON_VPOINT_LEVEL"
   | "STOP_LOSS_BY_USDT_LOSS"
+  | "LEVEL_BASED_PCT_DRIFT_STOP_LOSS"
   | "STOP_LOSS_PLUS_TP"
   | "VOLATILITY_TARGET_TP"
   | "VOLATILITY_TARGET_SL"

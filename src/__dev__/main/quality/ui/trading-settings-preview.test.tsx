@@ -213,6 +213,38 @@ describe("TradingSettingsPreview", () => {
     });
   });
 
+  it("projects the exact-level vPoint drift stop in Live Preview", () => {
+    const preview = buildTradingLivePreview({
+      config: {
+        ...configDraft,
+        modelConfig: {
+          ...configDraft.modelConfig,
+          levelBasedPctDriftStopLoss: {
+            enabled: true,
+            conditions: [{ absoluteLevel: 2, adverseDriftPct: 4 }],
+          },
+        },
+      },
+      dashboardState,
+    });
+
+    // BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS
+    expect(preview.exitStages[0]).toMatchObject({
+      firstStopLoss: {
+        estimatedLossUsdt: 0.56,
+        type: "LEVEL_BASED_PCT_DRIFT",
+      },
+      levelBasedPctDriftStopLoss: {
+        absoluteLevel: 2,
+        adverseDriftPct: 4,
+        anchorPrice: 100,
+        estimatedLossUsdt: 0.56,
+        triggerPrice: 96,
+      },
+    });
+    expect(preview.exitStages[1].levelBasedPctDriftStopLoss).toBeNull();
+  });
+
   it("previews the first stop outcome after each averaging tier", () => {
     const stopConfig = {
       ...configDraft,

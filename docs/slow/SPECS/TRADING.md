@@ -575,7 +575,38 @@ uses the stop-loss trade category and persists
 
 TC: `PROD:EXIT_ON_VPOINT_LEVEL`
 
-### B.4.2 Stop loss by net USDT loss
+### B.4.2 Level-based vPoint price-drift stop loss
+
+`modelConfig.levelBasedPctDriftStopLoss` is an additional stop loss shared by
+production, sandbox, the standard volatility-point backtest, and Quick
+Backtest. Its default is `{ enabled: false, conditions: [] }`.
+
+Each condition stores an exact positive `absoluteLevel` and an explicit
+positive `adverseDriftPct`. The current confirmed vPoint activates a condition
+only when `abs(vPoint.lvl) === absoluteLevel`; a condition for level 2 does not
+apply to level 3. The vPoint price is the anchor. LONG measures downward drift
+and SHORT measures upward drift. The boundary is inclusive:
+
+```txt
+LONG trigger  = vPointPrice * (1 - adverseDriftPct / 100)
+SHORT trigger = vPointPrice * (1 + adverseDriftPct / 100)
+```
+
+The settings editor initializes a newly added condition's percentage to the
+global `VOLATILITY_THRESHOLD`, but every saved condition keeps its own explicit
+percentage. This rule is OR-ed with all other exit rules; the first boundary
+reached exits and persists
+`closed.reason = "LEVEL_BASED_PCT_DRIFT_STOP_LOSS"`.
+
+The volatility-point backtest and Quick Backtest use the previous confirmed
+vPoint as the rail anchor and reconstruct the exact trigger price. When one
+rail crosses multiple stop boundaries, the boundary nearest that rail anchor
+is selected. Live Preview projects the configured exact level at each entry or
+averaging stage and includes its estimated result in `FIRST STOP OUTCOME`.
+
+TC: `BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS`
+
+### B.4.3 Stop loss by net USDT loss
 
 `modelConfig.stopLossUSDT` closes an open position when its fee-adjusted net
 USDT PnL is less than or equal to the negative configured amount. For example,
@@ -596,7 +627,7 @@ have been reached first.
 
 TC: `BOTH:STOP_LOSS_BY_USDT_LOSS`
 
-### B.4.3 Traditional TP / SL percent
+### B.4.4 Traditional TP / SL percent
 
 When SL Plus is disabled, the position should exit using traditional `takeProfitPercent` and `stopLossPercent`.
 
@@ -606,7 +637,7 @@ On the TP it must be hasHitTargetZone.
 
 TC: `BOTH:TRADITIONAL_TP_SL`
 
-### B.4.4 Volatility target-zone TP
+### B.4.5 Volatility target-zone TP
 
 If an open position has already hit the opposite volatility target zone after entry, SLOW should not keep averaging forever. For a LONG position, the target zone is a `TOP` point after entry. For a SHORT position, the target zone is a `BOTTOM` point after entry.
 
@@ -666,7 +697,7 @@ TC: `BOTH:REUSABLE_LEVEL_SEQUENCE`
 
 TC: `PROD:AVERAGING_MONITORING_STATE_SNAPSHOT`
 
-### B.4.5 Volatility target-zone stop loss
+### B.4.6 Volatility target-zone stop loss
 
 After an open position has hit its opposite volatility target zone, SLOW can
 apply an additional, tighter stop loss. For a LONG position, the target zone is
@@ -690,7 +721,7 @@ Production, sandbox, and backtest must use the same calculation.
 
 TC: `BOTH:VOLATILITY_TARGET_SL_VALUE`
 
-### B.4.6 Post-average rescue exit
+### B.4.7 Post-average rescue exit
 
 After a position has been averaged, System should not rely only on the original traditional TP target.
 
@@ -754,7 +785,7 @@ the same configuration to the shared rescue evaluator.
 
 TC: `BOTH:POST_AVERAGE_RESCUE_EXIT`
 
-### B.4.7 Post-average stop loss
+### B.4.8 Post-average stop loss
 
 `modelConfig.postAverageStopLoss` adds loss protection only after at least one
 averaging execution. It is disabled by default and contains ordered threshold
@@ -785,7 +816,7 @@ stops.
 
 TC: `BOTH:POST_AVERAGE_STOP_LOSS`
 
-### B.4.8 SL Plus
+### B.4.9 SL Plus
 
 SL Plus exists only in production. When enabled, `takeProfitPercent` is the
 activation threshold for trailing profit protection instead of immediate TP.
@@ -819,7 +850,7 @@ cause an exit.
 
 TC: `PROD:SL_PLUS`
 
-### B.4.9 Exit sideways positions to free workers for stronger candidates
+### B.4.10 Exit sideways positions to free workers for stronger candidates
 
 When `exitSidewaysToFreeWorkersForStrongCandidates` is enabled, SLOW can
 force-exit one sideways open position for a strong entry candidate on the next

@@ -11,6 +11,7 @@ import type {
 } from "@/lib/trading/models";
 import postAverageRescue from "@/lib/trading/post-average-rescue";
 import postAverageStopLoss from "@/lib/trading/post-average-stop-loss";
+import levelBasedPctDriftStopLoss from "@/lib/trading/level-based-pct-drift-stop-loss";
 import { vi } from "vitest";
 import { createTestPosition } from "../fixtures/position";
 
@@ -128,6 +129,117 @@ const rescueExitConfig: TradingModelConfig = {
 };
 
 describe("slow specs exit", () => {
+  it.each([
+    { currentPrice: 96, direction: "LONG" as const },
+    { currentPrice: 104, direction: "SHORT" as const },
+  ])(
+    "triggers the exact-level adverse drift boundary for $direction",
+    ({ currentPrice, direction }) => {
+      const result = levelBasedPctDriftStopLoss.evaluate({
+        config: {
+          enabled: true,
+          conditions: [{ absoluteLevel: 2, adverseDriftPct: 4 }],
+        },
+        currentPrice,
+        direction,
+        vPoint: { lvl: -2, p: 100 },
+      });
+
+      // BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS
+      expect(result.shouldExit).toBe(true);
+      expect(result.triggerPrice).toBe(currentPrice);
+    },
+  );
+
+  it("requires an exact configured level and defaults the feature to off", () => {
+    expect(
+      levelBasedPctDriftStopLoss.evaluate({
+        config: {
+          enabled: true,
+          conditions: [{ absoluteLevel: 3, adverseDriftPct: 3 }],
+        },
+        currentPrice: 90,
+        direction: "LONG",
+        vPoint: { lvl: -2, p: 100 },
+      }).shouldExit,
+    ).toBe(false);
+    expect(levelBasedPctDriftStopLoss.config.createDefault()).toEqual({
+      enabled: false,
+      conditions: [],
+    });
+  });
+
+  it("back-thinks overlapping stops to the first level-based rail boundary", () => {
+    const exit = resolveBacktestExitDecision({
+      position: createPosition(),
+      currentPrice: 80,
+      forceSell: false,
+      globalLiquidation: false,
+      lastVolatilityPoint: {
+        id: "B_LEVEL_2",
+        l: "B",
+        lvl: -2,
+        pct: 5,
+        p: 110,
+        t: 2,
+        vb: 1,
+        vq: 110,
+      },
+      modelConfig: {
+        takeProfitPercent: 5,
+        stopLossPercent: 20,
+        stopLossUSDT: 0,
+        levelBasedPctDriftStopLoss: {
+          enabled: true,
+          conditions: [{ absoluteLevel: 2, adverseDriftPct: 4 }],
+        },
+      },
+    });
+
+    // BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS
+    expect(exit.shouldExit).toBe(true);
+    expect(exit.exitPrice).toBeCloseTo(105.6);
+    expect(exit.message).toContain("BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS");
+  });
+
+  it("executes the level-based drift stop in production", async () => {
+    const memory = createMemory();
+    memory.volatility?.lastVolatility.push({
+      id: "B_LEVEL_2",
+      l: "B",
+      lvl: -2,
+      pct: 5,
+      p: 100,
+      t: 2,
+      vb: 1,
+      vq: 100,
+    });
+
+    const exit = await dynamicExit({
+      symbol: "SUI",
+      current: buildKline(3, 96),
+      config: {
+        takeProfitPercent: 5,
+        stopLossPercent: 90,
+        stopLossUSDT: 0,
+        levelBasedPctDriftStopLoss: {
+          enabled: true,
+          conditions: [{ absoluteLevel: 2, adverseDriftPct: 4 }],
+        },
+      },
+      memory,
+      exchangeType: "tokocrypto",
+      tradingMode: TradingMode.SPOT,
+    });
+
+    // BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS
+    expect(exit.action).toBe("SELL");
+    expect(exit.reason).toContain("BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS");
+    expect(memory.positionsSell?.[0].closed?.reason).toBe(
+      "LEVEL_BASED_PCT_DRIFT_STOP_LOSS",
+    );
+  });
+
   it("selects the greatest reached post-average stop tier", () => {
     const config = {
       enabled: true,

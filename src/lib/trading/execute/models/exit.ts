@@ -7,6 +7,7 @@ import { TRADE_MESSAGE } from "@/lib/trading/message";
 import postAverageRescue from "@/lib/trading/post-average-rescue";
 import postAverageStopLoss from "@/lib/trading/post-average-stop-loss";
 import volatilityTargetStopLoss from "@/lib/trading/volatility-target-stop-loss";
+import levelBasedPctDriftStopLoss from "@/lib/trading/level-based-pct-drift-stop-loss";
 import type { Kline } from "@/lib/exchange/platform/tokocrypto";
 import type {
   Position,
@@ -240,6 +241,42 @@ export async function dynamicExit({
       profit: netGain,
       position: lastPosition,
       emailNotif: `😞 [SELL] vPoint level exit triggered`,
+    };
+  }
+
+  const levelBasedDriftStop = levelBasedPctDriftStopLoss.evaluate({
+    config: config.levelBasedPctDriftStopLoss,
+    currentPrice: price,
+    direction,
+    vPoint: lastVolatility,
+  });
+
+  // BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS
+  if (levelBasedDriftStop.shouldExit && levelBasedDriftStop.condition) {
+    const { absoluteLevel, adverseDriftPct } = levelBasedDriftStop.condition;
+    const reason = `[SELL] ${readableTime} ${
+      TRADE_MESSAGE.sell.SL
+    } BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS absolute vPoint level ${absoluteLevel} adverse drift ${levelBasedDriftStop.adverseDriftPct.toFixed(
+      2,
+    )}% reached ${adverseDriftPct}% | anchor ${lastVPrice} | trigger ${levelBasedDriftStop.triggerPrice}`;
+
+    sellPosition({
+      currentKline: current,
+      memory,
+      exitMessage: reason,
+      closeReason: "LEVEL_BASED_PCT_DRIFT_STOP_LOSS",
+      roundTripFeeRatio: roundTripFee,
+    });
+
+    return {
+      action: "SELL",
+      price,
+      amount: totalQuantity,
+      category: TRADE_MESSAGE.sell.SL,
+      reason,
+      profit: netGain,
+      position: lastPosition,
+      emailNotif: `😞 [SELL] level-based vPoint drift stop triggered`,
     };
   }
 
