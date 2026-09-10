@@ -81,9 +81,11 @@ function SidewaysExitDetails() {
 
 export default function ExitStrategyReference({
   configDraft,
+  defaultAdverseDriftPct,
   setConfigDraft,
 }: {
   configDraft: ConfigDraft;
+  defaultAdverseDriftPct: number;
   setConfigDraft: ConfigDraftSetter;
 }) {
   const takeProfitPct = configDraft.modelConfig.takeProfitPercent ?? 0;
@@ -245,6 +247,7 @@ export default function ExitStrategyReference({
             tc="BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS"
           >
             <LevelBasedPctDriftStopLossSettings
+              defaultAdverseDriftPct={defaultAdverseDriftPct}
               onChange={(nextConfig) =>
                 updateModelConfig({ levelBasedPctDriftStopLoss: nextConfig })
               }

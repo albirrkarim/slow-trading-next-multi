@@ -66,6 +66,9 @@ const dashboardState = {
   balances: {
     spendableQuoteAsset: 180,
   },
+  globalConfig: {
+    volatilityThresholdPct: VOLATILITY_THRESHOLD,
+  },
   openPositions: [],
 } as unknown as DashboardState;
 

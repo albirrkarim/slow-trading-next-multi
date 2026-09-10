@@ -14,18 +14,22 @@ import {
   Typography,
 } from "@mui/material";
 
-import { VOLATILITY_THRESHOLD } from "@/lib/brain/constants";
 import levelBasedPctDriftStopLoss from "@/lib/trading/level-based-pct-drift-stop-loss";
 import type { LevelBasedPctDriftStopLossConfig } from "@/lib/trading/models";
 
 export default function LevelBasedPctDriftStopLossSettings({
   onChange,
   value,
+  defaultAdverseDriftPct,
 }: {
   onChange: (config: LevelBasedPctDriftStopLossConfig) => void;
   value?: LevelBasedPctDriftStopLossConfig;
+  defaultAdverseDriftPct: number;
 }) {
-  const config = levelBasedPctDriftStopLoss.config.normalize(value);
+  const config = levelBasedPctDriftStopLoss.config.normalize(
+    value,
+    defaultAdverseDriftPct,
+  );
 
   const updateCondition = (
     index: number,
@@ -50,7 +54,7 @@ export default function LevelBasedPctDriftStopLossSettings({
         ...config.conditions,
         {
           absoluteLevel: largestLevel + 1,
-          adverseDriftPct: VOLATILITY_THRESHOLD,
+          adverseDriftPct: defaultAdverseDriftPct,
         },
       ],
     });
@@ -114,7 +118,7 @@ export default function LevelBasedPctDriftStopLossSettings({
                 updateCondition(index, {
                   adverseDriftPct: Math.max(
                     0.01,
-                    Number(event.target.value) || VOLATILITY_THRESHOLD,
+                    Number(event.target.value) || defaultAdverseDriftPct,
                   ),
                 })
               }

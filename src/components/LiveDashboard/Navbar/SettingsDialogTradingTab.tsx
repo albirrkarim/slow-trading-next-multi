@@ -33,8 +33,9 @@ interface SettingsDialogTradingTabProps {
 
 function TradingAccountSettings({
   configDraft,
+  dashboardState,
   setConfigDraft,
-}: Pick<SettingsDialogTradingTabProps, "configDraft" | "setConfigDraft">) {
+}: SettingsDialogTradingTabProps) {
   const averagingEnabled = configDraft.enableWatchLogic ?? false;
   const selectedAccount = configDraft.exchangeAccounts.find(
     (account) => account.slug === configDraft.exchangeAccountSlug,
@@ -478,6 +479,9 @@ function TradingAccountSettings({
           <SettingsGroup title="Exit">
             <ExitStrategyReference
               configDraft={configDraft}
+              defaultAdverseDriftPct={
+                dashboardState.globalConfig.volatilityThresholdPct
+              }
               setConfigDraft={setConfigDraft}
             />
           </SettingsGroup>
@@ -621,6 +625,7 @@ export default function SettingsDialogTradingTab({
           ) : (
             <TradingAccountSettings
               configDraft={configDraft}
+              dashboardState={dashboardState}
               setConfigDraft={setSelectedAccountDraft}
             />
           )}

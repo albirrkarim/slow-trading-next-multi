@@ -18,6 +18,7 @@ function createDefaultConfig(): LevelBasedPctDriftStopLossConfig {
 /** Sanitizes persisted or user-edited exact-level drift conditions. */
 function normalizeConfig(
   config?: LevelBasedPctDriftStopLossConfig,
+  defaultAdverseDriftPct = VOLATILITY_THRESHOLD,
 ): LevelBasedPctDriftStopLossConfig {
   if (!config) return createDefaultConfig();
 
@@ -34,7 +35,7 @@ function normalizeConfig(
       adverseDriftPct:
         Number.isFinite(configuredPct) && configuredPct > 0
           ? configuredPct
-          : VOLATILITY_THRESHOLD,
+          : defaultAdverseDriftPct,
     });
   }
 
