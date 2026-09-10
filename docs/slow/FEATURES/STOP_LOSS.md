@@ -25,6 +25,6 @@ when the current last vpoint is level abs 3 so use the pct drift 3%
 
 This stop loss will be as "OR" with other exit rule / stop loss rule. lets see what reached first
 
-update the live preview, backtest, and quick backtest
+update the live preview, backtest, and quick backtest because we have calculation about the amount loss based on what stop loss will coming first
 
 TC: `BOTH:LEVEL_BASED_PCT_DRIFT_STOP_LOSS`
