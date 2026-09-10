@@ -7,6 +7,7 @@ import type { CoinTagState } from "@/lib/devBacktest/coins/tag-types";
 import slowTradingFinanceSummary from "./finance-summary";
 import slowTradingMcpBalance from "./mcp/balance";
 import slowTradingMcpHistory from "./mcp/history";
+import slowTradingMcpMonitoring from "./mcp/monitoring";
 import slowTradingStorage from "./storage";
 import {
   SLOW_TRADING_MCP_PERMISSIONS,
@@ -415,6 +416,29 @@ const toolDefinitions: SlowTradingMcpToolDefinition[] = [
     }),
   },
   {
+    name: "slow_monitoring_snapshot_read",
+    description:
+      "Read a versioned, credential-free snapshot of SLOW profile configuration, all account identities and effective strategies, withdrawal and Safe Haven schedules, and optional bounded operational logs.",
+    permission: "monitoring.read",
+    readOnlyHint: true,
+    inputSchema: jsonSchema({
+      mode: {
+        type: "string",
+        enum: ["active", "live", "sandbox"],
+        description: "Mode context. Defaults to active.",
+      },
+      include: {
+        type: "array",
+        items: { type: "string", enum: ["config", "automation", "logs"] },
+        description: "Sections to include. Defaults to config and automation.",
+      },
+      logLimit: {
+        type: "number",
+        description: "Maximum recent entries per log kind, from 1 to 100. Defaults to 20.",
+      },
+    }),
+  },
+  {
     name: "slow_balance_read",
     description:
       "Read the canonical SLOW USDT balance across all enabled exchange accounts, with an account breakdown. Returns available exchange-free balance, spendable capital, virtual reserve, Safe Haven, locked active-position margin, total asset, formulas, and a plain-language meaning for every field. totalAsset is available plus locked and is not floating equity or unrealized P&L.",
@@ -603,6 +627,18 @@ async function callMcpTool(params: {
       instanceName: getMcpAppName(),
       requestedMode: args.mode,
     });
+  }
+
+  if (params.name === "slow_monitoring_snapshot_read") {
+    assertPermission(params.auth, "monitoring.read");
+    return slowTradingMcpMonitoring.read(
+      {
+        mode: args.mode as "active" | "live" | "sandbox" | undefined,
+        include: args.include as ("config" | "automation" | "logs")[] | undefined,
+        logLimit: Number(args.logLimit) || undefined,
+      },
+      getMcpAppName(),
+    );
   }
 
   if (params.name === "slow_trade_history_read") {

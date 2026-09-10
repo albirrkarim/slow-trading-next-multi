@@ -82,6 +82,7 @@ https://fast.reinventwp.com/api/mcp
 - `coin_metadata.broadcast`
 - `balance.read`
 - `trade_history.read`
+- `monitoring.read`
 
 Write permissions are separate from read permissions so a token can be safely
 limited to read-only workflows.
@@ -137,6 +138,28 @@ TC: `PROD:MCP_FINANCE_SUMMARY`
 TC: `PROD:MULTI_ACCOUNT_COMBINED_MCP_DATA`
 
 TC: `PROD:MCP_ACCOUNT_IDENTITY_REDACTION`
+
+### Monitoring snapshot
+
+- `slow_monitoring_snapshot_read`
+
+Canonical unified contract:
+`/Users/susanto/Documents/OpenSource/trading/leaderboards-next/docs/SPECS/MCP.md`
+
+Returns schema version `1.0` with profile identity, every saved account,
+shared and per-account effective credential-free strategy configuration,
+withdrawal and Safe Haven schedules, and optional bounded error, management,
+Safe Haven, and withdrawal logs. Use `include: ["logs"]` to request logs;
+`logLimit` defaults to 20 and is capped at 100. Exchange credentials, MCP
+secret material, error details, and stack traces are never returned.
+
+TC: `PROD:MCP_MONITORING_SNAPSHOT`
+
+TC: `PROD:MCP_MONITORING_CREDENTIAL_REDACTION`
+
+TC: `PROD:MCP_MONITORING_EFFECTIVE_CONFIG`
+
+TC: `PROD:MCP_MONITORING_SECTION_FAILURE`
 
 ### Balance
 

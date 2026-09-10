@@ -173,6 +173,7 @@ export const SLOW_TRADING_MCP_PERMISSIONS = [
   "coin_metadata.broadcast",
   "balance.read",
   "trade_history.read",
+  "monitoring.read",
 ] as const;
 
 /** One permission flag available to an MCP token. */
