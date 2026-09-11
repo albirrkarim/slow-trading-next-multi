@@ -149,7 +149,6 @@ export function getEntryPreExecutionBlockReason(params: {
     slowTradingWatchReserve.volatilityPoint.isUsed({
       entrySignal: latestVolatility,
       modelMemory,
-      usedPointId: params.modeState.usedEntryVPointIds?.[symbol],
     })
   ) {
     return (
@@ -190,7 +189,6 @@ export function filterSignalsWithUnusedVolatilityPointId(
     return !slowTradingWatchReserve.volatilityPoint.isUsed({
       entrySignal: item,
       modelMemory,
-      usedPointId: modeState.usedEntryVPointIds?.[symbol],
     });
   });
 }
@@ -298,11 +296,6 @@ export async function buildSlowTradingSignals(params?: {
         );
       }
 
-      slowTradingWatchReserve.volatilityPoint.applyModeUsage({
-        modeState,
-        modelMemoryMap,
-      });
-
       for (const symbol of forcedEntrySymbols) {
         if (modelMemoryMap[symbol]) {
           modelMemoryMap[symbol].justBuy = true;
@@ -397,11 +390,6 @@ export async function buildSlowTradingSignals(params?: {
           );
         }
       }
-
-      slowTradingWatchReserve.volatilityPoint.applyModeUsage({
-        modeState,
-        modelMemoryMap,
-      });
 
       const volatilityPointsMap: Record<string, VolatilityPoint[]> = {};
       for (const symbol of Object.keys(modelMemoryMap)) {

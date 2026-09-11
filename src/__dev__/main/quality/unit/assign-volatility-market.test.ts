@@ -1,7 +1,4 @@
-import {
-  assignVolatility,
-  stripVolatilityPointUsage,
-} from "@/components/api/production/utils";
+import { assignVolatility } from "@/components/api/production/utils";
 import { TradingMode } from "@/lib/exchange";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -58,18 +55,6 @@ describe("production volatility market", () => {
         tradePair: "AKT_USDT",
       }),
     );
-  });
-
-  it("does not persist account-owned vPoint consumption in shared market memory", () => {
-    const memory = stripVolatilityPointUsage({
-      symbol: "AKT",
-      lastVolatility: [
-        { id: "used-point", l: "T", lvl: 3, p: 1, t: 1, used: true },
-      ],
-    } as any);
-
-    // PROD:MULTI_ACCOUNT_ENTRY_VPOINT_ISOLATION
-    expect(memory.lastVolatility[0]).not.toHaveProperty("used");
   });
 
   it("persists completed symbols before a later symbol fails", async () => {

@@ -17,19 +17,6 @@ function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-/** Removes account-owned entry consumption from public volatility memory. */
-export function stripVolatilityPointUsage(
-  memory: PredictionEngineMemory,
-): PredictionEngineMemory {
-  return {
-    ...cloneJson(memory),
-    lastVolatility: (memory.lastVolatility ?? []).map((point) => {
-      const { used: _used, ...publicPoint } = point;
-      return publicPoint;
-    }),
-  };
-}
-
 function getVolatilityFile(exchangeType: ExchangeType, symbol: string) {
   return `${FILES.slow.volatility(exchangeType)}/${symbol}.json`;
 }
@@ -40,15 +27,12 @@ export async function persistVolatilityMemory(params: {
   memory: PredictionEngineMemory;
   symbol: string;
 }): Promise<PredictionEngineMemory> {
-  const publicRuntimeMemory = stripVolatilityPointUsage(params.memory);
   return slowTradingJsonFile.update.atomic<PredictionEngineMemory>(
     getVolatilityFile(params.exchangeType, params.symbol),
     (current) =>
       mergeVolatilityMemoryById(
-        current
-          ? stripVolatilityPointUsage(current as PredictionEngineMemory)
-          : undefined,
-        publicRuntimeMemory,
+        current as PredictionEngineMemory | undefined,
+        params.memory,
       ),
   );
 }
@@ -71,14 +55,13 @@ async function refreshSharedVolatility(params: {
   return slowTradingPublicMarketCache.operation.singleFlight(key, async () => {
     const file = getVolatilityFile(params.exchangeType, params.symbol);
     const fileExists = await fs.exists(file);
-    const persistedMemory = fileExists
+    const memory = fileExists
       ? ((await fs.readJSON(file)) as PredictionEngineMemory)
       : {
           symbol: params.symbol,
           lastVolatility: [],
         };
-    const memory = stripVolatilityPointUsage(persistedMemory);
-    const beforeRefresh = fileExists ? JSON.stringify(persistedMemory) : null;
+    const beforeRefresh = fileExists ? JSON.stringify(memory) : null;
 
     await predictionEngine({
       tradePair: `${params.symbol}_USDT`,

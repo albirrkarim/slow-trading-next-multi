@@ -11,7 +11,6 @@ import type {
   PositionReserveStep,
 } from "@/lib/trading/models";
 import adaptiveAveraging from "@/lib/trading/adaptive-averaging";
-import type { SlowTradingModeState } from "./types";
 
 /** One step in the SLOW averaging reserve ladder. */
 export type WatchReserveStep = PositionReserveStep;
@@ -325,13 +324,8 @@ export function isEntrySignalVolatilityPointUsed(params: {
   entrySignal: Pick<VolatilityPoint, "id" | "symbol">;
   modelMemory?: VolatilityPointOwner;
   volatilityPoints?: VolatilityPoint[];
-  usedPointId?: string;
 }): boolean {
   // BOTH:ENTRY_ONLY_IN_UNIQUE_VOLATILITY_POINT_ID
-  const entryId = String(params.entrySignal.id || "").trim();
-  if (entryId && entryId === String(params.usedPointId || "").trim()) {
-    return true;
-  }
   return findEntrySignalVolatilityPoint(params)?.used === true;
 }
 
@@ -401,69 +395,6 @@ export function markEntrySignalVolatilityPointUsed(params: {
   }
 
   point.used = true;
-  return true;
-}
-
-/** Applies one account-mode's consumed entry points to shared market memory. */
-export function applyModeEntryVolatilityPointUsage(params: {
-  modeState: SlowTradingModeState;
-  modelMemoryMap: Record<string, VolatilityPointOwner>;
-}): void {
-  const usedIds = { ...(params.modeState.usedEntryVPointIds ?? {}) };
-
-  for (const tradeSetting of params.modeState.tradeSettings) {
-    const symbol = String(tradeSetting.symbol || "").trim().toUpperCase();
-    if (!symbol || usedIds[symbol]) continue;
-
-    // Production derives migration state only from active positions. Closed
-    // positions are owned by the history files, not the deprecated positionsSell
-    // compatibility field.
-    const positions = [...(tradeSetting.model_memory.positions ?? [])];
-    const latestPosition = positions.reduce<Position | undefined>(
-      (latest, position) =>
-        !latest || (position.opened?.t ?? 0) > (latest.opened?.t ?? 0)
-          ? position
-          : latest,
-      undefined,
-    );
-    const pointId = String(latestPosition?.opened?.vPoint?.id || "").trim();
-    if (pointId) usedIds[symbol] = pointId;
-  }
-
-  params.modeState.usedEntryVPointIds = usedIds;
-  for (const [rawSymbol, modelMemory] of Object.entries(
-    params.modelMemoryMap,
-  )) {
-    const symbol = rawSymbol.trim().toUpperCase();
-    const usedPointId = usedIds[symbol];
-    for (const point of modelMemory.volatility?.lastVolatility ?? []) {
-      if (usedPointId && point.id === usedPointId) {
-        point.used = true;
-      } else {
-        delete point.used;
-      }
-    }
-  }
-}
-
-/** Records a successful entry consumption in one account-mode only. */
-export function markModeEntryVolatilityPointUsed(params: {
-  entrySignal: Pick<VolatilityPoint, "id" | "symbol">;
-  modeState: SlowTradingModeState;
-  modelMemory?: VolatilityPointOwner;
-}): boolean {
-  const symbol = String(params.entrySignal.symbol || "").trim().toUpperCase();
-  const pointId = String(params.entrySignal.id || "").trim();
-  if (!symbol || !pointId) return false;
-
-  params.modeState.usedEntryVPointIds = {
-    ...(params.modeState.usedEntryVPointIds ?? {}),
-    [symbol]: pointId,
-  };
-  markEntrySignalVolatilityPointUsed({
-    entrySignal: params.entrySignal,
-    modelMemory: params.modelMemory,
-  });
   return true;
 }
 
@@ -1244,10 +1175,8 @@ const slowTradingWatchReserve = {
     getSpendableQuoteAssetValue,
   },
   volatilityPoint: {
-    applyModeUsage: applyModeEntryVolatilityPointUsage,
     isActionableAveragingLevel: isActionableAveragingVolatilityLevel,
     isUsed: isEntrySignalVolatilityPointUsed,
-    markModeUsed: markModeEntryVolatilityPointUsed,
     markUsed: markEntrySignalVolatilityPointUsed,
   },
   averaging: {
