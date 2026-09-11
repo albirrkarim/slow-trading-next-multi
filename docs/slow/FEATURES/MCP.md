@@ -122,6 +122,18 @@ account slug. The response identifies included accounts using only `slug`,
 `name`, and `type`. Credentials, trading configuration, sandbox configuration,
 and timestamps are never included. Disabled accounts are excluded.
 
+Canonical pagination contract:
+`/Users/susanto/Documents/OpenSource/trading/leaderboards-next/docs/SPECS/MCP.md`
+
+`slow_trade_history_read` returns globally sorted newest-first pages of up to
+500 closed rows. When `hasMore` is true, pass `nextCursor` unchanged as `cursor`
+on the next call until `nextCursor` is null. The opaque cursor is bound to the
+resolved mode and normalized symbol filter, remains stable when newer trades
+are appended, and rejects malformed or filter-mismatched reuse. Set
+`includeOpenPositions: false` while exporting all closed pages.
+
+TC: `PROD:MCP_TRADE_HISTORY_PAGINATION`
+
 `slow_finance_summary` accepts an inclusive UTC `start`/`end` range of at most
 731 days and defaults to live mode. It returns realized net P&L, winning and
 losing trade totals, known persisted fees, closed-trade coverage, and daily

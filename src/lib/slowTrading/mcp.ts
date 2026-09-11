@@ -7,6 +7,7 @@ import type { CoinTagState } from "@/lib/devBacktest/coins/tag-types";
 import slowTradingFinanceSummary from "./finance-summary";
 import slowTradingMcpBalance from "./mcp/balance";
 import slowTradingMcpHistory from "./mcp/history";
+import slowTradingTradeHistoryPagination from "./mcp/history-pagination";
 import slowTradingMcpMonitoring from "./mcp/monitoring";
 import slowTradingStorage from "./storage";
 import {
@@ -498,6 +499,12 @@ const toolDefinitions: SlowTradingMcpToolDefinition[] = [
         type: "number",
         description: "Maximum closed history rows to return. Defaults to 50.",
       },
+      cursor: {
+        type: "string",
+        maxLength: 2048,
+        description:
+          "Opaque cursor from the previous page. It is bound to the resolved mode and symbol filter.",
+      },
       includeOpenPositions: {
         type: "boolean",
         description: "Whether to include open positions. Defaults to true.",
@@ -652,12 +659,21 @@ async function callMcpTool(params: {
       requestedMode: args.mode,
       symbol: String(args.symbol ?? ""),
     });
+    const page = slowTradingTradeHistoryPagination.paginate({
+      cursor: args.cursor,
+      limit,
+      mode: combined.mode,
+      positions: combined.closed,
+      symbol: String(args.symbol ?? ""),
+    });
 
     return cloneJson({
       accounts: combined.accounts,
       activeMode: combined.activeMode,
       mode: combined.mode,
-      history: combined.closed.slice(-limit).reverse(),
+      history: page.items,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
       openPositions: combined.open,
       totalClosed: combined.closed.length,
     });
