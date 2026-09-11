@@ -1,4 +1,7 @@
-import { assignVolatility } from "@/components/api/production/utils";
+import {
+  assignVolatility,
+  mergeVolatilityMemoryById,
+} from "@/components/api/production/utils";
 import { TradingMode } from "@/lib/exchange";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -118,5 +121,46 @@ describe("production volatility market", () => {
     finishPrediction?.();
     await Promise.all([first, second]);
     expect(mocks.updateAtomic).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves account-scoped usage markers when merging volatility points", () => {
+    const merged = mergeVolatilityMemoryById(
+      {
+        symbol: "AKT",
+        lastVolatility: [
+          {
+            id: "akt-point",
+            l: "T",
+            lvl: 3,
+            p: 1,
+            pct: 3,
+            symbol: "AKT",
+            t: 1,
+            vb: 1,
+            vq: 1,
+            ["usedByaccount-1"]: true,
+          } as any,
+        ],
+      },
+      {
+        symbol: "AKT",
+        lastVolatility: [
+          {
+            id: "akt-point",
+            l: "T",
+            lvl: 3,
+            p: 1,
+            pct: 3,
+            symbol: "AKT",
+            t: 1,
+            vb: 1,
+            vq: 1,
+          },
+        ],
+      },
+    );
+
+    // PROD:MULTI_ACCOUNT_ENTRY_VPOINT_USAGE
+    expect((merged.lastVolatility[0] as any)["usedByaccount-1"]).toBe(true);
   });
 });

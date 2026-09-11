@@ -298,7 +298,9 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
         reports.push(report);
 
         if (report.tradingDetail?.action === "BUY") {
-          slowTradingWatchReserve.volatilityPoint.markUsed({
+          // PROD:MULTI_ACCOUNT_ENTRY_VPOINT_USAGE
+          slowTradingWatchReserve.volatilityPoint.markAccountUsed({
+            accountSlug: storage.account.slug,
             entrySignal,
             modelMemory: entryModelMemory,
           });

@@ -446,6 +446,68 @@ describe("slow specs entry", () => {
     expect(filtered.map((item) => item.id)).toEqual(["entry-2"]);
   });
 
+  it("consumes one volatility point once per account across live and sandbox", () => {
+    const point = createEntryRecommendation({ id: "shared-entry-1" });
+    const sharedMemory = {
+      symbol: "SUI",
+      lastVolatility: [point],
+    } as any;
+    const liveMemory = { volatility: sharedMemory } as TradingModelMemory;
+    const sandboxMemory = { volatility: sharedMemory } as TradingModelMemory;
+    point.used = true;
+
+    // PROD:MULTI_ACCOUNT_ENTRY_VPOINT_USAGE
+    expect(
+      slowTrading.watchReserve.volatilityPoint.isUsed({
+        accountSlug: "account-1",
+        entrySignal: point,
+        modelMemory: liveMemory,
+      }),
+    ).toBe(false);
+    expect(
+      slowTrading.watchReserve.volatilityPoint.markAccountUsed({
+        accountSlug: "account-1",
+        entrySignal: point,
+        modelMemory: liveMemory,
+      }),
+    ).toBe(true);
+    expect((point as any)["usedByaccount-1"]).toBe(true);
+    expect(
+      slowTrading.watchReserve.volatilityPoint.isUsed({
+        accountSlug: "account-1",
+        entrySignal: point,
+        modelMemory: sandboxMemory,
+      }),
+    ).toBe(true);
+    expect(
+      slowTrading.watchReserve.volatilityPoint.isUsed({
+        accountSlug: "account-2",
+        entrySignal: point,
+        modelMemory: sandboxMemory,
+      }),
+    ).toBe(false);
+
+    slowTrading.watchReserve.volatilityPoint.markAccountUsed({
+      accountSlug: "account-2",
+      entrySignal: point,
+      modelMemory: sandboxMemory,
+    });
+    expect((point as any)["usedByaccount-2"]).toBe(true);
+  });
+
+  it("resets legacy and account-scoped volatility usage markers", () => {
+    const point = createEntryRecommendation({ id: "reset-entry" }) as any;
+    point.used = true;
+    point["usedByaccount-1"] = true;
+    point["usedByaccount-2"] = true;
+
+    slowTrading.watchReserve.volatilityPoint.resetUsage(point);
+
+    expect(point.used).toBeUndefined();
+    expect(point["usedByaccount-1"]).toBeUndefined();
+    expect(point["usedByaccount-2"]).toBeUndefined();
+  });
+
   it("filters entry signals using the configured minimum actionable level", () => {
     const signals = [
       createEntryRecommendation({ id: "entry-neg-1", lvl: -1 }),

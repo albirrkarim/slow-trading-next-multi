@@ -277,6 +277,7 @@ async function executeSlowTradingAccountCycle(
         executionModeState,
         entrySignals,
         modelMemoryMap,
+        storage.account.slug,
       );
 
       const volatilityPointsMap =

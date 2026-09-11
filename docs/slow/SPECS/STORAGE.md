@@ -197,6 +197,10 @@ one in-progress calculation. This is part of the existing assignment loop and
 does not introduce a separate bootstrap queue or storage format.
 
 Account balances, positions, decisions, orders, and mode memory remain outside
-the shared volatility calculation.
+the shared volatility calculation. Production entry consumption is recorded on
+the shared per-symbol volatility point as the dynamic marker
+`vPoint["usedBy" + account.slug]`; these account markers are merged and
+persisted by point id. The legacy point-wide `used` marker remains for
+backtest compatibility and is not used by production.
 
 TC: `PROD:VOLATILITY_INCREMENTAL_PERSISTENCE`

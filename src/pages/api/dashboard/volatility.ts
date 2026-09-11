@@ -252,11 +252,16 @@ async function keepTheVolatilityUpdated(
         tradeLog.debug("Remove used vpoint ", symbol);
 
         for (const item of volatilityMap[symbol]) {
-          delete item.used;
+          // PROD:MULTI_ACCOUNT_ENTRY_VPOINT_USAGE
+          slowTrading.watchReserve.volatilityPoint.resetUsage(item);
         }
 
+        const currentMemory = (await fs.readJSON(
+          `${FILES.slow.volatility(exchangeType)}/${symbol}.json`,
+        )) as PredictionEngineMemory;
         const vMemory: PredictionEngineMemory = {
-          symbol,
+          ...currentMemory,
+          symbol: currentMemory.symbol ?? symbol,
           lastVolatility: volatilityMap[symbol],
         };
 

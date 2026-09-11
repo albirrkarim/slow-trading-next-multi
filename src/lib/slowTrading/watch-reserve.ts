@@ -297,6 +297,15 @@ type VolatilityPointOwner = {
   };
 };
 
+/**
+ * Builds the persisted property name used to track production entry usage for
+ * one exchange account. Account markers live on the shared volatility point
+ * so live and sandbox executions for that account observe the same usage.
+ */
+export function getEntryVolatilityPointUsageKey(accountSlug: string): string {
+  return `usedBy${String(accountSlug || "").trim()}`;
+}
+
 function findEntrySignalVolatilityPoint(params: {
   entrySignal: Pick<VolatilityPoint, "id" | "symbol">;
   modelMemory?: VolatilityPointOwner;
@@ -321,12 +330,28 @@ function findEntrySignalVolatilityPoint(params: {
  * Checks whether the source volatility point for an entry signal is already used.
  */
 export function isEntrySignalVolatilityPointUsed(params: {
+  accountSlug?: string;
   entrySignal: Pick<VolatilityPoint, "id" | "symbol">;
   modelMemory?: VolatilityPointOwner;
   volatilityPoints?: VolatilityPoint[];
 }): boolean {
   // BOTH:ENTRY_ONLY_IN_UNIQUE_VOLATILITY_POINT_ID
-  return findEntrySignalVolatilityPoint(params)?.used === true;
+  const point = findEntrySignalVolatilityPoint(params);
+  if (!point) {
+    return false;
+  }
+
+  const accountSlug = String(params.accountSlug || "").trim();
+  if (accountSlug) {
+    return (
+      (point as VolatilityPoint & Record<string, unknown>)[
+        getEntryVolatilityPointUsageKey(accountSlug)
+      ] === true
+    );
+  }
+
+  // Backtest keeps the legacy point-wide marker for compatibility.
+  return point.used === true;
 }
 
 /**
@@ -384,6 +409,7 @@ export function hasPositionHitTargetVolatilityPoint(params: {
  * Marks an entry signal's source volatility point as used after entry succeeds.
  */
 export function markEntrySignalVolatilityPointUsed(params: {
+  accountSlug?: string;
   entrySignal: Pick<VolatilityPoint, "id" | "symbol">;
   modelMemory?: VolatilityPointOwner;
   volatilityPoints?: VolatilityPoint[];
@@ -394,8 +420,45 @@ export function markEntrySignalVolatilityPointUsed(params: {
     return false;
   }
 
+  const accountSlug = String(params.accountSlug || "").trim();
+  if (accountSlug) {
+    Object.assign(point, {
+      [getEntryVolatilityPointUsageKey(accountSlug)]: true,
+    });
+    return true;
+  }
+
+  // Backtest keeps the legacy point-wide marker for compatibility.
   point.used = true;
   return true;
+}
+
+/**
+ * Marks an entry point as consumed by one production account.
+ *
+ * The marker is intentionally account-scoped: another account may consume the
+ * same vPoint id, while the same account cannot consume it again in either
+ * live or sandbox mode.
+ */
+export function markAccountEntryVolatilityPointUsed(params: {
+  accountSlug: string;
+  entrySignal: Pick<VolatilityPoint, "id" | "symbol">;
+  modelMemory?: VolatilityPointOwner;
+  volatilityPoints?: VolatilityPoint[];
+}): boolean {
+  return markEntrySignalVolatilityPointUsed(params);
+}
+
+/** Removes legacy and account-scoped entry usage markers from one point. */
+export function resetEntryVolatilityPointUsage(
+  point: VolatilityPoint,
+): void {
+  delete point.used;
+  for (const key of Object.keys(point)) {
+    if (key.startsWith("usedBy")) {
+      delete (point as VolatilityPoint & Record<string, unknown>)[key];
+    }
+  }
 }
 
 /**
@@ -1175,9 +1238,12 @@ const slowTradingWatchReserve = {
     getSpendableQuoteAssetValue,
   },
   volatilityPoint: {
+    getUsageKey: getEntryVolatilityPointUsageKey,
     isActionableAveragingLevel: isActionableAveragingVolatilityLevel,
+    markAccountUsed: markAccountEntryVolatilityPointUsed,
     isUsed: isEntrySignalVolatilityPointUsed,
     markUsed: markEntrySignalVolatilityPointUsed,
+    resetUsage: resetEntryVolatilityPointUsage,
   },
   averaging: {
     calculateProjectedProfitPct: calculateProjectedAveragingProfitPct,

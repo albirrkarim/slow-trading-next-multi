@@ -34,12 +34,25 @@ import type {
   SlowTradingModeState,
   SlowTradingStorageData,
 } from "./types";
+import type { TradingModelMemory } from "@/lib/trading/models";
 import slowTradingWatchReserve from "./watch-reserve";
 import slowTradingDailyPnlLimit from "./daily-pnl-limit";
 import slowTradingCycleSharedMarket, {
   type SlowTradingSharedMarketSnapshot,
 } from "./cycle/shared-market";
 import binanceRequestCoordinator from "@/lib/exchange/platform/binance/request-coordinator";
+
+/** Removes the backtest-only point-wide marker before production evaluation. */
+function clearLegacyVolatilityUsage(
+  modelMemoryMap: Record<string, TradingModelMemory>,
+): void {
+  // PROD:MULTI_ACCOUNT_ENTRY_VPOINT_USAGE
+  for (const modelMemory of Object.values(modelMemoryMap)) {
+    for (const point of modelMemory.volatility?.lastVolatility ?? []) {
+      delete point.used;
+    }
+  }
+}
 
 /**
  * Remove entry signals for symbols that already have open positions.
@@ -73,6 +86,7 @@ export function filterSignalsWithoutOpenPositions(
  * Explains why a forced manual entry did not produce an executable signal.
  */
 export function getForcedEntrySkipReason(params: {
+  accountSlug?: string;
   symbol: string;
   configuredSymbols: string[];
   minActionableAbsoluteLevel?: number;
@@ -89,6 +103,7 @@ export function getForcedEntrySkipReason(params: {
  * Returns the shared pre-execution block reason used by manual and diagnostic flows.
  */
 export function getEntryPreExecutionBlockReason(params: {
+  accountSlug?: string;
   symbol: string;
   configuredSymbols: string[];
   minActionableAbsoluteLevel?: number;
@@ -147,6 +162,7 @@ export function getEntryPreExecutionBlockReason(params: {
 
   if (
     slowTradingWatchReserve.volatilityPoint.isUsed({
+      accountSlug: params.accountSlug,
       entrySignal: latestVolatility,
       modelMemory,
     })
@@ -168,6 +184,7 @@ export function filterSignalsWithUnusedVolatilityPointId(
   modeState: SlowTradingModeState,
   entrySignals: EntryRecommendation[],
   modelMemoryMap?: Record<string, any>,
+  accountSlug?: string,
 ): EntryRecommendation[] {
   return entrySignals.filter((item) => {
     const symbol = String(item.symbol || "")
@@ -187,6 +204,7 @@ export function filterSignalsWithUnusedVolatilityPointId(
       )?.model_memory;
 
     return !slowTradingWatchReserve.volatilityPoint.isUsed({
+      accountSlug,
       entrySignal: item,
       modelMemory,
     });
@@ -296,6 +314,8 @@ export async function buildSlowTradingSignals(params?: {
         );
       }
 
+      clearLegacyVolatilityUsage(modelMemoryMap);
+
       for (const symbol of forcedEntrySymbols) {
         if (modelMemoryMap[symbol]) {
           modelMemoryMap[symbol].justBuy = true;
@@ -326,6 +346,7 @@ export async function buildSlowTradingSignals(params?: {
           modeState,
           entrySignals,
           modelMemoryMap,
+          storage.account.slug,
         );
         const volatilityPointsMap = Object.fromEntries(
           Object.entries(modelMemoryMap).map(([symbol, modelMemory]) => [
@@ -446,6 +467,7 @@ export async function buildSlowTradingSignals(params?: {
           minActionableAbsoluteLevel: storage.config.minActionableAbsoluteLevel,
         }),
       );
+      clearLegacyVolatilityUsage(modelMemoryMap);
       let entrySignals = evaluation.recommendations;
       const engineDiagnostics = evaluation.diagnostics;
 
@@ -501,6 +523,7 @@ export async function buildSlowTradingSignals(params?: {
         modeState,
         entrySignals,
         modelMemoryMap,
+        storage.account.slug,
       );
 
       return {
@@ -743,6 +766,7 @@ export async function buildSlowTradingEntryDiagnostics(params?: {
       status = "blocked";
     } else {
       const preExecutionReason = getEntryPreExecutionBlockReason({
+        accountSlug: storage.account.slug,
         symbol,
         configuredSymbols: storage.config.symbols,
         minActionableAbsoluteLevel: storage.config.minActionableAbsoluteLevel,
