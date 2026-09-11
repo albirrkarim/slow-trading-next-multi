@@ -11,6 +11,7 @@ import {
   formatMarketCapUpdatedAt,
   formatVolume24h,
   getMissingVolatilitySymbols,
+  isVolatilityPointUsedByAccount,
   isLowVolume24h,
   matchesLatestVolatilitySymbolSearch,
 } from "@/components/LiveDashboard/Feature/LatestVolatilityPoints";
@@ -30,6 +31,15 @@ import {
 import { describe, expect, it } from "vitest";
 
 describe("latest volatility point volume", () => {
+  it("reads account-scoped usage markers from the latest vPoint", () => {
+    const point = { id: "point-1", usedBymain: true } as any;
+
+    // PROD:MULTI_ACCOUNT_ENTRY_VPOINT_USAGE
+    expect(isVolatilityPointUsedByAccount(point, "main")).toBe(true);
+    expect(isVolatilityPointUsedByAccount(point, "second")).toBe(false);
+    expect(isVolatilityPointUsedByAccount(point, "")).toBe(false);
+  });
+
   it("marks only finite 24h volumes below $1M as low volume", () => {
     // PROD:LATEST_VOLATILITY_VOLUME_24H
     expect(isLowVolume24h(999_999)).toBe(true);
