@@ -34,6 +34,7 @@ function createEmptyModelMemory(): TradingModelMemory {
 export function createModeState(initialBalanceUSDT = 0): SlowTradingModeState {
   return {
     tradeSettings: [],
+    usedEntryVPointIds: {},
     dynamicTradeMemory: {
       ...clone(DEFAULT_DYNAMIC_TRADING_MEMORY),
       quoteAsset: initialBalanceUSDT,
@@ -240,6 +241,15 @@ export function ensureTradeSettings(
   return {
     ...state,
     tradeSettings,
+    usedEntryVPointIds: Object.fromEntries(
+      Object.entries(state.usedEntryVPointIds ?? {}).flatMap(
+        ([rawSymbol, rawPointId]) => {
+          const symbol = normalizeSymbol(rawSymbol);
+          const pointId = String(rawPointId || "").trim();
+          return symbol && pointId ? [[symbol, pointId]] : [];
+        },
+      ),
+    ),
     dynamicTradeMemory: {
       ...clone(DEFAULT_DYNAMIC_TRADING_MEMORY),
       ...clone(state.dynamicTradeMemory ?? DEFAULT_DYNAMIC_TRADING_MEMORY),

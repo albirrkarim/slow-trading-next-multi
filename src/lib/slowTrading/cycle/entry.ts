@@ -298,8 +298,9 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
         reports.push(report);
 
         if (report.tradingDetail?.action === "BUY") {
-          slowTradingWatchReserve.volatilityPoint.markUsed({
+          slowTradingWatchReserve.volatilityPoint.markModeUsed({
             entrySignal,
+            modeState,
             modelMemory: entryModelMemory,
           });
 

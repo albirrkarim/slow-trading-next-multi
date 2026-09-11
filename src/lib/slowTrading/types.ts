@@ -577,6 +577,8 @@ export interface SlowTradingModeState {
   tradeSettings: TradeSettings[];
   /** Shared dynamic trading memory for this mode. */
   dynamicTradeMemory: DynamicTradeMemory;
+  /** Latest successfully consumed entry vPoint id for each symbol. */
+  usedEntryVPointIds?: Record<string, string>;
   /** Last notified high-volatility zone per symbol. */
   highVolatilityNotificationState?: SlowTradingHighVolatilityNotificationState;
   /** Last completed UTC day reported per notification channel. */

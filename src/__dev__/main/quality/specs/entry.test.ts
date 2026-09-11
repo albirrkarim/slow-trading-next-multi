@@ -446,6 +446,49 @@ describe("slow specs entry", () => {
     expect(filtered.map((item) => item.id)).toEqual(["entry-2"]);
   });
 
+  it("isolates consumed entry volatility points between accounts", () => {
+    const accountOne = createModeState();
+    const accountTwo = createModeState();
+    accountOne.usedEntryVPointIds = { SUI: "shared-entry" };
+    const accountOneMemory = {
+      SUI: {
+        positions: [],
+        volatility: {
+          symbol: "SUI",
+          lastVolatility: [createEntryRecommendation({ id: "shared-entry", used: true })],
+        },
+      },
+    } as any;
+    const accountTwoMemory = JSON.parse(JSON.stringify(accountOneMemory));
+
+    slowTrading.watchReserve.volatilityPoint.applyModeUsage({
+      modeState: accountOne,
+      modelMemoryMap: accountOneMemory,
+    });
+    slowTrading.watchReserve.volatilityPoint.applyModeUsage({
+      modeState: accountTwo,
+      modelMemoryMap: accountTwoMemory,
+    });
+
+    const signal = createEntryRecommendation({ id: "shared-entry" });
+    // PROD:MULTI_ACCOUNT_ENTRY_VPOINT_ISOLATION
+    expect(
+      slowTrading.signals.filterSignalsWithUnusedVolatilityPointId(
+        accountOne,
+        [signal],
+        accountOneMemory,
+      ),
+    ).toHaveLength(0);
+    expect(
+      slowTrading.signals.filterSignalsWithUnusedVolatilityPointId(
+        accountTwo,
+        [signal],
+        accountTwoMemory,
+      ),
+    ).toHaveLength(1);
+    expect(accountTwoMemory.SUI.volatility.lastVolatility[0].used).toBeUndefined();
+  });
+
   it("filters entry signals using the configured minimum actionable level", () => {
     const signals = [
       createEntryRecommendation({ id: "entry-neg-1", lvl: -1 }),

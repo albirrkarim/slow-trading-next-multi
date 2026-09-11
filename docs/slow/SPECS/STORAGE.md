@@ -199,4 +199,10 @@ does not introduce a separate bootstrap queue or storage format.
 Account balances, positions, decisions, orders, and mode memory remain outside
 the shared volatility calculation.
 
+Entry vPoint consumption is account-owned mode state (`usedEntryVPointIds`).
+The shared volatility cache stores public market calculations only; its legacy
+`used` flags are ignored and removed when the cache is refreshed or persisted.
+
+TC: `PROD:MULTI_ACCOUNT_ENTRY_VPOINT_ISOLATION`
+
 TC: `PROD:VOLATILITY_INCREMENTAL_PERSISTENCE`
