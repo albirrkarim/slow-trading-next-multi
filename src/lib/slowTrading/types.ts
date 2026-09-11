@@ -80,6 +80,38 @@ export interface SlowTradingEntryDiagnostic {
   symbol: string;
 }
 
+/** Shared runtime control that applies before any account-specific entry work. */
+export interface SlowTradingSharedEntryGuardDiagnostic {
+  code: string;
+  reason: string;
+  status: "blocked" | "ready";
+}
+
+/** Latest unresolved execution failure associated with one account cycle. */
+export interface SlowTradingAccountExecutionError {
+  createdAt: number;
+  id: string;
+  message: string;
+}
+
+/** Entry diagnostics evaluated with one enabled account's effective state. */
+export interface SlowTradingAccountEntryDiagnostics {
+  account: {
+    name: string;
+    slug: ExchangeAccountSlug;
+  };
+  diagnosticError?: string;
+  diagnostics: SlowTradingEntryDiagnostic[];
+  latestExecutionError?: SlowTradingAccountExecutionError;
+}
+
+/** Complete dashboard snapshot of shared and per-account entry decisions. */
+export interface SlowTradingEntryDiagnosticsSnapshot {
+  accounts: SlowTradingAccountEntryDiagnostics[];
+  generatedAt: number;
+  sharedGuards: SlowTradingSharedEntryGuardDiagnostic[];
+}
+
 /** Persistent SLOW log collection exposed by the dashboard API. */
 export type SlowTradingLogKind =
   | "errors"

@@ -378,7 +378,8 @@ describe("production late entry vPoint drift guard", () => {
         tradingMode: TradingMode.FUTURES,
       }),
     ).rejects.toThrow(
-      "Failed to configure futures leverage and isolated margin for SUI_USDT at 1x",
+      "Failed to configure futures leverage and isolated margin for SUI_USDT " +
+        "at 1x (account binance-1)",
     );
 
     // PROD:FUTURES_ENTRY_ACCOUNT_SETUP
@@ -410,7 +411,10 @@ describe("production late entry vPoint drift guard", () => {
         simulate: false,
         tradingMode: TradingMode.FUTURES,
       }),
-    ).rejects.toThrow("code: -2015");
+    ).rejects.toThrow(
+      "Failed to configure futures leverage for SUI_USDT at 1x " +
+        "(account binance-1): Binance API Error: Invalid API-key, IP, or permissions for action (code: -2015)",
+    );
 
     // PROD:FUTURES_ENTRY_ACCOUNT_SETUP
     expect(entryMocks.dynamicEntry).not.toHaveBeenCalled();

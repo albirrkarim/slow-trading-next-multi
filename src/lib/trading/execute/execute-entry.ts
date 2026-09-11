@@ -312,11 +312,22 @@ export async function executeEntry({
     // PROD:FUTURES_ENTRY_ACCOUNT_SETUP
     // Sandbox shares leverage math with live trading but must not mutate the exchange account.
     if (!isTest) {
-      const leverageSet = await exchange.setLeverage(tradingSymbol, leverage);
+      let leverageSet: boolean;
+      try {
+        leverageSet = await exchange.setLeverage(tradingSymbol, leverage);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Failed to configure futures leverage for ${tradingSymbol} at ${leverage}x ` +
+            `(account ${getCurrentExchangeAccountSlug()}): ${errorMessage}`,
+        );
+      }
 
       if (!leverageSet) {
         throw new Error(
-          `Failed to configure futures leverage and isolated margin for ${tradingSymbol} at ${leverage}x`,
+          `Failed to configure futures leverage and isolated margin for ${tradingSymbol} ` +
+            `at ${leverage}x (account ${getCurrentExchangeAccountSlug()})`,
         );
       }
 
