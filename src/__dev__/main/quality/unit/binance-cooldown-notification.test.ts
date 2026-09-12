@@ -53,7 +53,6 @@ describe("Binance cooldown notification", () => {
     await slowTradingNotifications.operationalError.notify({
       source: "cycle.account.1",
       error: first,
-      details: { currentTimeMs },
     });
     await slowTradingNotifications.operationalError.notify({
       source: "cycle.account.2",
@@ -70,5 +69,35 @@ describe("Binance cooldown notification", () => {
         message: expect.stringContaining("Open again: 2 Sept 2026, 20:00 WIB"),
       }),
     );
+
+    expect(
+      slowTradingNotifications.binanceCooldown.build({
+        currentTimeMs,
+        reason: "Too many requests",
+        retryAt,
+      }),
+    ).toEqual({
+      title: "[BINANCE COOLDOWN] 2 minutes · opens 2 Sept 2026, 20:00 WIB",
+      message: [
+        "Binance cooldown: 2 minutes",
+        "Open again: 2 Sept 2026, 20:00 WIB (Jakarta time)",
+        "Reason: Too many requests",
+      ].join("\n"),
+    });
+  });
+
+  it("does not notify for callers that only observe an active cooldown", async () => {
+    const error = new BinanceCooldownError({
+      reason: "Already cooling down",
+      retryAt: Date.UTC(2026, 8, 3, 13),
+    });
+
+    await slowTradingNotifications.operationalError.notify({
+      source: "cycle.account.observer",
+      error,
+    });
+
+    expect(mocks.appendError).not.toHaveBeenCalled();
+    expect(mocks.central).not.toHaveBeenCalled();
   });
 });
