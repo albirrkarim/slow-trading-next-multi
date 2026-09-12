@@ -109,6 +109,44 @@ describe("slow specs logs", () => {
     );
   });
 
+  it("uses persisted dashboard balances without logging an active Binance cooldown", async () => {
+    const binanceRequestCoordinator = (
+      await import("@/lib/exchange/platform/binance/request-coordinator")
+    ).default;
+    await expect(
+      binanceRequestCoordinator.request.run(
+        {
+          domain: "https://fapi.binance.com",
+          endpoint: "/fapi/v2/balance",
+          kind: "private",
+        },
+        async () => {
+          throw Object.assign(new Error("Too many requests"), { status: 429 });
+        },
+      ),
+    ).rejects.toMatchObject({ name: "BinanceCooldownError" });
+
+    const getBalance = vi.fn();
+    vi.doMock("@/lib/exchange", async (importOriginal) => ({
+      ...(await importOriginal<typeof ExchangeModule>()),
+      getExchange: () => ({ getBalance }),
+    }));
+
+    const storageApi = (await import("@/lib/slowTrading")).default.storage;
+    const storage = storageApi.data.createDefault();
+    storage.config.exchangeType = "binance";
+    storage.runtime.sandboxEnabled = false;
+    storage.modes.live.dynamicTradeMemory.quoteAsset = 153.44;
+
+    const dashboard = await storageApi.dashboard.buildStateRealtime(storage);
+    const logs = await storageApi.logs.load();
+
+    // PROD:BINANCE_GLOBAL_COOLDOWN
+    expect(dashboard.balances.availableQuoteAsset).toBe(153.44);
+    expect(getBalance).not.toHaveBeenCalled();
+    expect(logs.errors).toEqual([]);
+  });
+
   it("deletes records from every persistent log without removing others", async () => {
     const storage = (await import("@/lib/slowTrading")).default.storage;
     const first = await storage.logs.appendError({

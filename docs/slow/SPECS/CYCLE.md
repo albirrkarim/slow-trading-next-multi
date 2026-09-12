@@ -308,6 +308,9 @@ While the cooldown is active:
   numeric `retryAt` timestamp without starting market analysis.
 - The first rate-limit response emits the canonical cooldown error; callers
   observing the same cooldown do not create another Binance request.
+- Realtime dashboard reads keep the latest persisted live balance while the
+  cooldown is active and do not append another error-log record for each
+  account or browser refresh.
 
 TC: `PROD:BINANCE_GLOBAL_COOLDOWN`
 

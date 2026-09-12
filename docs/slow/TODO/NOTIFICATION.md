@@ -1,3 +1,3 @@
-the notification of "Daily Trade Performance"
+I need develop new kind of notificaion when the binance cooldown hapen i should be informed
 
-seems not agregated for all enabled account
+its like "binance cooldown n minutes, open again on ... jakarta time"

@@ -19,7 +19,9 @@ import type {
   SlowTradingStorageData,
 } from "../types";
 import { tradeLog } from "@/lib/trading/helper/log";
-import binanceRequestCoordinator from "@/lib/exchange/platform/binance/request-coordinator";
+import binanceRequestCoordinator, {
+  BinanceCooldownError,
+} from "@/lib/exchange/platform/binance/request-coordinator";
 import blackSwan from "@/lib/trading/black-swan";
 
 /**
@@ -102,6 +104,14 @@ async function getSlowTradingLatestPriceMap(
 async function getSlowTradingLiveQuoteBalance(
   storage: SlowTradingStorageData,
 ): Promise<number | null> {
+  if (
+    storage.config.exchangeType === "binance" &&
+    binanceRequestCoordinator.cooldown.get()
+  ) {
+    // PROD:BINANCE_GLOBAL_COOLDOWN
+    return null;
+  }
+
   return runWithSlowTradingExchangeAccount(storage, async () => {
     const exchange = getExchange(storage.config.exchangeType, {
       defaultTradingMode: storage.config.tradingMode,
@@ -115,11 +125,19 @@ async function getSlowTradingLiveQuoteBalance(
 
       return balance.quoteAsset;
     } catch (error) {
+      if (error instanceof BinanceCooldownError && !error.activated) {
+        // A concurrent Binance request activated the shared cooldown after the
+        // preflight check. Keep the persisted balance without duplicating its log.
+        // PROD:BINANCE_GLOBAL_COOLDOWN
+        return null;
+      }
+
       // PROD:ERROR_LOG
       await appendSlowTradingErrorLog({
         source: "slow-trading.dashboard.live-balance",
         error,
         details: {
+          account: storage.account.slug,
           exchangeType: storage.config.exchangeType,
           tradingMode: storage.config.tradingMode,
         },
