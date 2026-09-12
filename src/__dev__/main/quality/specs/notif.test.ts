@@ -78,8 +78,10 @@ describe("slow specs notification", () => {
       // PROD:NOTIF_DAILY_PNL_LIMIT
       'key: "NOTIF_DAILY_PNL_LIMIT"',
     ]);
-    await expectSourceContains("src/lib/slowTrading/cycle/finalize.ts", [
+    await expectSourceContains("src/lib/slowTrading/cycle/coordinator.ts", [
       "dailyPerformance.notify",
+    ]);
+    await expectSourceContains("src/lib/slowTrading/cycle/finalize.ts", [
       // PROD:BOUNDED_POST_CYCLE_ASYNC_WORK
       "PROD:BOUNDED_POST_CYCLE_ASYNC_WORK",
       "await slowTradingNotifications.openPositions",
@@ -162,11 +164,10 @@ describe("slow specs notification", () => {
       .mockResolvedValue(undefined);
 
     await slowTrading.notifications.dailyPerformance.notify({
-      account: loaded.account.slug,
+      accounts: [{ modeState, slug: loaded.account.slug }],
       currentTimeMs: Date.UTC(2026, 5, 10, 1),
       exchangeType: loaded.config.exchangeType,
       mode: "live",
-      modeState,
       notification: loaded.runtime.notification,
     });
 
@@ -188,11 +189,10 @@ describe("slow specs notification", () => {
     );
 
     await slowTrading.notifications.dailyPerformance.notify({
-      account: loaded.account.slug,
+      accounts: [{ modeState, slug: loaded.account.slug }],
       currentTimeMs: Date.UTC(2026, 5, 10, 12),
       exchangeType: loaded.config.exchangeType,
       mode: "live",
-      modeState,
       notification: loaded.runtime.notification,
     });
     expect(centralSpy).toHaveBeenCalledTimes(1);
@@ -202,6 +202,106 @@ describe("slow specs notification", () => {
     expect(
       reloaded.modes.live.dailyPerformanceNotificationState?.telegram,
     ).toBe("2026-06-09");
+  });
+
+  it("aggregates daily performance across every selected account", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const trading = (await import("@/lib/trading")).default;
+    const alphaState = slowTrading.storage.data.createDefault().modes.live;
+    const betaState = slowTrading.storage.data.createDefault().modes.live;
+    alphaState.dynamicTradeMemory.startingBalanceUSDT = 40;
+    betaState.dynamicTradeMemory.startingBalanceUSDT = 60;
+    const notification = slowTrading.storage.data.createDefault().runtime
+      .notification;
+    const reportDay = Date.UTC(2026, 5, 9, 8);
+
+    vi.spyOn(slowTrading.storage.history, "readRange").mockResolvedValue([
+      createTestPosition({
+        account: "alpha",
+        entryTime: reportDay - 60_000,
+        netPct: 1,
+        netUsdt: 7,
+        closed: {
+          feeUsdt: 0,
+          price: 1.1,
+          reason: "TAKE_PROFIT",
+          t: reportDay,
+        },
+      }),
+      createTestPosition({
+        account: "beta",
+        entryTime: reportDay,
+        netPct: -0.5,
+        netUsdt: -2,
+        closed: {
+          feeUsdt: 0,
+          price: 0.9,
+          reason: "STOP_LOSS",
+          t: reportDay + 60_000,
+        },
+      }),
+      createTestPosition({
+        account: "disabled",
+        entryTime: reportDay,
+        netPct: 9,
+        netUsdt: 90,
+        closed: {
+          feeUsdt: 0,
+          price: 2,
+          reason: "TAKE_PROFIT",
+          t: reportDay + 120_000,
+        },
+      }),
+    ]);
+    const balanceSpy = vi
+      .spyOn(slowTrading.storage.balanceSnapshots, "readCombined")
+      .mockResolvedValue([
+        {
+          day: "2026-06-08",
+          timestamp: Date.UTC(2026, 5, 8, 23, 55),
+          total: 100,
+        },
+        {
+          day: "2026-06-09",
+          timestamp: Date.UTC(2026, 5, 9, 23, 55),
+          total: 105,
+        },
+      ]);
+    const centralSpy = vi
+      .spyOn(trading.notif, "central")
+      .mockResolvedValue(undefined);
+
+    await slowTrading.notifications.dailyPerformance.notify({
+      accounts: [
+        { modeState: alphaState, slug: "alpha" },
+        { modeState: betaState, slug: "beta" },
+      ],
+      currentTimeMs: Date.UTC(2026, 5, 10, 1),
+      exchangeType: "binance",
+      mode: "live",
+      notification,
+    });
+
+    expect(balanceSpy).toHaveBeenCalledWith({
+      accounts: ["alpha", "beta"],
+      mode: "live",
+    });
+    expect(centralSpy).toHaveBeenCalledTimes(1);
+    expect(centralSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title:
+          "[DAILY] 9 Jun UTC | +$5.00 | +$7.00 -$2.00 | WR 50% (1W / 1L)",
+        message: expect.stringContaining(
+          "Accounts: alpha, beta\nTrade PnL: +$5.00\nTrade PnL %: +0.50%\nTrades: 2",
+        ),
+      }),
+    );
+    expect(alphaState.dailyPerformanceNotificationState?.telegram).toBe(
+      "2026-06-09",
+    );
+    expect(betaState.dailyPerformanceNotificationState?.telegram).toBe(
+      "2026-06-09",
+    );
   });
 
   it("notifies once per daily PnL stop breach and resets after recovery", async () => {

@@ -247,6 +247,7 @@ function formatCompactPercent(value: number): string {
 
 /** Builds the title and day-card fields for a daily performance notification. */
 export function buildSlowTradingDailyPerformanceNotification(params: {
+  accounts: readonly string[];
   exchangeType: SlowTradingStorageData["config"]["exchangeType"];
   mode: SlowTradingMode;
   report: SlowTradingDailyPerformanceReport;
@@ -266,6 +267,7 @@ export function buildSlowTradingDailyPerformanceNotification(params: {
       `UTC day: ${day}`,
       `Mode: ${params.mode}`,
       `Exchange: ${params.exchangeType}`,
+      `Accounts: ${params.accounts.join(", ")}`,
       `Trade PnL: ${formatSignedUsdt(trades.pnlUsdt)}`,
       `Trade PnL %: ${formatSignedPercent(trades.pnlPercent)}`,
       `Trades: ${trades.trades}`,
@@ -282,66 +284,103 @@ export function buildSlowTradingDailyPerformanceNotification(params: {
 
 /** Sends the previous completed UTC day's performance once per enabled channel. */
 export async function notifySlowTradingDailyPerformance(params: {
-  account: string;
+  accounts: readonly {
+    modeState: SlowTradingModeState;
+    slug: string;
+  }[];
   currentTimeMs?: number;
   exchangeType: SlowTradingStorageData["config"]["exchangeType"];
   mode: SlowTradingMode;
-  modeState: SlowTradingModeState;
   notification: DashboardNotificationConfig;
 }): Promise<boolean> {
+  if (params.accounts.length === 0) {
+    return false;
+  }
+
   const period = slowTradingDailyPerformance.report.getPreviousCompletedUtcDay(
     params.currentTimeMs,
   );
-  const notificationState =
-    params.modeState.dailyPerformanceNotificationState ?? {};
-  params.modeState.dailyPerformanceNotificationState = notificationState;
+  const notificationStates = params.accounts.map(({ modeState }) => {
+    const state = modeState.dailyPerformanceNotificationState ?? {};
+    modeState.dailyPerformanceNotificationState = state;
+    return state;
+  });
+  let stateChanged = false;
   const pendingChannels = NOTIFICATION_CHANNELS.filter(
-    (channel) =>
-      notificationState[channel] !== period.day &&
-      Boolean(
+    (channel) => {
+      const enabled = Boolean(
         getNotificationTypeConfig(
           params.notification,
           channel,
           "NOTIF_DAILY_PERFORMANCE",
         ),
-      ),
+      );
+      if (!enabled) return false;
+
+      const alreadyReported = notificationStates.some(
+        (state) => state[channel] === period.day,
+      );
+      if (alreadyReported) {
+        for (const state of notificationStates) {
+          if (state[channel] !== period.day) {
+            state[channel] = period.day;
+            stateChanged = true;
+          }
+        }
+      }
+
+      return !alreadyReported;
+    },
   );
 
   if (pendingChannels.length === 0) {
-    return false;
+    return stateChanged;
   }
 
   try {
+    const accountSlugs = Array.from(
+      new Set(params.accounts.map(({ slug }) => slug)),
+    );
+    const accountSlugSet = new Set(accountSlugs);
     const [history, balanceSnapshots] = await Promise.all([
       slowTradingStorage.history.readRange({
-        account: params.account,
         endTime: period.dayEndMs,
         mode: params.mode,
         startTime: period.dayStartMs,
       }),
-      slowTradingStorage.balanceSnapshots.read({
-        account: params.account,
+      slowTradingStorage.balanceSnapshots.readCombined({
+        accounts: accountSlugs,
         mode: params.mode,
       }),
     ]);
+    const startingBalances = params.accounts
+      .map(({ modeState }) => modeState.dynamicTradeMemory.startingBalanceUSDT)
+      .filter(
+        (balance): balance is number =>
+          typeof balance === "number" && Number.isFinite(balance),
+      );
     const report = slowTradingDailyPerformance.report.create({
       balanceSnapshots,
       currentTimeMs: params.currentTimeMs,
-      history: history.map((position) => ({
-        entryTime: position.opened.t,
-        exitTime: position.closed?.t,
-        netPnlPct: position.pnl.netPct,
-        netProfitUSDT: position.pnl.netUsdt,
-      })),
+      history: history
+        .filter((position) => accountSlugSet.has(position.account))
+        .map((position) => ({
+          entryTime: position.opened.t,
+          exitTime: position.closed?.t,
+          netPnlPct: position.pnl.netPct,
+          netProfitUSDT: position.pnl.netUsdt,
+        })),
       startingBalanceUSDT:
-        params.modeState.dynamicTradeMemory.startingBalanceUSDT,
+        startingBalances.length === params.accounts.length
+          ? startingBalances.reduce((total, balance) => total + balance, 0)
+          : undefined,
     });
     const content = buildSlowTradingDailyPerformanceNotification({
+      accounts: accountSlugs,
       exchangeType: params.exchangeType,
       mode: params.mode,
       report,
     });
-    let stateChanged = false;
 
     for (const channel of pendingChannels) {
       try {
@@ -358,7 +397,9 @@ export async function notifySlowTradingDailyPerformance(params: {
           ].join(":"),
           ...content,
         });
-        notificationState[channel] = report.day;
+        for (const state of notificationStates) {
+          state[channel] = report.day;
+        }
         stateChanged = true;
       } catch (error) {
         tradeLog.error(

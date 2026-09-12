@@ -5,8 +5,14 @@ import slowTradingPerformance, {
 } from "../performance";
 import slowTradingShared from "../shared";
 import slowTradingStorage from "../storage";
-import type { SlowTradingModeState, SlowTradingStorageData } from "../types";
-import slowTradingCycleAccounts from "./accounts";
+import type {
+  SlowTradingMode,
+  SlowTradingModeState,
+  SlowTradingStorageData,
+} from "../types";
+import slowTradingCycleAccounts, {
+  type SlowTradingCycleAccountScope,
+} from "./accounts";
 import slowTradingCyclePlanning from "./planning";
 import slowTradingCycleSharedMarket, {
   type SlowTradingSharedMarketSnapshot,
@@ -127,20 +133,23 @@ async function execute(params: {
       )
     : null;
   const results: SlowTradingCycleResult[] = [];
+  const successfulAccountSlugs = new Set<string>();
 
   // PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE
   // PROD:MULTI_ACCOUNT_SEQUENTIAL_ACCOUNT_EXECUTION
   for (const scope of scopes) {
     try {
       // PROD:MULTI_ACCOUNT_PRIVATE_STATE_ISOLATION
-      results.push(
-        await params.executeOne(scope.request, {
-          cycleStartedAt,
-          sharedMarket,
-          sharedPerformanceEntries,
-          storage: scope.storage,
-        }),
-      );
+      const result = await params.executeOne(scope.request, {
+        cycleStartedAt,
+        sharedMarket,
+        sharedPerformanceEntries,
+        storage: scope.storage,
+      });
+      results.push(result);
+      if (!result.skipped) {
+        successfulAccountSlugs.add(scope.storage.account.slug);
+      }
     } catch (error) {
       if (params.request?.account) {
         throw error;
@@ -154,6 +163,77 @@ async function execute(params: {
         source: `cycle.account.${scope.storage.account.slug}`,
         error,
       });
+    }
+  }
+
+  const reportingScopes = [...scopes];
+  if (params.request?.account) {
+    const loadedSlugs = new Set(
+      reportingScopes.map((scope) => scope.storage.account.slug),
+    );
+    for (const account of catalog.runtime.exchangeAccounts) {
+      if (!account.enabled || loadedSlugs.has(account.slug)) continue;
+      try {
+        reportingScopes.push({
+          request: { account: account.slug },
+          storage: await slowTradingStorage.data.load({
+            account: account.slug,
+            modeScope: "active",
+          }),
+        });
+      } catch (error) {
+        tradeLog.error(
+          `daily performance account load failed | account=${account.slug}`,
+          error,
+        );
+      }
+    }
+  }
+
+  const reportingGroups = new Map<
+    SlowTradingMode,
+    SlowTradingCycleAccountScope[]
+  >();
+  for (const scope of reportingScopes) {
+    if (!scope.storage.account.enabled) continue;
+    const mode = slowTradingStorage.mode.getActive(scope.storage);
+    const group = reportingGroups.get(mode) ?? [];
+    group.push(scope);
+    reportingGroups.set(mode, group);
+  }
+
+  // PROD:NOTIF_DAILY_PERFORMANCE
+  // Aggregate the completed day once per mode after all enabled accounts finish.
+  for (const [mode, group] of reportingGroups) {
+    if (
+      !group.some((scope) =>
+        successfulAccountSlugs.has(scope.storage.account.slug),
+      )
+    ) {
+      continue;
+    }
+
+    const stateChanged =
+      await slowTradingNotifications.dailyPerformance.notify({
+        accounts: group.map((scope) => ({
+          modeState: scope.storage.modes[mode],
+          slug: scope.storage.account.slug,
+        })),
+        currentTimeMs: Date.now(),
+        exchangeType: catalog.config.exchangeType,
+        mode,
+        notification: catalog.runtime.notification,
+      });
+
+    if (stateChanged) {
+      // The account states share one memory file, so persist them sequentially.
+      for (const scope of group) {
+        await slowTradingStorage.mode.saveState(
+          mode,
+          scope.storage.modes[mode],
+          { account: scope.storage.account.slug },
+        );
+      }
     }
   }
 

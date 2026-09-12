@@ -380,6 +380,17 @@ describe("slow end-to-end cycle", () => {
     ).toHaveLength(1);
     expect(alpha.modes.sandbox.dynamicTradeMemory.quoteAsset).toBe(980);
     expect(beta.modes.sandbox.dynamicTradeMemory.quoteAsset).toBe(980);
+    const dailyNotifications = notificationMocks.central.mock.calls.filter(
+      ([payload]) => payload.key === "NOTIF_DAILY_PERFORMANCE",
+    );
+    expect(dailyNotifications).toHaveLength(1);
+    expect(dailyNotifications[0]?.[0].message).toContain(
+      "Accounts: alpha, beta",
+    );
+    expect(alpha.modes.sandbox.dailyPerformanceNotificationState?.telegram).toBe(
+      beta.modes.sandbox.dailyPerformanceNotificationState?.telegram,
+    );
+    expect(alpha.modes.sandbox.dailyPerformanceNotificationState?.telegram).toBeTruthy();
   });
 
   it("classifies a persisted averaged position with shared volatility", async () => {

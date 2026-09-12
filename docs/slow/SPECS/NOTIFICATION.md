@@ -119,7 +119,10 @@ TC: `PROD:NOTIF_MANAGEMENT_ACTION`
 
 - Daily Trade Performance: Sent on the first successful SLOW cycle after a UTC
   day closes. It reports the immediately previous completed UTC day once per
-  enabled channel and mode, including days with zero closed trades. The report
+  enabled channel and mode, including days with zero closed trades. Each mode's
+  report aggregates trade history, balance snapshots, and starting balances
+  across all enabled accounts running in that mode. Disabled accounts are not
+  included. The report
   uses the same day-card metrics as Daily PnL Calendar: Trade PnL USD, summed
   Trade PnL %, trade count, wins, losses, win rate, Balance PnL USD, Balance PnL
   %, start balance, and end balance. Closed trades are assigned by `closed.t`;

@@ -208,16 +208,6 @@ async function execute(
     }),
   );
 
-  // Report the previous fully closed UTC day after its trades are archived.
-  await slowTradingNotifications.dailyPerformance.notify({
-    account: storage.account.slug,
-    currentTimeMs: Date.now(),
-    exchangeType,
-    mode: activeMode,
-    modeState,
-    notification: storage.runtime.notification,
-  });
-
   slowTradingStageRun.recordCompleted({
     cycleStartedAt,
     modeState,
