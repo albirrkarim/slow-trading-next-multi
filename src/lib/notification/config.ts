@@ -24,6 +24,7 @@ export const SLOW_NOTIFICATION_KEYS = [
   "NOTIF_DAILY_PNL_LIMIT",
   "NOTIF_DAILY_PERFORMANCE",
   "NOTIF_IP_CHANGED",
+  "NOTIF_BINANCE_COOLDOWN",
   "NOTIF_ERROR",
 ] as const;
 
@@ -111,6 +112,11 @@ export const SLOW_NOTIFICATION_TYPE_INFO: Record<
     label: "Instance IP Changed",
     description:
       "Sent at server startup when the public IP reported by ipify differs from the previously stored IP.",
+  },
+  NOTIF_BINANCE_COOLDOWN: {
+    label: "Binance Cooldown",
+    description:
+      "Sent when Binance activates a REST cooldown, including the duration and Jakarta reopen time.",
   },
   NOTIF_ERROR: {
     label: "Error",

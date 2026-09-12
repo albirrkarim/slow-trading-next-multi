@@ -156,6 +156,13 @@ TC: `PROD:NOTIF_ERROR`
 
 TC: `PROD:NOTIF_IP_CHANGED`
 
+- Binance Cooldown: Sent once when the shared Binance REST request coordinator
+  activates a cooldown. The notification reports the remaining cooldown in
+  minutes and the reopen time formatted in Jakarta time (`WIB`). A repeated
+  caller observing the same cooldown does not send another notification.
+
+TC: `PROD:NOTIF_BINANCE_COOLDOWN`
+
 Email notification subjects are prefixed with `[process.env.APP_NAME]` when
 `APP_NAME` is set, so multi-instance deployments can identify which server sent
 the message. The notification settings UI also provides one-off Telegram and

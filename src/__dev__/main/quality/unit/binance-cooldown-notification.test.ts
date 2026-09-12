@@ -30,14 +30,16 @@ vi.mock("@/lib/slowTrading/storage", () => ({
 import slowTradingNotifications from "@/lib/slowTrading/notifications";
 import { BinanceCooldownError } from "@/lib/exchange/platform/binance/request-coordinator";
 
-describe("Binance cooldown operational notification", () => {
+describe("Binance cooldown notification", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("records and emits one error for all callers in the same cooldown", async () => {
+  it("records and emits one dedicated notification for all callers in the same cooldown", async () => {
+    const currentTimeMs = Date.UTC(2026, 8, 2, 12, 58);
     const retryAt = Date.UTC(2026, 8, 2, 13);
     const first = new BinanceCooldownError({
+      activated: true,
       code: -1003,
       reason: "IP banned",
       retryAt,
@@ -51,6 +53,7 @@ describe("Binance cooldown operational notification", () => {
     await slowTradingNotifications.operationalError.notify({
       source: "cycle.account.1",
       error: first,
+      details: { currentTimeMs },
     });
     await slowTradingNotifications.operationalError.notify({
       source: "cycle.account.2",
@@ -60,5 +63,12 @@ describe("Binance cooldown operational notification", () => {
     // PROD:BINANCE_GLOBAL_COOLDOWN
     expect(mocks.appendError).toHaveBeenCalledTimes(1);
     expect(mocks.central).toHaveBeenCalledTimes(1);
+    expect(mocks.central).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "NOTIF_BINANCE_COOLDOWN",
+        title: expect.stringContaining("[BINANCE COOLDOWN]"),
+        message: expect.stringContaining("Open again: 2 Sept 2026, 20:00 WIB"),
+      }),
+    );
   });
 });

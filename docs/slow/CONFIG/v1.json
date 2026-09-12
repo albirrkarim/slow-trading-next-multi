@@ -104,6 +104,9 @@
           "params": {
             "hour": 1
           }
+        },
+        {
+          "id": "NOTIF_BINANCE_COOLDOWN"
         }
       ]
     },
@@ -134,6 +137,9 @@
           "params": {
             "hour": 1
           }
+        },
+        {
+          "id": "NOTIF_BINANCE_COOLDOWN"
         }
       ]
     }

@@ -28,6 +28,7 @@ import type { DailyPnlLimitEvaluation } from "./daily-pnl-limit";
 import { BinanceCooldownError } from "@/lib/exchange/platform/binance/request-coordinator";
 
 const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 const NOTIFICATION_CHANNELS: NotificationChannel[] = ["telegram", "email"];
 let lastNotifiedBinanceCooldownRetryAt = 0;
 
@@ -48,6 +49,58 @@ export interface SlowTradingManagementAction {
   source: string;
   symbol: string;
   t?: number;
+}
+
+/** Builds a Binance cooldown message with the reopen time in Jakarta time. */
+export function buildSlowTradingBinanceCooldownNotification(params: {
+  currentTimeMs?: number;
+  reason: string;
+  retryAt: number;
+}): { message: string; title: string } {
+  const currentTimeMs = params.currentTimeMs ?? Date.now();
+  const remainingMinutes = Math.max(
+    1,
+    Math.ceil(Math.max(0, params.retryAt - currentTimeMs) / MINUTE_MS),
+  );
+  const minuteLabel = remainingMinutes === 1 ? "minute" : "minutes";
+  const reopenTime = `${new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "short",
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+  }).format(new Date(params.retryAt))} WIB`;
+
+  return {
+    title: `[BINANCE COOLDOWN] ${remainingMinutes} ${minuteLabel} · opens ${reopenTime}`,
+    message: [
+      `Binance cooldown: ${remainingMinutes} ${minuteLabel}`,
+      `Open again: ${reopenTime} (Jakarta time)`,
+      `Reason: ${params.reason}`,
+    ].join("\n"),
+  };
+}
+
+/** Sends one dedicated notification for each newly activated Binance cooldown. */
+export async function notifySlowTradingBinanceCooldown(params: {
+  currentTimeMs?: number;
+  error: BinanceCooldownError;
+}) {
+  const content = buildSlowTradingBinanceCooldownNotification({
+    currentTimeMs: params.currentTimeMs,
+    reason: params.error.message,
+    retryAt: params.error.retryAt,
+  });
+
+  await trading.notif.central({
+    dashboard: "SLOW",
+    // PROD:NOTIF_BINANCE_COOLDOWN
+    key: "NOTIF_BINANCE_COOLDOWN",
+    dedupeKey: `slow-binance-cooldown:${params.error.retryAt}`,
+    ...content,
+  });
 }
 
 /** Builds the notification emitted when the current daily PnL entry stop is reached. */
@@ -565,7 +618,10 @@ export async function notifySlowTradingOperationalError(params: {
   details?: Record<string, unknown>;
 }) {
   if (params.error instanceof BinanceCooldownError) {
-    if (params.error.retryAt === lastNotifiedBinanceCooldownRetryAt) {
+    if (
+      !params.error.activated ||
+      params.error.retryAt === lastNotifiedBinanceCooldownRetryAt
+    ) {
       return;
     }
     // PROD:BINANCE_GLOBAL_COOLDOWN
@@ -587,6 +643,18 @@ export async function notifySlowTradingOperationalError(params: {
         logError,
       );
     });
+
+  if (params.error instanceof BinanceCooldownError) {
+    try {
+      await notifySlowTradingBinanceCooldown({ error: params.error });
+    } catch (notificationError) {
+      tradeLog.error(
+        "[slow-trading] failed to send Binance cooldown notification",
+        notificationError,
+      );
+    }
+    return;
+  }
 
   try {
     await trading.notif.central({
@@ -956,6 +1024,10 @@ const slowTradingNotifications = {
   operationalError: {
     notify: notifySlowTradingOperationalError,
   },
+  binanceCooldown: {
+    build: buildSlowTradingBinanceCooldownNotification,
+    notify: notifySlowTradingBinanceCooldown,
+  },
   stalePosition: {
     notify: notifyStalePositions,
   },
@@ -964,6 +1036,7 @@ const slowTradingNotifications = {
   notifySlowTradingManagementActions,
   notifyOpenPositionMonitors,
   notifySlowTradingOperationalError,
+  notifySlowTradingBinanceCooldown,
   notifyStalePositions,
 } as const;
 

@@ -210,6 +210,15 @@ function get(
           "Last checked: 2026-08-10T10:15:00.000Z",
         ].join("\n"),
       };
+    case "NOTIF_BINANCE_COOLDOWN":
+      return {
+        title: "[BINANCE COOLDOWN] 2 minutes · opens 10 Aug 2026, 17:17 WIB",
+        message: [
+          "Binance cooldown: 2 minutes",
+          "Open again: 10 Aug 2026, 17:17 WIB (Jakarta time)",
+          "Reason: Too many requests",
+        ].join("\n"),
+      };
     case "NOTIF_ERROR":
       return {
         title: "[ERROR] management-cycle",

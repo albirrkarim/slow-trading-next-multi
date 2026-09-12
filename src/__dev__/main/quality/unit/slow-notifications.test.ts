@@ -57,6 +57,12 @@ describe("slow trading notifications", () => {
       id: "NOTIF_MANAGEMENT_ACTION",
       params: { add: true, remove: true },
     });
+    expect(config.telegram.types).toContainEqual({
+      id: "NOTIF_BINANCE_COOLDOWN",
+    });
+    expect(config.email.types).toContainEqual({
+      id: "NOTIF_BINANCE_COOLDOWN",
+    });
     expect(SLOW_NOTIFICATION_TYPE_INFO.NOTIF_HIGH_VOLATILITY.label).toBe(
       "High Volatility",
     );

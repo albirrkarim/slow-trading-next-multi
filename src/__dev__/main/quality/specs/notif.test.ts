@@ -77,6 +77,8 @@ describe("slow specs notification", () => {
       'key: "NOTIF_DAILY_PERFORMANCE"',
       // PROD:NOTIF_DAILY_PNL_LIMIT
       'key: "NOTIF_DAILY_PNL_LIMIT"',
+      // PROD:NOTIF_BINANCE_COOLDOWN
+      'key: "NOTIF_BINANCE_COOLDOWN"',
     ]);
     await expectSourceContains("src/lib/slowTrading/cycle/coordinator.ts", [
       "dailyPerformance.notify",
