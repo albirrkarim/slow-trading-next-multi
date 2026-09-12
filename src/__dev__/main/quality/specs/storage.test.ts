@@ -36,6 +36,8 @@ describe("slow specs storage", () => {
 
     // PROD:STORAGE_SOURCE_OF_TRUTH
     expect(FILES.slow.root).toBe(path.join(tmpRoot!, "slow"));
+    // PROD:INSTANCE_IP_STORAGE
+    expect(FILES.slow.ip).toBe(path.join(tmpRoot!, "slow/ip.json"));
     expect(await fs.pathExists(path.join(tmpRoot!, "slow/config.json"))).toBe(true);
     expect(await fs.pathExists(path.join(tmpRoot!, "slow/memory.json"))).toBe(true);
     expect(loaded.runtime.sandboxEnabled).toBe(true);

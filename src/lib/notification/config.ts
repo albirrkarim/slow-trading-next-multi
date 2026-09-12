@@ -23,6 +23,7 @@ export const SLOW_NOTIFICATION_KEYS = [
   "NOTIF_BLACK_SWAN_ACTION",
   "NOTIF_DAILY_PNL_LIMIT",
   "NOTIF_DAILY_PERFORMANCE",
+  "NOTIF_IP_CHANGED",
   "NOTIF_ERROR",
 ] as const;
 
@@ -105,6 +106,11 @@ export const SLOW_NOTIFICATION_TYPE_INFO: Record<
     label: "Daily Trade Performance",
     description:
       "Sent once after each UTC day closes with the previous day's trade and balance performance.",
+  },
+  NOTIF_IP_CHANGED: {
+    label: "Instance IP Changed",
+    description:
+      "Sent at server startup when the public IP reported by ipify differs from the previously stored IP.",
   },
   NOTIF_ERROR: {
     label: "Error",

@@ -3,6 +3,7 @@ import slowTrading, {
   type SlowTradingStorageUpdateInput,
 } from "@/lib/slowTrading";
 import { tradeLog } from "@/lib/trading/helper/log";
+import instanceIp from "@/lib/runtime/instance-ip";
 
 async function loadDashboardState() {
   const catalog = await slowTrading.storage.data.load({ modeScope: "active" });
@@ -23,7 +24,10 @@ async function loadDashboardState() {
   }
   const combined =
     await slowTrading.storage.dashboard.buildCombinedStateRealtime(storages);
-  return combined;
+  return {
+    ...combined,
+    instanceIp: (await instanceIp.storage.read()) ?? undefined,
+  };
 }
 
 export default async function handler(

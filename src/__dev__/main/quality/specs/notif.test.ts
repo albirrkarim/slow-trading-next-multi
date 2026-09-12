@@ -106,6 +106,20 @@ describe("slow specs notification", () => {
     ]);
   });
 
+  it("checks and notifies public IP changes only from startup instrumentation", async () => {
+    await expectSourceContains("src/instrumentation.ts", [
+      // PROD:INSTANCE_IP_CHECK_ON_START
+      "PROD:INSTANCE_IP_CHECK_ON_START",
+      'import("@/lib/runtime/instance-ip")',
+      ".default.lifecycle.check()",
+    ]);
+    await expectSourceContains("src/lib/runtime/instance-ip.ts", [
+      // PROD:NOTIF_IP_CHANGED
+      'key: "NOTIF_IP_CHANGED"',
+      "https://api.ipify.org",
+    ]);
+  });
+
   it("keeps BTC helper high-volatility notification state between cycles", async () => {
     const slowTradingStorage = (await import("@/lib/slowTrading")).default
       .storage;

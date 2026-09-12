@@ -12,6 +12,16 @@ Everything in the UI of Slow Trading must be loaded from files under:
 
 This folder is the source-of-truth root for slow trading. The data may be split into multiple files such as config, memory, history, volatility cache, and priceNorm cache.
 
+The latest successful public instance-IP check is stored compactly in
+`slow/ip.json` as `{ "ip": string, "t": number }`. The navbar reads this
+snapshot, shows `t` as the last-checked time, and copies the IP to the clipboard
+when its chip is activated. The file is updated only by the startup check, not
+by trading cycles.
+
+TC: `PROD:INSTANCE_IP_STORAGE`
+
+TC: `PROD:NAVBAR_INSTANCE_IP_COPY`
+
 ## C.2 History Independence
 
 Closed trade history is loaded from every persisted symbol file for the

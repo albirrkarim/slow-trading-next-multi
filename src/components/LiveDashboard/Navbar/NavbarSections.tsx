@@ -30,6 +30,7 @@ import {
   getPnlPercentBg,
 } from "./helpers";
 import NavbarBalanceSummary from "./NavbarBalanceSummary";
+import NavbarInstanceIp from "./NavbarInstanceIp";
 import NavbarStageRuns from "./NavbarStageRuns";
 import NavbarVolatilityThreshold from "./NavbarVolatilityThreshold";
 import SettingsDialog from "./SettingsDialog";
@@ -140,6 +141,8 @@ export function NavbarIdentitySection({
       }}
     >
       <SidebarButton />
+
+      <NavbarInstanceIp snapshot={dashboardState?.instanceIp} />
 
       {dashboardState && configDraft ? (
         <Box

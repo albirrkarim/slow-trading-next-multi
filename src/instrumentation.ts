@@ -14,5 +14,7 @@ export async function register() {
       import("@/lib/runtime/resource-monitor"),
     ]);
   await getSlowTradingRunner();
+  // PROD:INSTANCE_IP_CHECK_ON_START
+  await (await import("@/lib/runtime/instance-ip")).default.lifecycle.check();
   resourceMonitor.lifecycle.start();
 }

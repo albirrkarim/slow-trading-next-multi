@@ -655,6 +655,11 @@ export interface SlowTradingDashboardAccountSummary {
 
 /** Dashboard response shape for the active SLOW mode. */
 export interface SlowTradingDashboardState {
+  /** Latest successful public instance-IP check, when available. */
+  instanceIp?: {
+    ip: string;
+    t: number;
+  };
   /** Null for the default combined dashboard, otherwise the filtered account. */
   accountFilter: ExchangeAccountSlug | null;
   /** Per-account balances retained even when the default view is combined. */

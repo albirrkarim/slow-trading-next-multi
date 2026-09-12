@@ -201,6 +201,15 @@ function get(
           "End balance: $1004.53",
         ].join("\n"),
       };
+    case "NOTIF_IP_CHANGED":
+      return {
+        title: "[IP CHANGED] 203.0.113.10 -> 203.0.113.25",
+        message: [
+          "Previous IP: 203.0.113.10",
+          "Current IP: 203.0.113.25",
+          "Last checked: 2026-08-10T10:15:00.000Z",
+        ].join("\n"),
+      };
     case "NOTIF_ERROR":
       return {
         title: "[ERROR] management-cycle",

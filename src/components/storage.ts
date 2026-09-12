@@ -41,6 +41,7 @@ const SLOW_FILES = {
   legacyState: `${SLOW_TRADING_DIR}/state.json`,
   legacyHistoryRoot: `${SLOW_TRADING_DIR}/history`,
   marketCapCache: `${SLOW_TRADING_DIR}/marketcap_cache.json`,
+  ip: `${SLOW_TRADING_DIR}/ip.json`,
   notificationDedupe: `${SLOW_TRADING_DIR}/notification-dedupe.json`,
   queue: `${SLOW_TRADING_DIR}/queue.json`,
   logs: {

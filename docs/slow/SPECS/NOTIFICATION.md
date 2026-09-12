@@ -148,6 +148,14 @@ TC: `PROD:NOTIF_DAILY_PNL_LIMIT`
 
 TC: `PROD:NOTIF_ERROR`
 
+- Instance IP Changed: On server process startup, SLOW checks its public IP once
+  through `https://api.ipify.org`. If it differs from the last successfully
+  stored IP, SLOW sends this notification through the configured channels. The
+  first successful check establishes the baseline and does not notify. Trading
+  cycles do not perform this check.
+
+TC: `PROD:NOTIF_IP_CHANGED`
+
 Email notification subjects are prefixed with `[process.env.APP_NAME]` when
 `APP_NAME` is set, so multi-instance deployments can identify which server sent
 the message. The notification settings UI also provides one-off Telegram and
