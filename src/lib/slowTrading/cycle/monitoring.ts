@@ -195,6 +195,7 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
       const reservedBefore = slowTradingBalance.reserve.getOpen(modelMemory);
       const report = await profiler.time("cycle.averagingExecution", () =>
         trading.execution.averaging({
+          accountSlug: storage.account.slug,
           symbol: trade.symbol ?? "",
           modelConfig,
           modelMemory,

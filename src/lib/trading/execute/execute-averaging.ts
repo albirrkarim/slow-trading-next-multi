@@ -12,6 +12,7 @@ import type {
   TradingModelConfig,
   TradingModelMemory,
 } from "@/lib/trading/models";
+import slowTradingWatchReserve from "@/lib/slowTrading/watch-reserve";
 import { MINIMAL_USDT_TO_TRADE } from "../constants";
 import { tradeLog } from "../helper/log";
 import { notif } from "../helper/notification";
@@ -19,16 +20,10 @@ import { TRADE_MESSAGE } from "../message";
 import type { InitialBalance, TradingReturn } from "../type";
 import averagingMessage from "./averaging-message";
 import adaptiveAveraging from "../adaptive-averaging";
-import {
-  canSpendWatchStepMargin,
-  getNextWatchStep,
-  hasPositionHitTargetVolatilityPoint,
-  isActionableAveragingVolatilityLevel,
-  markReservedWatchStepUsed,
-  resolveAveragingRescueProjection,
-} from "../../slowTrading/watch-reserve";
 
 interface ExecuteAveragingProps {
+  /** Account that consumes the triggering vPoint in production and sandbox. */
+  accountSlug?: string;
   symbol: string;
   modelConfig: TradingModelConfig;
   modelMemory: TradingModelMemory;
@@ -51,6 +46,7 @@ interface ExecuteAveragingProps {
  * when Max Next Averaging Levels allows them and balance is available.
  */
 export async function executeAveraging({
+  accountSlug,
   symbol,
   modelConfig,
   modelMemory,
@@ -79,7 +75,7 @@ export async function executeAveraging({
     };
   }
   if (
-    hasPositionHitTargetVolatilityPoint({
+    slowTradingWatchReserve.averaging.hasHitTargetVPoint({
       position: existingPosition,
       volatilityPoints,
     })
@@ -94,7 +90,7 @@ export async function executeAveraging({
   }
 
   // B. Find the next reserved watch step — this drives the amount
-  const nextStep = getNextWatchStep({
+  const nextStep = slowTradingWatchReserve.averaging.getNextStep({
     averaging: existingPosition.strategy.averaging,
     includeUnreserved: true,
   });
@@ -108,7 +104,9 @@ export async function executeAveraging({
 
   if (
     averagingRecommendation &&
-    !isActionableAveragingVolatilityLevel(averagingRecommendation)
+    !slowTradingWatchReserve.volatilityPoint.isActionableAveragingLevel(
+      averagingRecommendation,
+    )
   ) {
     return {
       symbol,
@@ -148,17 +146,18 @@ export async function executeAveraging({
   }
 
   const price = parseFloat(current[4]);
-  const rescueProjection = resolveAveragingRescueProjection({
-    position: existingPosition,
-    step: nextStep,
-    executablePrice: price,
-    rescueAnchorPrice: averagingRecommendation?.p ?? Number.NaN,
-    quoteAsset: balanceOverride?.quoteAsset,
-    reservedQuoteAsset,
-    adaptiveAveraging: resolvedAdaptiveAveraging,
-    rescueProjectionGuardEnabled: averagingRescueProjectionGuardEnabled,
-    triggerVolatilityPct: averagingRecommendation?.pct,
-  });
+  const rescueProjection =
+    slowTradingWatchReserve.averaging.resolveRescueProjection({
+      position: existingPosition,
+      step: nextStep,
+      executablePrice: price,
+      rescueAnchorPrice: averagingRecommendation?.p ?? Number.NaN,
+      quoteAsset: balanceOverride?.quoteAsset,
+      reservedQuoteAsset,
+      adaptiveAveraging: resolvedAdaptiveAveraging,
+      rescueProjectionGuardEnabled: averagingRescueProjectionGuardEnabled,
+      triggerVolatilityPct: averagingRecommendation?.pct,
+    });
 
   if (!rescueProjection.canExecute) {
     return {
@@ -195,7 +194,7 @@ export async function executeAveraging({
   if (
     balanceOverride &&
     // BOTH:HAVE_ENOUGH_TO_RESERVED
-    !canSpendWatchStepMargin({
+    !slowTradingWatchReserve.balance.canSpendWatchStepMargin({
       step: spendStep,
       quoteAsset: balanceOverride.quoteAsset,
       reservedQuoteAsset,
@@ -302,7 +301,7 @@ export async function executeAveraging({
         : undefined,
     });
 
-    markReservedWatchStepUsed({
+    slowTradingWatchReserve.averaging.markReservedStepUsed({
       averaging: existingPosition.strategy.averaging,
       handledLevel: nextStep.level,
       executedPrice: price,
@@ -310,6 +309,15 @@ export async function executeAveraging({
       usedMarginUsdt: executedMarginUSDT,
       usedPctAlloc,
     });
+    if (averagingRecommendation) {
+      // BOTH:AVERAGING_CONSUMES_VOLATILITY_POINT
+      slowTradingWatchReserve.volatilityPoint.markUsed({
+        accountSlug,
+        entrySignal: averagingRecommendation,
+        modelMemory,
+        volatilityPoints,
+      });
+    }
 
     success = true;
     message =
@@ -418,7 +426,7 @@ export async function executeAveraging({
           : undefined,
       });
 
-      markReservedWatchStepUsed({
+      slowTradingWatchReserve.averaging.markReservedStepUsed({
         averaging: existingPosition.strategy.averaging,
         handledLevel: nextStep.level,
         executedPrice,
@@ -426,6 +434,15 @@ export async function executeAveraging({
         usedMarginUsdt: liveMarginUSDT,
         usedPctAlloc,
       });
+      if (averagingRecommendation) {
+        // BOTH:AVERAGING_CONSUMES_VOLATILITY_POINT
+        slowTradingWatchReserve.volatilityPoint.markUsed({
+          accountSlug,
+          entrySignal: averagingRecommendation,
+          modelMemory,
+          volatilityPoints,
+        });
+      }
 
       message =
         `${TRADE_MESSAGE.buy.ADD_POSITION} | ${symbol} ${direction} | ` +

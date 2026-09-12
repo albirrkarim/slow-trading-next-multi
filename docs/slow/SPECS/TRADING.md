@@ -406,16 +406,21 @@ Guard:
 - In production, check `vPoint["usedBy" + account.slug]` instead. The same
   volatility-point id may be consumed once by each account, but an account may
   not consume it again in either live or sandbox mode.
-- After a successful entry, mark the source production volatility point with
-  `vPoint["usedBy" + account.slug] = true`; backtest continues to mark
-  `vPoint.used = true`.
-- Only successful entry can mark it used. Signal preview/building should not consume the volatility point.
+- After a successful entry or averaging execution, mark the source production
+  volatility point with `vPoint["usedBy" + account.slug] = true`; backtest
+  continues to mark `vPoint.used = true`. This prevents an averaging vPoint
+  from becoming a fresh entry for that account after the averaged position
+  closes, including after a stop loss while no newer vPoint has formed.
+- Only a successful entry or averaging execution can mark it used. Signal
+  preview/building and rejected or skipped executions must not consume the
+  volatility point.
 - The usage marker is persisted through the per-symbol volatility cache JSON,
   so the next SLOW cycle still knows the point has been consumed.
 - Production must not use `item.model_memory.positionsSell` for this guard because `positionsSell` is deprecated for production closed-trade history. It may still exist for legacy/backtest flows only.
 
 TC: `BOTH:ENTRY_ONLY_IN_UNIQUE_VOLATILITY_POINT_ID`
 TC: `PROD:MULTI_ACCOUNT_ENTRY_VPOINT_USAGE`
+TC: `BOTH:AVERAGING_CONSUMES_VOLATILITY_POINT`
 
 ### B.3.4 it should not entry when theres no spendable balance. left for current trade signal.
 

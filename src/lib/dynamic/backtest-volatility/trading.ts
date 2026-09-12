@@ -14,22 +14,7 @@ import type {
 } from "@/lib/dynamic";
 import { TradingMode } from "@/lib/exchange";
 import { getCurrentExchangeAccountSlug } from "@/lib/exchange/account-context";
-import {
-  adjustEntryMarginForSlowConfig,
-  buildSlowWatchReserveState,
-  canKeepSpendableForLargestUnreservedBailout,
-  canSpendWatchStepMargin,
-  getSpendableQuoteAssetValue,
-  hasPositionHitTargetVolatilityPoint,
-  isActionableAveragingVolatilityLevel,
-  isEntrySignalVolatilityPointUsed,
-  getNextWatchStep,
-  getReservedRemainingUsdt,
-  markEntrySignalVolatilityPointUsed,
-  markReservedWatchStepUsed,
-  resolveAveragingRescueProjection,
-  roundUsdt,
-} from "@/lib/slowTrading/watch-reserve";
+import slowTradingWatchReserve from "@/lib/slowTrading/watch-reserve";
 import { MINIMAL_USDT_TO_TRADE } from "@/lib/trading/constants";
 import averagingMessage from "@/lib/trading/execute/averaging-message";
 import { resolveEntryLeverage } from "@/lib/trading/execute/entry-leverage";
@@ -53,7 +38,7 @@ interface BacktestTradeRuntimeProps {
 export function getBacktestSpendableQuoteAsset(
   dynamicTradeMemory: DynamicTradeMemory,
 ): number {
-  return getSpendableQuoteAssetValue({
+  return slowTradingWatchReserve.balance.getSpendableQuoteAssetValue({
     quoteAsset: dynamicTradeMemory.quoteAsset,
     reservedQuoteAsset: dynamicTradeMemory.reservedQuoteAsset,
   });
@@ -67,9 +52,10 @@ function addBacktestReservedQuoteAsset(
     return;
   }
 
-  dynamicTradeMemory.reservedQuoteAsset = roundUsdt(
-    (dynamicTradeMemory.reservedQuoteAsset ?? 0) + amount,
-  );
+  dynamicTradeMemory.reservedQuoteAsset =
+    slowTradingWatchReserve.money.roundUsdt(
+      (dynamicTradeMemory.reservedQuoteAsset ?? 0) + amount,
+    );
 }
 
 export function subtractBacktestReservedQuoteAsset(
@@ -80,9 +66,10 @@ export function subtractBacktestReservedQuoteAsset(
     return;
   }
 
-  dynamicTradeMemory.reservedQuoteAsset = roundUsdt(
-    Math.max(0, (dynamicTradeMemory.reservedQuoteAsset ?? 0) - amount),
-  );
+  dynamicTradeMemory.reservedQuoteAsset =
+    slowTradingWatchReserve.money.roundUsdt(
+      Math.max(0, (dynamicTradeMemory.reservedQuoteAsset ?? 0) - amount),
+    );
 }
 
 export function fitBacktestEntryMargin(params: {
@@ -93,7 +80,7 @@ export function fitBacktestEntryMargin(params: {
 }): number {
   const { config } = params;
   return Math.floor(
-    adjustEntryMarginForSlowConfig({
+    slowTradingWatchReserve.entry.adjustMarginForConfig({
       desiredMarginUsdt: params.desiredMarginUsdt,
       spendableUsdt: params.spendableUsdt,
       enableWatchLogic: config.enableWatchLogic !== false,
@@ -144,7 +131,7 @@ function buildBacktestStrategy(params: {
           reservedRemainingMarginUsdt: 0,
           steps: [],
         }
-      : buildSlowWatchReserveState({
+      : slowTradingWatchReserve.reserve.buildState({
           direction,
           baseMarginUsdt: marginUsdt,
           entryLevel: recommend.lvl ?? 0,
@@ -210,7 +197,7 @@ export function tryOpenBacktestEntry({
   }
 
   if (
-    isEntrySignalVolatilityPointUsed({
+    slowTradingWatchReserve.volatilityPoint.isUsed({
       entrySignal: recommend,
       modelMemory,
     })
@@ -254,15 +241,19 @@ export function tryOpenBacktestEntry({
     marginUsdt,
     config,
   });
-  const reservedUsdt = getReservedRemainingUsdt(strategy.averaging);
-  const bailoutGate = canKeepSpendableForLargestUnreservedBailout({
-    // BOTH:ALWAYS_HAVE_SPENDABLE_TO_BAILING_OUT
-    activePositions,
-    entryMarginUsdt: marginUsdt,
-    projectedWatchState: strategy.averaging,
-    reserveBudgetUsdt: reservedUsdt,
-    spendableUsdt: getBacktestSpendableQuoteAsset(dynamicTradeMemory),
-  });
+  const reservedUsdt =
+    slowTradingWatchReserve.reserve.getReservedRemainingUsdt(
+      strategy.averaging,
+    );
+  const bailoutGate =
+    slowTradingWatchReserve.balance.canKeepSpendableForLargestUnreservedBailout({
+      // BOTH:ALWAYS_HAVE_SPENDABLE_TO_BAILING_OUT
+      activePositions,
+      entryMarginUsdt: marginUsdt,
+      projectedWatchState: strategy.averaging,
+      reserveBudgetUsdt: reservedUsdt,
+      spendableUsdt: getBacktestSpendableQuoteAsset(dynamicTradeMemory),
+    });
 
   if (!bailoutGate.canEnter) {
     return false;
@@ -311,11 +302,11 @@ export function tryOpenBacktestEntry({
     profit: 0,
   } as TradeHistoryDynamic);
 
-  dynamicTradeMemory.quoteAsset = roundUsdt(
+  dynamicTradeMemory.quoteAsset = slowTradingWatchReserve.money.roundUsdt(
     dynamicTradeMemory.quoteAsset - marginUsdt,
   );
   addBacktestReservedQuoteAsset(dynamicTradeMemory, reservedUsdt);
-  markEntrySignalVolatilityPointUsed({
+  slowTradingWatchReserve.volatilityPoint.markUsed({
     entrySignal: recommend,
     modelMemory,
   });
@@ -349,7 +340,7 @@ export function tryExecuteBacktestAveraging({
   }
 
   if (
-    hasPositionHitTargetVolatilityPoint({
+    slowTradingWatchReserve.averaging.hasHitTargetVPoint({
       position,
       volatilityPoints,
     })
@@ -358,12 +349,16 @@ export function tryExecuteBacktestAveraging({
     return false;
   }
 
-  if (!isActionableAveragingVolatilityLevel(recommend)) {
+  if (
+    !slowTradingWatchReserve.volatilityPoint.isActionableAveragingLevel(
+      recommend,
+    )
+  ) {
     // PROD:LOW_LEVEL_NO_ACTION_AVERAGING
     return false;
   }
 
-  const nextStep = getNextWatchStep({
+  const nextStep = slowTradingWatchReserve.averaging.getNextStep({
     averaging: position.strategy.averaging,
     includeUnreserved: true,
   });
@@ -373,18 +368,19 @@ export function tryExecuteBacktestAveraging({
   }
 
   const price = recommend.p;
-  const rescueProjection = resolveAveragingRescueProjection({
-    position,
-    step: nextStep,
-    executablePrice: price,
-    rescueAnchorPrice: recommend.p,
-    quoteAsset: dynamicTradeMemory.quoteAsset,
-    reservedQuoteAsset: dynamicTradeMemory.reservedQuoteAsset,
-    adaptiveAveraging: config.adaptiveAveraging,
-    rescueProjectionGuardEnabled:
-      config.averagingRescueProjectionGuardEnabled !== false,
-    triggerVolatilityPct: recommend.pct,
-  });
+  const rescueProjection =
+    slowTradingWatchReserve.averaging.resolveRescueProjection({
+      position,
+      step: nextStep,
+      executablePrice: price,
+      rescueAnchorPrice: recommend.p,
+      quoteAsset: dynamicTradeMemory.quoteAsset,
+      reservedQuoteAsset: dynamicTradeMemory.reservedQuoteAsset,
+      adaptiveAveraging: config.adaptiveAveraging,
+      rescueProjectionGuardEnabled:
+        config.averagingRescueProjectionGuardEnabled !== false,
+      triggerVolatilityPct: recommend.pct,
+    });
 
   if (!rescueProjection.canExecute) {
     // BOTH:AVERAGING_IMPROVES_RESCUE_PROJECTION
@@ -404,7 +400,7 @@ export function tryExecuteBacktestAveraging({
       ? ` | ADAPTIVE AVG ${usedPctAlloc}x (reserved $${nextStep.marginUsdt.toFixed(2)} -> used $${marginUsdt.toFixed(2)}, projected +${rescueProjection.projectedProfitPct.toFixed(2)}%)`
       : "";
 
-  if (!canSpendWatchStepMargin({
+  if (!slowTradingWatchReserve.balance.canSpendWatchStepMargin({
     // BOTH:HAVE_ENOUGH_TO_RESERVED
     step: spendStep,
     quoteAsset: dynamicTradeMemory.quoteAsset,
@@ -419,19 +415,22 @@ export function tryExecuteBacktestAveraging({
   const addedQuantity = (marginUsdt * leverage) / price;
   const newQuantity = position.exposure.quantity + addedQuantity;
   const positionsBefore = deepCopy(modelMemory.positions);
-  const reservedBefore = getReservedRemainingUsdt(
-    position.strategy.averaging,
-  );
+  const reservedBefore =
+    slowTradingWatchReserve.reserve.getReservedRemainingUsdt(
+      position.strategy.averaging,
+    );
 
   position.exposure.averageEntryPrice =
     (position.exposure.averageEntryPrice * position.exposure.quantity + price * addedQuantity) /
     newQuantity;
   position.exposure.quantity = newQuantity;
-  position.exposure.notionalUsdt = roundUsdt(
+  position.exposure.notionalUsdt = slowTradingWatchReserve.money.roundUsdt(
     (position.exposure.notionalUsdt ?? 0) + marginUsdt * leverage,
   );
-  position.exposure.marginUsdt = roundUsdt((position.exposure.marginUsdt ?? 0) + marginUsdt);
-  position.fees.entryUsdt = roundUsdt(
+  position.exposure.marginUsdt = slowTradingWatchReserve.money.roundUsdt(
+    (position.exposure.marginUsdt ?? 0) + marginUsdt,
+  );
+  position.fees.entryUsdt = slowTradingWatchReserve.money.roundUsdt(
     position.fees.entryUsdt + marginUsdt * BACKTEST_ONE_SIDE_FEE_RATIO,
   );
   const averagingSummary = averagingMessage.format({
@@ -457,7 +456,7 @@ export function tryExecuteBacktestAveraging({
     price,
   });
 
-  markReservedWatchStepUsed({
+  slowTradingWatchReserve.averaging.markReservedStepUsed({
     averaging: position.strategy.averaging,
     handledLevel: nextStep.level,
     executedPrice: price,
@@ -465,15 +464,22 @@ export function tryExecuteBacktestAveraging({
     usedMarginUsdt: marginUsdt,
     usedPctAlloc,
   });
+  // BOTH:AVERAGING_CONSUMES_VOLATILITY_POINT
+  slowTradingWatchReserve.volatilityPoint.markUsed({
+    entrySignal: recommend,
+    modelMemory,
+    volatilityPoints,
+  });
 
-  const reservedAfter = getReservedRemainingUsdt(
-    position.strategy.averaging,
-  );
+  const reservedAfter =
+    slowTradingWatchReserve.reserve.getReservedRemainingUsdt(
+      position.strategy.averaging,
+    );
   subtractBacktestReservedQuoteAsset(
     dynamicTradeMemory,
     Math.max(0, reservedBefore - reservedAfter),
   );
-  dynamicTradeMemory.quoteAsset = roundUsdt(
+  dynamicTradeMemory.quoteAsset = slowTradingWatchReserve.money.roundUsdt(
     dynamicTradeMemory.quoteAsset - marginUsdt,
   );
 

@@ -1,4 +1,7 @@
-import type { AveragingRecommendation } from "@/lib/brain/algorithms/type-execute";
+import type {
+  AveragingRecommendation,
+  EntryRecommendation,
+} from "@/lib/brain/algorithms/type-execute";
 import { VOLATILITY_THRESHOLD } from "@/lib/brain/constants";
 import { tryExecuteBacktestAveraging } from "@/lib/dynamic/backtest-volatility/trading";
 import { TradingMode } from "@/lib/exchange";
@@ -471,6 +474,7 @@ describe("slow specs watch", () => {
     };
 
     const result = await executeAveraging({
+      accountSlug: "account-1",
       symbol: "SUI",
       modelConfig: { orderType: "taker" } as any,
       modelMemory,
@@ -518,6 +522,106 @@ describe("slow specs watch", () => {
       reservedMarginUsdt: 10,
       status: "USED",
     });
+  });
+
+  it("consumes a successful averaging vPoint for only the owning account", async () => {
+    const watchState = buildSlowWatchReserveState({
+      direction: "LONG",
+      baseMarginUsdt: 5,
+      entryLevel: -3,
+      reserveLevels: 1,
+      pctAlloc: 2,
+    });
+    const point = {
+      id: "average-level-4",
+      symbol: "SUI",
+      l: "B",
+      lvl: -4,
+      p: 10,
+      pct: 3,
+      t: 2,
+      vb: 1,
+      vq: 1,
+    } as VolatilityPoint;
+    const modelMemory: TradingModelMemory = {
+      positions: [
+        createWatchPosition({
+          watchState,
+          entryPrice: 10.2,
+          quantity: 1,
+          leverage: 2,
+          marginUsdt: 5,
+          notionalUsdt: 10,
+        }),
+      ],
+      positionsSell: [],
+      volatility: {
+        symbol: "SUI",
+        lastVolatility: [point],
+      },
+    };
+    const recommendation: AveragingRecommendation = {
+      ...point,
+      investAmount: 10,
+      message: "Average SUI at level -4",
+      symbol: "SUI",
+    };
+
+    const result = await executeAveraging({
+      accountSlug: "account-1",
+      symbol: "SUI",
+      modelConfig: { orderType: "taker" } as any,
+      modelMemory,
+      volatilityPoints: [point],
+      exchangeType: "tokocrypto",
+      tradingMode: TradingMode.FUTURES,
+      balanceOverride: { baseAsset: 0, quoteAsset: 100 },
+      reservedQuoteAsset: 10,
+      averagingRecommendation: recommendation,
+    });
+
+    // BOTH:AVERAGING_CONSUMES_VOLATILITY_POINT
+    expect(result.tradingDetail?.action).toBe("BUY");
+    expect((point as any)["usedByaccount-1"]).toBe(true);
+    expect((point as any)["usedByaccount-2"]).toBeUndefined();
+    expect(
+      slowTrading.watchReserve.volatilityPoint.isUsed({
+        accountSlug: "account-1",
+        entrySignal: point,
+        volatilityPoints: [point],
+      }),
+    ).toBe(true);
+    expect(
+      slowTrading.watchReserve.volatilityPoint.isUsed({
+        accountSlug: "account-2",
+        entrySignal: point,
+        volatilityPoints: [point],
+      }),
+    ).toBe(false);
+
+    modelMemory.positions = [];
+    const afterStopLossModeState = slowTrading.storage.mode.createState();
+    const futureEntry: EntryRecommendation = {
+      ...recommendation,
+      amountProbab: 1,
+      maxLeverage: 2,
+    };
+    expect(
+      slowTrading.signals.filter.unusedVolatilityPointId(
+        afterStopLossModeState,
+        [futureEntry],
+        { SUI: modelMemory },
+        "account-1",
+      ),
+    ).toEqual([]);
+    expect(
+      slowTrading.signals.filter.unusedVolatilityPointId(
+        afterStopLossModeState,
+        [futureEntry],
+        { SUI: modelMemory },
+        "account-2",
+      ),
+    ).toEqual([futureEntry]);
   });
 
   it("rejects direct production averaging execution on weak levels", async () => {
@@ -575,6 +679,7 @@ describe("slow specs watch", () => {
     ] as VolatilityPoint[];
 
     const result = await executeAveraging({
+      accountSlug: "account-1",
       symbol: "SUI",
       modelConfig: { orderType: "taker" } as any,
       modelMemory,
@@ -596,6 +701,7 @@ describe("slow specs watch", () => {
     expect(result.message).toContain("AVERAGING_STOPS_AFTER_TARGET_VPOINT");
     expect(watchState.steps[0].status).toBe("RESERVED");
     expect(modelMemory.positions[0].exposure.quantity).toBe(1);
+    expect((volatilityPoints[1] as any)["usedByaccount-1"]).toBeUndefined();
     expect(exchangeMocks.getKlines).not.toHaveBeenCalled();
   });
 
@@ -849,6 +955,73 @@ describe("slow specs watch", () => {
     expect(backtestPack.tradeHistoryMap.SUI.at(-1)?.message).not.toContain(
       "AVERAGED: +",
     );
+  });
+
+  it("prevents a backtest averaging vPoint from becoming a later entry", () => {
+    const watchState = buildSlowWatchReserveState({
+      direction: "LONG",
+      baseMarginUsdt: 5,
+      entryLevel: -3,
+      reserveLevels: 1,
+      pctAlloc: 2,
+    });
+    const point = {
+      id: "backtest-average-level-4",
+      symbol: "SUI",
+      l: "B",
+      lvl: -4,
+      p: 10,
+      pct: 3,
+      t: 2,
+      vb: 1,
+      vq: 1,
+    } as VolatilityPoint;
+    const modelMemoryMap: Record<string, TradingModelMemory> = {
+      SUI: {
+        positions: [
+          createWatchPosition({
+            watchState,
+            entryPrice: 10.2,
+            leverage: 2,
+            marginUsdt: 5,
+            notionalUsdt: 5,
+          }),
+        ],
+        positionsSell: [],
+        volatility: {
+          symbol: "SUI",
+          lastVolatility: [point],
+        },
+      },
+    };
+
+    const didAverage = tryExecuteBacktestAveraging({
+      currentTimeMs: 2,
+      modelMemoryMap,
+      dynamicTradeMemory: {
+        quoteAsset: 100,
+        reservedQuoteAsset: 10,
+      } as any,
+      backtestPack: { tradeHistoryMap: { SUI: [] } } as any,
+      config: {} as any,
+      volatilityPoints: [point],
+      recommend: {
+        ...point,
+        investAmount: 10,
+        message: "Average SUI at level -4",
+        symbol: "SUI",
+      },
+    });
+
+    // BOTH:AVERAGING_CONSUMES_VOLATILITY_POINT
+    expect(didAverage).toBe(true);
+    expect(point.used).toBe(true);
+    expect(
+      slowTrading.watchReserve.volatilityPoint.isUsed({
+        entrySignal: point,
+        modelMemory: modelMemoryMap.SUI,
+      }),
+    ).toBe(true);
   });
 
   it("keeps the backtest watch step when rescue projection rejects averaging", () => {
