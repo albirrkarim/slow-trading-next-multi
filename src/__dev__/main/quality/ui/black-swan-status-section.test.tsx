@@ -100,7 +100,7 @@ describe("BlackSwanStatusSection", () => {
     expect(onRefresh).toHaveBeenCalledOnce();
   });
 
-  it("places the persistent decision section before Entry Signals", () => {
+  it("places the persistent decision section in the first dashboard column", () => {
     const source = readFileSync(
       path.resolve("src/components/LiveDashboard/LiveDashboardPage.tsx"),
       "utf8",
@@ -108,11 +108,9 @@ describe("BlackSwanStatusSection", () => {
 
     // PROD:BLACK_SWAN_RISK_SENTINEL
     expect(source.indexOf("<BlackSwanStatusSection")).toBeGreaterThan(-1);
-    expect(source.indexOf("<BlackSwanStatusSection")).toBeLessThan(
-      source.indexOf("<EntrySignals"),
-    );
     expect(source).toMatch(
-      /<Grid size=\{\{ xl: 4, lg: 3, md: 6, xs: 12 \}\}>\s*<BlackSwanStatusSection[\s\S]*?<EntrySignals/,
+      /<Grid size=\{\{ xl: 4, lg: 3, md: 6, xs: 12 \}\}>\s*<BlackSwanStatusSection/,
     );
+    expect(source).not.toContain("<EntrySignals");
   });
 });

@@ -14,8 +14,11 @@ import {
 import axios from "axios";
 import { useSnackbar } from "notistack";
 
-import type { LeveledMarkers } from "@/components/LiveDashboard/converter";
-import { convertPositionIntoEntryExitPair } from "@/components/LiveDashboard/converter";
+import {
+  convertPositionIntoEntryExitPair,
+  type LeveledMarkers,
+  type Marker,
+} from "@/components/LiveDashboard/converter";
 import { DEFAULT_COLORS } from "@/components/client/constants";
 import { endpoints } from "@/components/endpoints";
 import MultiLineTimelined from "@/components/ui/Chart/MultiLineTimelined";
@@ -30,8 +33,6 @@ import CoinTagManagerDialog from "../dev/Coins/CoinTagManagerDialog";
 import type { TagData } from "../dev/Coins/CoinTagManagerDialog";
 import HeaderMetrics from "../ui/HeaderMetrics";
 import TypographyTooltip from "../ui/TypographyTooltip";
-import EntrySignals from "./Feature/EntrySignals";
-import KlinesAndMarkers, { type KlineMarker } from "./Feature/KlinesAndMarkers";
 import LatestVolatilityPoints from "./Feature/LatestVolatilityPoints";
 import OpenPositions from "./Feature/OpenPositions";
 import PriceNormFeature from "./Feature/PriceNorm";
@@ -63,6 +64,13 @@ export interface DashboardConfig {
 type QuickBacktestSimulationSeries = {
   names: string[];
   series: LeveledMarkers[][];
+};
+
+type KlineMarker = {
+  symbols: string[];
+  series: LeveledMarkers[][];
+  names: string[];
+  markers: Marker[][];
 };
 
 /**
@@ -895,11 +903,6 @@ export default function DynamicTradeHistoryPage({
                     onRefresh={execute}
                     state={dashboardState}
                   />
-
-                  <EntrySignals
-                    defaultExpanded={!isMobile}
-                    exchangeType={currentExchangeType}
-                  />
                 </Grid>
                 <Grid size={{ xl: 5, lg: 5, md: 6, xs: 12 }}>
                   <OpenPositions
@@ -1077,7 +1080,6 @@ export default function DynamicTradeHistoryPage({
           )}
         </HeaderMetrics>
 
-        <KlinesAndMarkers data={data} exchangeType={currentExchangeType} />
       </Box>
     </Box>
   );

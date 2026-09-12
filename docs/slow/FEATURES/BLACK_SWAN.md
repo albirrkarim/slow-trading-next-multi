@@ -10,9 +10,9 @@ Implementation summary:
   cadence configured by `blackSwanStageIntervalMinutes`.
 - Live and sandbox persist separate protection state. The dashboard exposes a
   dedicated `Black Swan` settings tab and a persistent Risk Sentinel decision
-  section in the Entry Signals column, immediately above Entry Signals. It
-  shows every state, including `NORMAL`, with the reason, evidence, state
-  timing, evaluation cadence, and live recovery acknowledgement.
+  section in the first dashboard column. It shows every state, including
+  `NORMAL`, with the reason, evidence, state timing, evaluation cadence, and
+  live recovery acknowledgement.
 - The final SLOW cycle boundary blocks automatic and forced/manual entries and
   averaging in `WATCH`, `CRISIS`, and `RECOVERY`; exits continue.
 - `CLOSE_ADVERSE` and `FLATTEN_ALL` reuse the existing forced-exit path. Futures
@@ -403,14 +403,14 @@ Add a dedicated `Black Swan Action` notification type. It should include:
 - Timestamp and data freshness.
 
 The dashboard should show a persistent high-visibility Risk Sentinel decision
-section in the same dashboard column as Entry Signals, immediately above Entry
-Signals. It remains visible in `NORMAL` so the operator can see when the
-detector last decided conditions were healthy. In `WATCH`, `CRISIS`, or
-`RECOVERY`, the section must show why risk is blocked and whether live recovery
-requires acknowledgement. It should also show when the current state began,
-the latest evaluation time, evaluation cadence, and available BTC and breadth
-evidence. Do not place it as a global top alert or represent it only as a toast
-because the state can survive a browser refresh or process restart.
+section in the first dashboard column. It remains visible in `NORMAL` so the
+operator can see when the detector last decided conditions were healthy. In
+`WATCH`, `CRISIS`, or `RECOVERY`, the section must show why risk is blocked and
+whether live recovery requires acknowledgement. It should also show when the
+current state began, the latest evaluation time, evaluation cadence, and
+available BTC and breadth evidence. Do not place it as a global top alert or
+represent it only as a toast because the state can survive a browser refresh
+or process restart.
 
 ## Dedicated Candle Backtest
 
