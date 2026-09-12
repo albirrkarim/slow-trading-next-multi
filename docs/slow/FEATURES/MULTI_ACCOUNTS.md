@@ -222,6 +222,22 @@ volume. Volatility symbols remain sequential inside this single shared phase to
 limit Binance request pressure. The optimization removes duplicate work across
 accounts; it does not replace controlled requests with a parallel burst.
 
+### Account-scoped volatility-point usage
+
+Volatility points are shared public market data, but their entry usage is
+tracked per account. After a successful entry or averaging execution, the
+source point is marked with `vPoint["usedBy" + account.slug] = true`. The same
+account then cannot reuse that point for a new entry in either live or sandbox
+mode, while another account may still use it if that account's own marker is
+absent and its other entry guards pass.
+
+Only a successful order execution consumes the point. A preview, rejected or
+skipped entry, and rejected or skipped averaging attempt do not mark it used.
+The account markers are persisted with the shared per-symbol volatility cache,
+so they survive later production cycles and restarts. Backtest uses the same
+account-scoped marker only in simulation memory and does not write it to SLOW
+volatility storage.
+
 Every enabled account executes in deterministic sequential order after shared
 preparation. A disabled account does not open new positions, but it is still
 executed while it owns an open position so exits, averaging, monitoring, and
@@ -299,6 +315,8 @@ these exact TC comments:
 - `PROD:MULTI_ACCOUNT_SHARED_MARKET_PREPARATION`
 - `PROD:MULTI_ACCOUNT_SEQUENTIAL_ACCOUNT_EXECUTION`
 - `PROD:MULTI_ACCOUNT_PRIVATE_STATE_ISOLATION`
+- `PROD:MULTI_ACCOUNT_ENTRY_VPOINT_USAGE`
+- `BOTH:AVERAGING_CONSUMES_VOLATILITY_POINT`
 - `PROD:MULTI_ACCOUNT_FAILURE_ISOLATION`
 - `PROD:MULTI_ACCOUNT_DISABLED_ENTRY_ONLY`
 - `PROD:EMPTY_MONITORING_NO_MARKET_IO`

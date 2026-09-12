@@ -165,6 +165,7 @@ export function tryOpenBacktestEntry({
 }): boolean {
   const symbol = recommend.symbol ?? "";
   const modelMemory = modelMemoryMap[symbol];
+  const accountSlug = getCurrentExchangeAccountSlug();
   if (!symbol || !modelMemory) {
     return false;
   }
@@ -198,6 +199,7 @@ export function tryOpenBacktestEntry({
 
   if (
     slowTradingWatchReserve.volatilityPoint.isUsed({
+      accountSlug,
       entrySignal: recommend,
       modelMemory,
     })
@@ -307,6 +309,7 @@ export function tryOpenBacktestEntry({
   );
   addBacktestReservedQuoteAsset(dynamicTradeMemory, reservedUsdt);
   slowTradingWatchReserve.volatilityPoint.markUsed({
+    accountSlug,
     entrySignal: recommend,
     modelMemory,
   });
@@ -334,6 +337,7 @@ export function tryExecuteBacktestAveraging({
   const symbol = recommend.symbol ?? "";
   const modelMemory = modelMemoryMap[symbol];
   const position = modelMemory?.positions?.[0];
+  const accountSlug = getCurrentExchangeAccountSlug();
 
   if (!symbol || !modelMemory || !position) {
     return false;
@@ -466,6 +470,7 @@ export function tryExecuteBacktestAveraging({
   });
   // BOTH:AVERAGING_CONSUMES_VOLATILITY_POINT
   slowTradingWatchReserve.volatilityPoint.markUsed({
+    accountSlug,
     entrySignal: recommend,
     modelMemory,
     volatilityPoints,

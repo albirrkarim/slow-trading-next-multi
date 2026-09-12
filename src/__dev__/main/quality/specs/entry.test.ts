@@ -2,6 +2,7 @@ import { fitBacktestEntryMargin, tryOpenBacktestEntry } from "@/lib/dynamic/back
 import type { BacktestConfigDynamic } from "@/lib/dynamic/type-backtest";
 import type { DynamicTradeMemory } from "@/lib/dynamic";
 import { TradingMode } from "@/lib/exchange";
+import { runWithExchangeAccount } from "@/lib/exchange/account-context";
 import { getManualEntrySignal } from "@/components/api/production/utils";
 import slowTrading from "@/lib/slowTrading";
 import { resolveEntryLeverage } from "@/lib/trading/execute/entry-leverage";
@@ -583,29 +584,34 @@ describe("slow specs entry", () => {
     expect(runtime.modelMemoryMap.SUI.positions).toHaveLength(1);
   });
 
-  it("does not reopen a closed backtest trade on the same volatility point id", () => {
+  it("does not reopen a closed backtest trade on the same account volatility point id", async () => {
     const runtime = createRuntime();
     const config = createBacktestConfig();
     runtime.modelMemoryMap.SUI.volatility = {
       symbol: "SUI",
       lastVolatility: [
-        createEntryRecommendation({ id: "entry-1", used: true }),
+        {
+          ...createEntryRecommendation({ id: "entry-1" }),
+          usedByaccount1: true,
+        },
       ],
     } as any;
 
-    const didOpen = tryOpenBacktestEntry({
-      ...runtime,
-      currentTimeMs: 3,
-      config,
-      recommend: createEntryRecommendation({ id: "entry-1", t: 3 }),
-    });
+    const didOpen = await runWithExchangeAccount("account1", async () =>
+      tryOpenBacktestEntry({
+        ...runtime,
+        currentTimeMs: 3,
+        config,
+        recommend: createEntryRecommendation({ id: "entry-1", t: 3 }),
+      }),
+    );
 
     // BOTH:ENTRY_ONLY_IN_UNIQUE_VOLATILITY_POINT_ID
     expect(didOpen).toBe(false);
     expect(runtime.modelMemoryMap.SUI.positions).toHaveLength(0);
   });
 
-  it("marks a volatility point as used after a successful backtest entry", () => {
+  it("marks a volatility point as used by the active backtest account", async () => {
     const runtime = createRuntime();
     const config = createBacktestConfig();
     const volatilityPoint = createEntryRecommendation({ id: "entry-1" });
@@ -614,16 +620,20 @@ describe("slow specs entry", () => {
       lastVolatility: [volatilityPoint],
     } as any;
 
-    const didOpen = tryOpenBacktestEntry({
-      ...runtime,
-      currentTimeMs: 3,
-      config,
-      recommend: createEntryRecommendation({ id: "entry-1", t: 3 }),
-    });
+    const didOpen = await runWithExchangeAccount("account1", async () =>
+      tryOpenBacktestEntry({
+        ...runtime,
+        currentTimeMs: 3,
+        config,
+        recommend: createEntryRecommendation({ id: "entry-1", t: 3 }),
+      }),
+    );
 
     // BOTH:ENTRY_ONLY_IN_UNIQUE_VOLATILITY_POINT_ID
     expect(didOpen).toBe(true);
-    expect(volatilityPoint.used).toBe(true);
+    expect((volatilityPoint as any).usedByaccount1).toBe(true);
+    expect((volatilityPoint as any).usedByaccount2).toBeUndefined();
+    expect(volatilityPoint.used).toBeUndefined();
   });
 
   it("blocks unreserved watch spending when only reserved balance remains", () => {

@@ -468,7 +468,9 @@ function buildInjectedVolatilityDataset({
   const normalizedWarmupMap: Record<string, any[]> = {};
 
   for (const symbol of symbols) {
-    const points = [...(volatilityMap[symbol] ?? [])]
+    // Backtest usage markers must stay inside this simulation and must not
+    // mutate caller-owned points that may also be visible to SLOW runtime.
+    const points = deepCopy(volatilityMap[symbol] ?? [])
       .filter((point) => {
         const time = Number(point.t);
         if (!Number.isFinite(time)) return false;
@@ -479,9 +481,9 @@ function buildInjectedVolatilityDataset({
       .sort((a, b) => a.t - b.t);
 
     normalizedMap[symbol] = points;
-    normalizedWarmupMap[symbol] = [
-      ...(warmupVolatilityMap?.[symbol] ?? volatilityMap[symbol] ?? []),
-    ]
+    normalizedWarmupMap[symbol] = deepCopy(
+      warmupVolatilityMap?.[symbol] ?? volatilityMap[symbol] ?? [],
+    )
       .filter((point) => Number.isFinite(Number(point.t)))
       .sort((a, b) => a.t - b.t);
   }

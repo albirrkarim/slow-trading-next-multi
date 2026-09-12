@@ -350,7 +350,7 @@ export function isEntrySignalVolatilityPointUsed(params: {
     );
   }
 
-  // Backtest keeps the legacy point-wide marker for compatibility.
+  // Keep the legacy point-wide marker for callers without account identity.
   return point.used === true;
 }
 
@@ -428,7 +428,7 @@ export function markEntrySignalVolatilityPointUsed(params: {
     return true;
   }
 
-  // Backtest keeps the legacy point-wide marker for compatibility.
+  // Keep the legacy point-wide marker for callers without account identity.
   point.used = true;
   return true;
 }

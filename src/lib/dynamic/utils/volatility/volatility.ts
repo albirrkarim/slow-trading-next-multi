@@ -16,7 +16,8 @@ interface VolatilityPointRuntimeAddOn<T = any> {
   symbol?: string;
 
   /**
-   * used in backtest based on volatility
+   * Legacy point-wide backtest usage marker. Account-aware entry and averaging
+   * use runtime `usedBy<accountSlug>` properties instead.
    *
    * [EXCLUDE FROM DATASET]
    */

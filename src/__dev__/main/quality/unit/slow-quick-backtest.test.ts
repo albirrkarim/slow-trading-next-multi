@@ -468,6 +468,15 @@ describe("slow quick backtest report helpers", () => {
     expect(result.backtestPack.modelMemoryMap.EARLY.positionsSell ?? []).toHaveLength(1);
     expect(result.backtestPack.modelMemoryMap.LATE.positionsSell ?? []).toHaveLength(0);
     expect(result.backtestPack.modelMemoryMap.LATE.positions ?? []).toHaveLength(0);
+    // BOTH:ENTRY_ONLY_IN_UNIQUE_VOLATILITY_POINT_ID
+    expect(
+      (volatilityMap.EARLY[0] as any)["usedBybinance-1"],
+    ).toBeUndefined();
+    expect(
+      (result.backtestPack.modelMemoryMap.EARLY.volatility?.lastVolatility?.[0] as any)[
+        "usedBybinance-1"
+      ],
+    ).toBe(true);
   });
 
   it("passes the configured v19 minimum entry level into backtest decisions", async () => {

@@ -5,6 +5,7 @@ import type {
 import { VOLATILITY_THRESHOLD } from "@/lib/brain/constants";
 import { tryExecuteBacktestAveraging } from "@/lib/dynamic/backtest-volatility/trading";
 import { TradingMode } from "@/lib/exchange";
+import { runWithExchangeAccount } from "@/lib/exchange/account-context";
 import type { VolatilityPoint } from "@/lib/dynamic";
 import slowTrading from "@/lib/slowTrading";
 import { executeAveraging } from "@/lib/trading/execute/execute-averaging";
@@ -957,7 +958,7 @@ describe("slow specs watch", () => {
     );
   });
 
-  it("prevents a backtest averaging vPoint from becoming a later entry", () => {
+  it("consumes a backtest averaging vPoint for only the active account", async () => {
     const watchState = buildSlowWatchReserveState({
       direction: "LONG",
       baseMarginUsdt: 5,
@@ -995,29 +996,34 @@ describe("slow specs watch", () => {
       },
     };
 
-    const didAverage = tryExecuteBacktestAveraging({
-      currentTimeMs: 2,
-      modelMemoryMap,
-      dynamicTradeMemory: {
-        quoteAsset: 100,
-        reservedQuoteAsset: 10,
-      } as any,
-      backtestPack: { tradeHistoryMap: { SUI: [] } } as any,
-      config: {} as any,
-      volatilityPoints: [point],
-      recommend: {
-        ...point,
-        investAmount: 10,
-        message: "Average SUI at level -4",
-        symbol: "SUI",
-      },
-    });
+    const didAverage = await runWithExchangeAccount("account1", async () =>
+      tryExecuteBacktestAveraging({
+        currentTimeMs: 2,
+        modelMemoryMap,
+        dynamicTradeMemory: {
+          quoteAsset: 100,
+          reservedQuoteAsset: 10,
+        } as any,
+        backtestPack: { tradeHistoryMap: { SUI: [] } } as any,
+        config: {} as any,
+        volatilityPoints: [point],
+        recommend: {
+          ...point,
+          investAmount: 10,
+          message: "Average SUI at level -4",
+          symbol: "SUI",
+        },
+      }),
+    );
 
     // BOTH:AVERAGING_CONSUMES_VOLATILITY_POINT
     expect(didAverage).toBe(true);
-    expect(point.used).toBe(true);
+    expect((point as any).usedByaccount1).toBe(true);
+    expect((point as any).usedByaccount2).toBeUndefined();
+    expect(point.used).toBeUndefined();
     expect(
       slowTrading.watchReserve.volatilityPoint.isUsed({
+        accountSlug: "account1",
         entrySignal: point,
         modelMemory: modelMemoryMap.SUI,
       }),
