@@ -6,7 +6,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import BlackSwanStatusSection from "@/components/LiveDashboard/BlackSwanStatusSection";
 import type { SlowTradingDashboardState } from "@/lib/slowTrading";
@@ -39,7 +39,12 @@ function makeState(
 }
 
 describe("BlackSwanStatusSection", () => {
-  it("shows normal decisions instead of hiding the monitor", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("shows normal decisions instead of hiding the monitor", async () => {
+    const user = userEvent.setup();
     render(
       <BlackSwanStatusSection
         onRefresh={vi.fn()}
@@ -51,6 +56,8 @@ describe("BlackSwanStatusSection", () => {
         })}
       />,
     );
+
+    await user.click(screen.getByText("Black Swan Risk Sentinel"));
 
     // PROD:BLACK_SWAN_RISK_SENTINEL
     expect(screen.getByRole("region", { name: "Live Black Swan decision" }))
@@ -83,6 +90,8 @@ describe("BlackSwanStatusSection", () => {
         })}
       />,
     );
+
+    await user.click(screen.getByText("Black Swan Risk Sentinel"));
 
     // PROD:BLACK_SWAN_RISK_SENTINEL
     expect(screen.getByText("Entries and averaging are blocked")).toBeDefined();

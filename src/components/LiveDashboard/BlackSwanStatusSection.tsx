@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   Chip,
-  Paper,
   Stack,
   Typography,
 } from "@mui/material";
@@ -14,6 +13,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 
 import { endpoints } from "@/components/endpoints";
+import HeaderMetrics from "@/components/ui/HeaderMetrics";
 import type { SlowTradingDashboardState } from "@/lib/slowTrading";
 import blackSwanModel, {
   type BlackSwanReason,
@@ -171,26 +171,25 @@ export default function BlackSwanStatusSection({
 
   return (
     // PROD:BLACK_SWAN_RISK_SENTINEL
-    <Paper
+    <Box
       aria-label="Live Black Swan decision"
       aria-live="polite"
       component="section"
       sx={(theme) => ({
+        border: `1px solid ${theme.palette[color].main}`,
         borderColor: theme.palette[color].main,
         borderLeftWidth: 4,
+        borderRadius: 1,
         mb: 2,
         overflow: "hidden",
         p: { xs: 1.5, sm: 2 },
       })}
-      variant="outlined"
     >
-      <Stack gap={1.25}>
-        <Stack
-          alignItems={{ xs: "flex-start", sm: "center" }}
-          direction={{ xs: "column", sm: "row" }}
-          gap={1}
-          justifyContent="space-between"
-        >
+      <HeaderMetrics
+        defaultExpanded={false}
+        headerCanBeClicked
+        rememberExpand="black-swan-risk-sentinel"
+        title={
           <Stack alignItems="center" direction="row" flexWrap="wrap" gap={1}>
             <ShieldOutlinedIcon color={color} />
             <Typography fontWeight={800} variant="h6">
@@ -208,77 +207,90 @@ export default function BlackSwanStatusSection({
               variant="outlined"
             />
           </Stack>
+        }
+        titleRight={
+          state.activeMode === "live" && state.blackSwan.status === "RECOVERY" ? (
+            <Button
+              color={color}
+              disabled={acknowledging}
+              onClick={(event) => {
+                event.stopPropagation();
+                void acknowledge();
+              }}
+              size="small"
+              variant="outlined"
+            >
+              {acknowledging ? "Acknowledging…" : "Acknowledge recovery"}
+            </Button>
+          ) : undefined
+        }
+      >
+        {(expanded) =>
+          expanded && (
+            <Stack gap={1.25}>
+              <Box>
+                <Typography fontWeight={700} variant="body1">
+                  {protectionActive
+                    ? "Entries and averaging are blocked"
+                    : "Trading is operating normally"}
+                </Typography>
+                <Typography color="text.secondary" variant="body2">
+                  {REASON_EXPLANATIONS[state.blackSwan.reason]}
+                </Typography>
+              </Box>
 
-          {state.activeMode === "live" &&
-            state.blackSwan.status === "RECOVERY" && (
-              <Button
-                color={color}
-                disabled={acknowledging}
-                onClick={() => void acknowledge()}
-                size="small"
-                variant="outlined"
+              <Evidence state={state} />
+
+              <Stack alignItems="center" direction="row" gap={0.75}>
+                <AccessTimeOutlinedIcon color="action" fontSize="small" />
+                <Typography
+                  color="text.secondary"
+                  fontWeight={700}
+                  variant="caption"
+                >
+                  Decision timing
+                </Typography>
+              </Stack>
+              <Box
+                sx={{
+                  display: "grid",
+                  gap: 1,
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                }}
               >
-                {acknowledging ? "Acknowledging…" : "Acknowledge recovery"}
-              </Button>
-            )}
-        </Stack>
-
-        <Box>
-          <Typography fontWeight={700} variant="body1">
-            {protectionActive
-              ? "Entries and averaging are blocked"
-              : "Trading is operating normally"}
-          </Typography>
-          <Typography color="text.secondary" variant="body2">
-            {REASON_EXPLANATIONS[state.blackSwan.reason]}
-          </Typography>
-        </Box>
-
-        <Evidence state={state} />
-
-        <Stack alignItems="center" direction="row" gap={0.75}>
-          <AccessTimeOutlinedIcon color="action" fontSize="small" />
-          <Typography color="text.secondary" fontWeight={700} variant="caption">
-            Decision timing
-          </Typography>
-        </Stack>
-        <Box
-          sx={{
-            display: "grid",
-            gap: 1,
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-          }}
-        >
-          <TimingItem
-            label="State since"
-            value={`${formatTime(state.blackSwan.since)}${
-              now > 0 && state.blackSwan.since > 0
-                ? ` · ${formatElapsed(state.blackSwan.since, now)}`
-                : ""
-            }`}
-          />
-          <TimingItem
-            label="Last evaluated"
-            value={formatTime(state.blackSwan.t)}
-          />
-          <TimingItem
-            label="Evaluation cadence"
-            value={`Every ${state.runtime.blackSwanStageIntervalMinutes}m`}
-          />
-          {state.blackSwan.status === "RECOVERY" && cooldownEnd && (
-            <TimingItem
-              label="Recovery cooldown"
-              value={
-                now === 0
-                  ? "Calculating…"
-                  : now >= cooldownEnd
-                    ? "Complete"
-                    : `${formatElapsed(now, cooldownEnd)} remaining`
-              }
-            />
-          )}
-        </Box>
-      </Stack>
-    </Paper>
+                <TimingItem
+                  label="State since"
+                  value={`${formatTime(state.blackSwan.since)}${
+                    now > 0 && state.blackSwan.since > 0
+                      ? ` · ${formatElapsed(state.blackSwan.since, now)}`
+                      : ""
+                  }`}
+                />
+                <TimingItem
+                  label="Last evaluated"
+                  value={formatTime(state.blackSwan.t)}
+                />
+                <TimingItem
+                  label="Evaluation cadence"
+                  value={`Every ${state.runtime.blackSwanStageIntervalMinutes}m`}
+                />
+                {state.blackSwan.status === "RECOVERY" && cooldownEnd && (
+                  <TimingItem
+                    label="Recovery cooldown"
+                    value={
+                      now === 0
+                        ? "Calculating…"
+                        : now >= cooldownEnd
+                          ? "Complete"
+                          : `${formatElapsed(now, cooldownEnd)} remaining`
+                    }
+                  />
+                )}
+              </Box>
+            </Stack>
+          )
+        }
+      </HeaderMetrics>
+    </Box>
   );
 }
