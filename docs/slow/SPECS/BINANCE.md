@@ -36,12 +36,15 @@ balance reads and can be multiplied further by multiple dashboard clients.
 
 The fix makes coordinator state process-wide and makes cooldown state
 persistent. Every REST request hydrates the persisted gate before its callback
-is allowed to execute. Monitoring-only cycles also no longer perform the
-redundant second account-balance request.
+is allowed to execute. Private balance is now lazy: monitoring evaluates exits
+and averaging candidates first, then fetches balance only when funds are
+actually needed for entry or averaging authorization.
 
 TC: `PROD:BINANCE_PERSISTENT_COOLDOWN`
 
 TC: `PROD:BINANCE_BALANCE_REQUEST_BUDGET`
+
+TC: `PROD:LAZY_BALANCE_REFRESH`
 
 ## 2. Scheduled stages and collision rules
 
@@ -105,21 +108,26 @@ by all enabled accounts.
 | Latest decision-v19 context | Klines through `buildLatestKlineBySymbol` | Capture-entry preparation when decision engine v19 is active | Stage-shared result |
 | Funding rate | Futures `/fapi/v1/premiumIndex` without a symbol | When futures reporting needs funding | One all-symbol response cached 5 minutes |
 | 24-hour volume | Futures `/fapi/v1/ticker/24hr` or spot `/api/v3/ticker/24hr` without a symbol | Entry context/dashboard initialization | One all-symbol response cached 10 minutes and persisted |
-| Starting account balance | Futures `/fapi/v2/balance` or spot `/api/v3/account` | Once per eligible live account cycle | Per account; required before execution |
+| Entry authorization balance | Futures `/fapi/v2/balance` or spot `/api/v3/account` | Once per live account pass only when at least one entry signal survives the final guards | Reused by all serialized entry candidates; local value is adjusted after each successful order |
+| Averaging authorization balance | Same balance endpoint | Once per live monitoring pass only when at least one averaging candidate exists | Reused by all serialized averaging candidates; no call for exit-only or ordinary monitoring |
 | Open futures positions | `/fapi/v2/positionRisk` | Live futures account cycle with selected open positions | Once per account pass |
 | Final account balance | Same balance endpoint | Only after a report confirms `BUY` or `SELL` | Skipped for monitoring-only/no-order cycles |
 
 Empty monitoring stages do no public or private exchange I/O.
 
 With multiple accounts, public market preparation remains one shared stage
-snapshot. Balance and position-risk requests remain private and execute once per
-eligible account, sequentially.
+snapshot. Balance and position-risk requests remain private and execute
+sequentially. Position risk is synchronized when required by live futures
+positions. Balance is not periodic: it is requested only at an entry/averaging
+authorization boundary and after a successful order.
 
 TC: `PROD:SHARED_MARKET_SINGLE_FLIGHT`
 
 TC: `PROD:MULTI_ACCOUNT_SEQUENTIAL_CYCLE`
 
 TC: `PROD:EMPTY_MONITORING_NO_MARKET_IO`
+
+TC: `PROD:LAZY_BALANCE_REFRESH`
 
 ## 5. Order and account-operation requests
 

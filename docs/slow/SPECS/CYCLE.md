@@ -21,8 +21,10 @@ prepare shared Binance Futures market data once
 for each trading account sequentially
   load account state
   apply account guards
-  fetch private balance and positions
+  synchronize private positions when required
+  fetch private balance only at a spend authorization boundary
   execute trades
+  reconcile private balance after a successful order
   persist account state
 
 END CYCLE
@@ -126,7 +128,7 @@ The account phase owns:
 - Open-position and used-vPoint filtering.
 - Black Swan state transition and entry protection for the account.
 - Daily-PnL entry guard and notification transition state.
-- Private balance and exchange-position synchronization.
+- Lazy private balance authorization and exchange-position synchronization.
 - Entry sizing, reserve planning, and Safe Haven balance.
 - Fresh final entry-price guards.
 - Entry, exit, and averaging orders.
@@ -179,7 +181,8 @@ without an open position are entry candidates.
 
 Capture Entry must prepare shared market inputs once, then apply
 account-specific entry filters, balance sizing, and execution to each enabled
-account. A disabled account must not enter a new position.
+account. It fetches private balance only when at least one entry signal remains
+after the account guards. A disabled account must not enter a new position.
 
 ### 5.3 Disabled Accounts
 
@@ -227,8 +230,8 @@ TC: `PROD:BLACK_SWAN_ACCOUNT_STATE_FAN_OUT`
 
 Sharing a market snapshot must not weaken final order safety.
 
-Immediately before an entry or other balance-changing action, the account
-phase must retain the existing final checks for:
+Immediately before an entry or averaging action, the account phase must retain
+the existing final checks for:
 
 - Latest shared runtime configuration and persisted account state.
 - Current Black Swan protection or pending protection.
@@ -240,6 +243,16 @@ phase must retain the existing final checks for:
 
 A shared analysis snapshot can identify candidates, but it does not authorize
 an order. Only the account execution boundary can authorize and submit it.
+
+Private balance follows that same boundary. Exit-only and monitoring-only
+passes do not request it. One fresh balance is shared by all entry candidates
+or all averaging candidates in the serialized account pass, with the local
+value adjusted after each successful order. A successful `BUY` or `SELL` then
+causes one final balance refresh for authoritative reconciliation.
+
+TC: `PROD:LAZY_BALANCE_REFRESH`
+
+TC: `PROD:BINANCE_BALANCE_REQUEST_BUDGET`
 
 ## 8. Single-Flight and Rate Limits
 

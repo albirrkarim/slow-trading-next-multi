@@ -239,6 +239,63 @@ describe("settings behavior: runtime cycle toggles", () => {
     expect(enabledBuild).toHaveBeenCalledOnce();
   });
 
+  it("reuses one fresh balance across live entry execution", async () => {
+    const { slowTrading, storage } = await saveStorage({
+      autoEntryEnabled: true,
+      runnerEnabled: true,
+    });
+    storage.runtime.notification.telegram.enabled = false;
+    storage.runtime.notification.email.enabled = false;
+    await slowTrading.storage.data.save(storage);
+    vi.spyOn(slowTrading.signals, "build").mockResolvedValue({
+      activeMode: "live",
+      entrySignals: [
+        {
+          amountProbab: 1,
+          id: "SUI_lazy_balance",
+          l: "B",
+          lvl: -3,
+          maxLeverage: 1,
+          message: "forced entry",
+          p: 100,
+          pct: -3,
+          symbol: "SUI",
+          t: Date.UTC(2026, 0, 1),
+        },
+      ],
+      modelMemoryMap: {
+        SUI: {
+          positions: [],
+          volatility: { lastVolatility: [], symbol: "SUI" },
+        },
+      },
+      storage,
+      symbols: ["SUI"],
+      tradeSettings: storage.modes.live.tradeSettings,
+    } as any);
+    const trading = (await import("@/lib/trading")).default;
+    const entry = vi.spyOn(trading.execution, "entry").mockResolvedValue({
+      message: "entry checked",
+      symbol: "SUI",
+    });
+
+    await slowTrading.service.runSlowTradingCycle({
+      bypass: true,
+      forceEntrySymbols: ["SUI"],
+    });
+
+    // PROD:LAZY_BALANCE_REFRESH
+    expect(exchangeMocks.getBalance).toHaveBeenCalledOnce();
+    expect(entry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        balanceOverride: {
+          baseAsset: 0,
+          quoteAsset: 1_000,
+        },
+      }),
+    );
+  });
+
   it("stops automatic entry at the daily navbar PnL limit but allows manual entry", async () => {
     const { slowTrading } = await saveStorage({
       autoEntryDailyPnlLimitUSDT: -50,
@@ -374,6 +431,69 @@ describe("settings behavior: runtime cycle toggles", () => {
     await enabled.slowTrading.service.runSlowTradingCycle();
 
     expect(enabledAveraging).toHaveBeenCalledOnce();
+  });
+
+  it("does not refresh private balance when monitoring finds no averaging candidate", async () => {
+    const { slowTrading } = await saveStorage({
+      enableWatchLogic: true,
+      openPosition: true,
+      runnerEnabled: true,
+    });
+    vi.spyOn(
+      slowTrading.watchReserve.averaging,
+      "generateRecommendations",
+    ).mockReturnValue({ recommendations: [] });
+
+    await slowTrading.service.runSlowTradingCycle({
+      stage: "standard-monitoring",
+    });
+
+    // PROD:LAZY_BALANCE_REFRESH
+    expect(exchangeMocks.getBalance).not.toHaveBeenCalled();
+  });
+
+  it("refreshes balance around an executed averaging order without executor duplication", async () => {
+    const { slowTrading } = await saveStorage({
+      enableWatchLogic: true,
+      openPosition: true,
+      runnerEnabled: true,
+    });
+    const trading = (await import("@/lib/trading")).default;
+    vi.spyOn(
+      slowTrading.watchReserve.averaging,
+      "generateRecommendations",
+    ).mockReturnValue({
+      recommendations: [{ symbol: "SUI" }],
+    } as any);
+    const averaging = vi
+      .spyOn(trading.execution, "averaging")
+      .mockResolvedValue({
+        message: "averaged",
+        symbol: "SUI",
+        tradingDetail: {
+          action: "BUY",
+          usdtSpent: -10,
+        },
+      } as any);
+
+    await slowTrading.service.runSlowTradingCycle({
+      stage: "standard-monitoring",
+    });
+
+    // One authorization refresh and one post-order reconciliation refresh.
+    // PROD:LAZY_BALANCE_REFRESH
+    // PROD:BINANCE_BALANCE_REQUEST_BUDGET
+    expect(exchangeMocks.getBalance).toHaveBeenCalledTimes(2);
+    expect(exchangeMocks.getBalance).toHaveBeenNthCalledWith(1, "USDT_USDT");
+    expect(exchangeMocks.getBalance).toHaveBeenNthCalledWith(2, "USDT_USDT");
+    expect(averaging).toHaveBeenCalledWith(
+      expect.objectContaining({
+        balanceOverride: {
+          baseAsset: 0,
+          quoteAsset: 1_000,
+        },
+      }),
+    );
   });
 
   it("evaluates exit before averaging during monitoring", async () => {

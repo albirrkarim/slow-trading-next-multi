@@ -7,6 +7,7 @@ import slowTradingAutoRemoveSymbols from "../auto-remove-symbols";
 import slowTradingBalance from "../balance";
 import slowTradingBlackSwan from "../black-swan";
 import slowTradingDailyPnlLimit from "../daily-pnl-limit";
+import slowTradingSidewaysExit from "../exit-sideways";
 import slowTradingMarket from "../market";
 import slowTradingNotifications from "../notifications";
 import slowTradingShared from "../shared";
@@ -197,6 +198,27 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
 
   // E. Try to open new positions when auto-entry is enabled.
   if (shouldAutoEnter && entrySignals.length > 0) {
+    if (!isSandbox) {
+      // PROD:LAZY_BALANCE_REFRESH
+      await slowTradingBalance.live.refreshAvailableQuoteAsset({
+        dynamicTradeMemory,
+        exchange,
+        profiler,
+      });
+    }
+
+    await slowTradingSidewaysExit.production.apply({
+      config: storage.config,
+      currentTimeMs,
+      dynamicTradeMemory,
+      entrySignals,
+      exchange,
+      exchangeType,
+      marketType,
+      modelMemoryMap,
+      profiler,
+    });
+
     // PROD:CAPTURE_ENTRY_STAGE
     const currentBalance = dynamic.balance.countGrowthOvertime({
       timeMs: currentTimeMs,
@@ -281,12 +303,12 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
               failureKey: "NOTIF_ENTRY_FAILED",
             },
             simulate: isSandbox,
-            balanceOverride: isSandbox
-              ? {
-                  quoteAsset: dynamicTradeMemory.quoteAsset,
-                  baseAsset: 0,
-                }
-              : undefined,
+            // The cycle refreshes live balance once for the complete candidate
+            // set, then adjusts this local value after each successful order.
+            balanceOverride: {
+              quoteAsset: dynamicTradeMemory.quoteAsset,
+              baseAsset: 0,
+            },
             executionMode: activeMode,
             reservedQuoteAsset: dynamicTradeMemory.reservedQuoteAsset,
             dynamicTradeConfig: storage.config,

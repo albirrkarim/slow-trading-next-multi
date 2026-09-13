@@ -12,7 +12,6 @@ import slowTradingNotifications from "../notifications";
 import slowTradingPerformance from "../performance";
 import slowTradingPositions from "../positions";
 import slowTradingShared from "../shared";
-import slowTradingSidewaysExit from "../exit-sideways";
 import slowTradingSignals from "../signals";
 import slowTradingStorage from "../storage";
 import slowTradingCycleCoordinator, {
@@ -170,7 +169,8 @@ async function executeSlowTradingAccountCycle(
       const sharedMarket = context.sharedMarket;
       const currentTimeMs = sharedMarket.currentTimeMs;
 
-      // B.1 Refresh the quote balance according to live or sandbox execution mode.
+      // B.1 Sandbox owns a local balance. Live balance is refreshed lazily at
+      // the entry or averaging authorization boundary.
       if (isSandbox) {
         if (!dynamicTradeMemory.startingBalanceUSDT) {
           dynamicTradeMemory.startingBalanceUSDT =
@@ -179,19 +179,6 @@ async function executeSlowTradingAccountCycle(
         if (!dynamicTradeMemory.quoteAsset) {
           dynamicTradeMemory.quoteAsset =
             storage.runtime.sandboxInitialBalanceUSDT;
-        }
-      } else {
-        const realQuote = await profiler.time("cycle.balanceRefresh", () =>
-          exchange.getBalance("USDT_USDT"),
-        );
-        if (realQuote == null) {
-          throw new Error("Can't fetch real balance!");
-        }
-
-        const available = realQuote.quoteAsset - dynamicTradeMemory.safeHaven;
-        dynamicTradeMemory.quoteAsset = available;
-        if (!dynamicTradeMemory.startingBalanceUSDT) {
-          dynamicTradeMemory.startingBalanceUSDT = available;
         }
       }
 
@@ -284,20 +271,6 @@ async function executeSlowTradingAccountCycle(
         slowTradingCycleSharedMarket.memory.buildVolatilityPointsMap(
           modelMemoryMap,
         );
-
-      if (plan.shouldCaptureEntry) {
-        await slowTradingSidewaysExit.production.apply({
-          config: storage.config,
-          currentTimeMs,
-          dynamicTradeMemory,
-          entrySignals,
-          exchange,
-          exchangeType,
-          marketType,
-          modelMemoryMap,
-          profiler,
-        });
-      }
 
       if (plan.shouldCaptureEntry) {
         await profiler.time("cycle.priceNorm", () => {

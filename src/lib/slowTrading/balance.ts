@@ -1,7 +1,33 @@
 import type { DynamicTradeMemory } from "@/lib/dynamic";
+import type { getExchange } from "@/lib/exchange";
 import type { TradingModelMemory } from "@/lib/trading/models";
+import type { SlowTradingCycleProfiler } from "./performance";
 import type { SlowTradingModeState } from "./types";
 import slowTradingWatchReserve from "./watch-reserve";
+
+/**
+ * Refreshes live spendable quote balance at an order authorization boundary.
+ */
+export async function refreshLiveAvailableQuoteAsset(params: {
+  dynamicTradeMemory: DynamicTradeMemory;
+  exchange: ReturnType<typeof getExchange>;
+  profiler: SlowTradingCycleProfiler;
+}): Promise<number> {
+  const realQuote = await params.profiler.time("cycle.balanceRefresh", () =>
+    params.exchange.getBalance("USDT_USDT"),
+  );
+  if (realQuote == null) {
+    throw new Error("Can't fetch real balance!");
+  }
+
+  const available = realQuote.quoteAsset - params.dynamicTradeMemory.safeHaven;
+  params.dynamicTradeMemory.quoteAsset = available;
+  if (!params.dynamicTradeMemory.startingBalanceUSDT) {
+    params.dynamicTradeMemory.startingBalanceUSDT = available;
+  }
+
+  return available;
+}
 
 /**
  * Seed sandbox balance memory when the mode has not traded yet.
@@ -107,6 +133,9 @@ export function releaseClosedPositionReserve(
  * Grouped balance API for SLOW runtime balance mutations.
  */
 const slowTradingBalance = {
+  live: {
+    refreshAvailableQuoteAsset: refreshLiveAvailableQuoteAsset,
+  },
   reserve: {
     add: addReservedQuoteAsset,
     addForLatestEntry: addReserveForLatestEntry,

@@ -184,6 +184,15 @@ async function execute(runtime: SlowTradingCycleRuntime): Promise<void> {
       );
     });
 
+    if (!isSandbox && symbolsToAverage.length > 0) {
+      // PROD:LAZY_BALANCE_REFRESH
+      await slowTradingBalance.live.refreshAvailableQuoteAsset({
+        dynamicTradeMemory,
+        exchange: runtime.exchange,
+        profiler,
+      });
+    }
+
     for (const trade of symbolsToAverage) {
       if (slowTradingBlackSwan.runtime.isProtectionPending(activeMode)) {
         break;

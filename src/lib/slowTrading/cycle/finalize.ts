@@ -1,6 +1,7 @@
 import dynamic from "@/lib/dynamic";
 import { TradingMode } from "@/lib/exchange";
 import { tradeLog } from "@/lib/trading/helper/log";
+import slowTradingBalance from "../balance";
 import slowTradingCache from "../cache";
 import slowTradingNotifications from "../notifications";
 import slowTradingPositions from "../positions";
@@ -42,22 +43,18 @@ async function execute(
     volatilityPointsMap,
   } = runtime;
 
-  // H. Refresh only after an order changed the account. The cycle-start balance
-  // remains authoritative for monitoring-only passes.
+  // H. Reconcile only after an order changed the account. Monitoring-only
+  // passes retain persisted balance without touching the private endpoint.
   const executedOrder = reports.some((report) =>
     ["BUY", "SELL"].includes(report.tradingDetail?.action ?? ""),
   );
   if (!isSandbox && executedOrder) {
     // PROD:BINANCE_BALANCE_REQUEST_BUDGET
-    const realQuoteFinal = await profiler.time("cycle.balanceRefresh", () =>
-      exchange.getBalance("USDT_USDT"),
-    );
-    if (realQuoteFinal == null) {
-      throw new Error("Can't fetch real balance!");
-    }
-
-    dynamicTradeMemory.quoteAsset =
-      realQuoteFinal.quoteAsset - dynamicTradeMemory.safeHaven;
+    await slowTradingBalance.live.refreshAvailableQuoteAsset({
+      dynamicTradeMemory,
+      exchange,
+      profiler,
+    });
   }
 
   const persistedTradeSymbols = Array.from(
