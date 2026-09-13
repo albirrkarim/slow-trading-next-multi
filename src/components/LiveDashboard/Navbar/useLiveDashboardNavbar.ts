@@ -93,6 +93,9 @@ export function useLiveDashboardNavbar({
 }: UseLiveDashboardNavbarArgs) {
   const [configDraft, setConfigDraftState] = useState<ConfigDraft | null>(null);
   const [runningCycle, setRunningCycle] = useState(false);
+  const [refreshingBalanceAccount, setRefreshingBalanceAccount] = useState<
+    string | null
+  >(null);
   const [resettingSandboxAccount, setResettingSandboxAccount] = useState<
     string | null
   >(null);
@@ -346,6 +349,24 @@ export function useLiveDashboardNavbar({
     }
   };
 
+  const refreshBalance = async (accountSlug: string) => {
+    setRefreshingBalanceAccount(accountSlug);
+    try {
+      await axios.post(endpoints.slow.prod.balanceRefresh, {
+        account: accountSlug,
+      });
+      await onRefresh();
+    } catch (error: any) {
+      tradeLog.error(error);
+      alert(
+        error?.response?.data?.error ??
+          `Failed to refresh live balance for ${accountSlug}`,
+      );
+    } finally {
+      setRefreshingBalanceAccount(null);
+    }
+  };
+
   const resetSandbox = async (accountSlug: string) => {
     if (!configDraft) {
       return;
@@ -442,6 +463,8 @@ export function useLiveDashboardNavbar({
     dayPreview,
     isActive,
     openPositionSummary,
+    refreshBalance,
+    refreshingBalanceAccount,
     resetSandbox,
     resettingSandboxAccount,
     runCycle,

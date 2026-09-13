@@ -450,7 +450,9 @@ describe("multi-account settings UI", () => {
     expect(resetSandbox).toHaveBeenCalledWith("beta");
   });
 
-  it("shows one account chip and balance group for every enabled account", () => {
+  it("shows persisted balances with manual refresh only for live accounts", async () => {
+    const user = userEvent.setup();
+    const refreshBalance = vi.fn(async () => undefined);
     window.localStorage.setItem(
       "slow-trading:navbar:balance-visible:v1",
       "true",
@@ -461,6 +463,7 @@ describe("multi-account settings UI", () => {
       <NavbarIdentitySection
         configDraft={makeConfigDraft(state)}
         dashboardState={state}
+        onRefreshBalance={refreshBalance}
       />,
     );
 
@@ -478,5 +481,18 @@ describe("multi-account settings UI", () => {
         screen.getByRole("group", { name: "Beta balance" }),
       ).getByText("$244"),
     ).toBeTruthy();
+
+    const alphaGroup = screen.getByRole("group", { name: "Alpha balance" });
+    await user.click(
+      within(alphaGroup).getByRole("button", {
+        name: "Refresh Alpha live balance",
+      }),
+    );
+    expect(refreshBalance).toHaveBeenCalledWith("alpha");
+    expect(
+      within(
+        screen.getByRole("group", { name: "Beta balance" }),
+      ).queryByRole("button", { name: /Refresh Beta live balance/ }),
+    ).toBeNull();
   });
 });

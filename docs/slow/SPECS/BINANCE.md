@@ -151,11 +151,15 @@ private Binance request helper and therefore the same queue and cooldown gate.
 
 ## 6. Dashboard requests
 
-- The dashboard storage endpoint refreshes once on page load and then every
-  10 minutes per open browser client.
-- For live mode it requests one account balance per displayed account, unless
-  the persistent Binance cooldown is active. During cooldown it keeps the last
-  persisted balance.
+- The dashboard storage endpoint loads once on page load and then every
+  10 minutes per open browser client, but its balance values come only from
+  persisted runner memory. Opening, reloading, or polling the dashboard does
+  not request a private Binance balance.
+- Each enabled live account has a small manual balance-refresh control in the
+  navbar. One click makes one private balance request for that account, updates
+  its persisted live memory, and reloads the storage-backed dashboard state.
+- Manual balance refresh is unavailable for sandbox accounts and while the
+  persistent Binance cooldown is active.
 - It requests a small 1-minute kline set for each distinct open-position symbol
   to refresh floating PnL. Those callbacks are also blocked during cooldown.
 - Dashboard initialization can refresh the 24-hour all-symbol ticker snapshot
@@ -164,6 +168,10 @@ private Binance request helper and therefore the same queue and cooldown gate.
 
 Browser clients do not own request coordination. Their server-side Binance
 callbacks all join the process-wide queue and read the persistent cooldown gate.
+
+TC: `PROD:DASHBOARD_PERSISTED_BALANCE`
+
+TC: `PROD:MANUAL_ACCOUNT_BALANCE_REFRESH`
 
 ## 7. Coordinator weight budget
 

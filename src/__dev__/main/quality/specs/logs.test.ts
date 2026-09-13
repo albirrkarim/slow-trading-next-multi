@@ -109,6 +109,27 @@ describe("slow specs logs", () => {
     );
   });
 
+  it("serves the persisted runner balance when live refresh is disabled", async () => {
+    const getBalance = vi.fn();
+    vi.doMock("@/lib/exchange", async (importOriginal) => ({
+      ...(await importOriginal<typeof ExchangeModule>()),
+      getExchange: () => ({ getBalance }),
+    }));
+
+    const storageApi = (await import("@/lib/slowTrading")).default.storage;
+    const storage = storageApi.data.createDefault();
+    storage.runtime.sandboxEnabled = false;
+    storage.modes.live.dynamicTradeMemory.quoteAsset = 153.44;
+
+    const dashboard = await storageApi.dashboard.buildStateRealtime(storage, {
+      refreshLiveBalance: false,
+    });
+
+    // PROD:DASHBOARD_PERSISTED_BALANCE
+    expect(dashboard.balances.availableQuoteAsset).toBe(153.44);
+    expect(getBalance).not.toHaveBeenCalled();
+  });
+
   it("uses persisted dashboard balances without logging an active Binance cooldown", async () => {
     const binanceRequestCoordinator = (
       await import("@/lib/exchange/platform/binance/request-coordinator")

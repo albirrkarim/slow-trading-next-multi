@@ -30,6 +30,7 @@ import {
   getPnlPercentBg,
 } from "./helpers";
 import NavbarBalanceSummary from "./NavbarBalanceSummary";
+import NavbarBalanceRefreshButton from "./NavbarBalanceRefreshButton";
 import NavbarInstanceIp from "./NavbarInstanceIp";
 import NavbarStageRuns from "./NavbarStageRuns";
 import NavbarVolatilityThreshold from "./NavbarVolatilityThreshold";
@@ -45,6 +46,8 @@ import type {
 interface NavbarIdentitySectionProps {
   configDraft: ConfigDraft | null;
   dashboardState: DashboardState | null;
+  onRefreshBalance?: (accountSlug: string) => Promise<void>;
+  refreshingBalanceAccount?: string | null;
 }
 
 const balanceTooltipSlotProps = {
@@ -105,6 +108,8 @@ function BalanceTooltipText({
 export function NavbarIdentitySection({
   configDraft,
   dashboardState,
+  onRefreshBalance,
+  refreshingBalanceAccount = null,
 }: NavbarIdentitySectionProps) {
   const accountSummaries = dashboardState
     ? (dashboardState.accountSummaries ?? [
@@ -224,6 +229,17 @@ export function NavbarIdentitySection({
                   account.balances,
                 )}
               />
+              {account.activeMode === "live" && onRefreshBalance && (
+                <NavbarBalanceRefreshButton
+                  accountName={account.name}
+                  disabled={
+                    refreshingBalanceAccount !== null ||
+                    Boolean(dashboardState.binanceHealth?.current)
+                  }
+                  loading={refreshingBalanceAccount === account.slug}
+                  onRefresh={() => onRefreshBalance(account.slug)}
+                />
+              )}
             </Box>
           ))}
         </Box>

@@ -25,6 +25,8 @@ export default function LiveDashboardNavbar({
     dayPreview,
     isActive,
     openPositionSummary,
+    refreshBalance,
+    refreshingBalanceAccount,
     closeSettingsDialog,
     openSettingsDialog,
     resetSandbox,
@@ -81,6 +83,8 @@ export default function LiveDashboardNavbar({
       <NavbarIdentitySection
         configDraft={configDraft}
         dashboardState={dashboardState}
+        onRefreshBalance={refreshBalance}
+        refreshingBalanceAccount={refreshingBalanceAccount}
       />
 
       <NavbarDayPreviewSection

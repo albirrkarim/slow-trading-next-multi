@@ -23,7 +23,10 @@ async function loadDashboardState() {
     );
   }
   const combined =
-    await slowTrading.storage.dashboard.buildCombinedStateRealtime(storages);
+    await slowTrading.storage.dashboard.buildCombinedStateRealtime(storages, {
+      // PROD:DASHBOARD_PERSISTED_BALANCE
+      refreshLiveBalance: false,
+    });
   return {
     ...combined,
     instanceIp: (await instanceIp.storage.read()) ?? undefined,

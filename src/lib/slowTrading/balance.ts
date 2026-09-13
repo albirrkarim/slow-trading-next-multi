@@ -6,6 +6,23 @@ import type { SlowTradingModeState } from "./types";
 import slowTradingWatchReserve from "./watch-reserve";
 
 /**
+ * Applies an authoritative exchange quote balance to SLOW live memory.
+ */
+export function applyLiveAvailableQuoteAsset(params: {
+  dynamicTradeMemory: DynamicTradeMemory;
+  quoteAsset: number;
+}): number {
+  const available =
+    params.quoteAsset - params.dynamicTradeMemory.safeHaven;
+  params.dynamicTradeMemory.quoteAsset = available;
+  if (!params.dynamicTradeMemory.startingBalanceUSDT) {
+    params.dynamicTradeMemory.startingBalanceUSDT = available;
+  }
+
+  return available;
+}
+
+/**
  * Refreshes live spendable quote balance at an order authorization boundary.
  */
 export async function refreshLiveAvailableQuoteAsset(params: {
@@ -20,13 +37,10 @@ export async function refreshLiveAvailableQuoteAsset(params: {
     throw new Error("Can't fetch real balance!");
   }
 
-  const available = realQuote.quoteAsset - params.dynamicTradeMemory.safeHaven;
-  params.dynamicTradeMemory.quoteAsset = available;
-  if (!params.dynamicTradeMemory.startingBalanceUSDT) {
-    params.dynamicTradeMemory.startingBalanceUSDT = available;
-  }
-
-  return available;
+  return applyLiveAvailableQuoteAsset({
+    dynamicTradeMemory: params.dynamicTradeMemory,
+    quoteAsset: realQuote.quoteAsset,
+  });
 }
 
 /**
@@ -134,6 +148,7 @@ export function releaseClosedPositionReserve(
  */
 const slowTradingBalance = {
   live: {
+    applyAvailableQuoteAsset: applyLiveAvailableQuoteAsset,
     refreshAvailableQuoteAsset: refreshLiveAvailableQuoteAsset,
   },
   reserve: {

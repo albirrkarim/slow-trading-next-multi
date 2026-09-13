@@ -1,4 +1,5 @@
 import slowTradingBalanceSummary from "./balance-summary";
+import slowTradingBalanceRefresh from "./balance-refresh";
 import slowTradingDebugSync from "./debug-sync";
 import slowTradingEntrySequences from "./entry-sequences";
 import slowTradingExchangeSync from "./exchange-sync";
@@ -27,6 +28,7 @@ import slowTradingBinanceHealth from "./binance-health";
  * when a caller needs several related operations.
  */
 const slowTrading = {
+  balance: slowTradingBalanceRefresh,
   balanceSummary: slowTradingBalanceSummary,
   binanceHealth: slowTradingBinanceHealth,
   blackSwan: slowTradingBlackSwan,

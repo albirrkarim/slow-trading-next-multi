@@ -25,6 +25,11 @@ import binanceRequestCoordinator, {
 import blackSwan from "@/lib/trading/black-swan";
 import slowTradingBinanceHealth from "../binance-health";
 
+export interface SlowTradingDashboardRealtimeOptions {
+  /** Set false when a caller must use the persisted runner balance. */
+  refreshLiveBalance?: boolean;
+}
+
 /**
  * Gets slow trading latest price map from SLOW state or storage.
  */
@@ -232,6 +237,7 @@ function combineLatestStageRuns(
 /** Combines account-scoped dashboard snapshots without mixing persisted state. */
 export async function buildCombinedSlowTradingDashboardStateRealtime(
   storages: SlowTradingStorageData[],
+  options?: SlowTradingDashboardRealtimeOptions,
 ): Promise<SlowTradingDashboardState> {
   if (storages.length === 0) {
     throw new Error("Cannot build a combined dashboard without accounts.");
@@ -239,7 +245,9 @@ export async function buildCombinedSlowTradingDashboardStateRealtime(
 
   const states: SlowTradingDashboardState[] = [];
   for (const storage of storages) {
-    states.push(await buildSlowTradingDashboardStateRealtime(storage));
+    states.push(
+      await buildSlowTradingDashboardStateRealtime(storage, options),
+    );
   }
   const primary = states[0];
   // PROD:MULTI_ACCOUNT_COMBINED_DASHBOARD
@@ -400,17 +408,22 @@ export function buildSlowTradingDashboardState(
  * the latest market prices available from the configured exchange.
  *
  * @param storage - Slow-trading storage.
+ * @param options - Controls optional private balance refresh behavior.
  * @returns Dashboard snapshot with refreshed open-position metrics.
  */
 export async function buildSlowTradingDashboardStateRealtime(
   storage: SlowTradingStorageData,
+  options?: SlowTradingDashboardRealtimeOptions,
 ): Promise<SlowTradingDashboardState> {
   let snapshot = buildSlowTradingDashboardState(storage);
   snapshot.binanceHealth = await slowTradingBinanceHealth.snapshot.read({
     limit: 20,
   });
 
-  if (snapshot.activeMode === "live") {
+  if (
+    snapshot.activeMode === "live" &&
+    options?.refreshLiveBalance !== false
+  ) {
     const liveQuoteBalance = await getSlowTradingLiveQuoteBalance(storage);
     if (liveQuoteBalance != null) {
       const safeHaven = snapshot.balances.safeHaven;
