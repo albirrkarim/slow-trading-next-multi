@@ -21,6 +21,39 @@ vi.mock("@/components/dev/Coins/CoinTagChip", () => ({
 }));
 
 describe("open-position Speedup chip", () => {
+  it("gives a new position ten minutes before warning it was never monitored", () => {
+    const now = Date.UTC(2026, 0, 1, 0, 20);
+    const position = createTestPosition({
+      direction: "LONG",
+      entryPrice: 10,
+      entryTime: now - 4 * 60_000,
+      executionMode: "live",
+      symbol: "APT",
+    });
+
+    render(
+      <OpenPositionItem
+        availableTags={[]}
+        coinDescription=""
+        coinTags={[]}
+        config={{ watchReservePctAlloc: 2 } as any}
+        exchangeType="binance"
+        now={now}
+        onCoinDescriptionChange={vi.fn()}
+        onCoinTagsChange={vi.fn()}
+        pnlContributionShare={1}
+        position={{ ...position, mode: "live" }}
+        spendableQuoteAsset={100}
+        tagColors={{}}
+        tagDescriptions={{}}
+        volatilityPoints={[]}
+      />,
+    );
+
+    // PROD:OPEN_POSITION_STALE_MONITORING_WARNING
+    expect(screen.queryByText("Never monitored")).toBeNull();
+  });
+
   it("warns when successful monitoring is older than ten minutes", () => {
     const now = Date.UTC(2026, 0, 1, 0, 20);
     const position = createTestPosition({

@@ -198,8 +198,10 @@ export default function OpenPositionItem({
   const profitPercent = position.pnl.netPct ?? 0;
   const lastMonitoringStage = position.lastMonitoringStage;
   const isSpeedupStage = lastMonitoringStage?.stage === "speedup";
-  const monitoringAgeMs = lastMonitoringStage
-    ? Math.max(0, now - lastMonitoringStage.lastUpdated)
+  const monitoringReferenceTime =
+    lastMonitoringStage?.lastUpdated ?? position.opened.t;
+  const monitoringAgeMs = Number.isFinite(monitoringReferenceTime)
+    ? Math.max(0, now - monitoringReferenceTime)
     : Number.POSITIVE_INFINITY;
   const monitoringStale = monitoringAgeMs > 10 * 60_000;
   const profitUsdt = position.pnl.netUsdt ?? 0;
@@ -310,7 +312,9 @@ export default function OpenPositionItem({
                     ? `Last successful monitoring was ${Math.floor(
                         monitoringAgeMs / 60_000,
                       )} minutes ago at ${formatDate(lastMonitoringStage.lastUpdated)}. The position has exceeded the 10-minute health threshold.`
-                    : "No successful monitoring timestamp is recorded for this open position."
+                    : `No successful monitoring timestamp is recorded after ${Math.floor(
+                        monitoringAgeMs / 60_000,
+                      )} minutes since the position opened.`
                 }
               >
                 <Chip

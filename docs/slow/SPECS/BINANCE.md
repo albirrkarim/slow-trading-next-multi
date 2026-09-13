@@ -235,8 +235,10 @@ TC: `PROD:BINANCE_MANUAL_COOLDOWN_RESET`
 ## 9. Position-monitoring health
 
 Every open position displays a visible warning when its latest successful
-Speedup/Standard monitoring timestamp is missing or more than 10 minutes old.
-The tooltip shows the last timestamp and elapsed minutes. This is a health
-signal: it does not itself mutate or close a position.
+Speedup/Standard monitoring timestamp is more than 10 minutes old. A new
+position without a successful monitoring timestamp receives the same 10-minute
+grace period measured from its opening time; after that it displays the missing
+monitoring warning. The tooltip shows the last timestamp and elapsed minutes.
+This is a health signal: it does not itself mutate or close a position.
 
 TC: `PROD:OPEN_POSITION_STALE_MONITORING_WARNING`
