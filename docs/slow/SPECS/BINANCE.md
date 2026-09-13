@@ -220,9 +220,17 @@ remaining duration, trigger, exact reason, and recent incident logs. MCP
 monitoring snapshots include the same bounded cooldown logs when `logs` is
 requested.
 
+An operator can manually reset an active cooldown from the dashboard after
+changing the public IP. The reset clears the in-memory gate and request-weight
+window, ends any active persisted incidents at the reset time, and retains the
+incidents in the health history. A later Binance rate-limit response activates
+a new cooldown normally.
+
 TC: `PROD:BINANCE_GLOBAL_COOLDOWN`
 
 TC: `PROD:BINANCE_PERSISTENT_COOLDOWN`
+
+TC: `PROD:BINANCE_MANUAL_COOLDOWN_RESET`
 
 ## 9. Position-monitoring health
 

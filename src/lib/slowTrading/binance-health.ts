@@ -38,13 +38,9 @@ function toCooldownState(
 }
 
 const persistence: BinanceCooldownPersistence = {
-  async readActive(now) {
-    const latest = (await readLogs()).reduce<
-      SlowTradingBinanceCooldownLogEntry | undefined
-    >((selected, incident) =>
-      !selected || incident.end > selected.end ? incident : selected,
-    undefined);
-    return latest && latest.end > now ? toCooldownState(latest) : null;
+  async readLatest() {
+    const latest = (await readLogs()).at(-1);
+    return latest ? toCooldownState(latest) : null;
   },
 
   async record(params) {
@@ -90,6 +86,20 @@ const persistence: BinanceCooldownPersistence = {
     );
     return toCooldownState(saved);
   },
+
+  async reset(now) {
+    await slowTradingJsonFile.update.atomic<SlowTradingBinanceCooldownLogEntry[]>(
+      FILES.slow.logs.binanceCooldowns,
+      (raw) => {
+        const current = Array.isArray(raw)
+          ? (raw as SlowTradingBinanceCooldownLogEntry[])
+          : [];
+        return current.map((incident) =>
+          incident.end > now ? { ...incident, end: now } : incident,
+        );
+      },
+    );
+  },
 };
 
 /** Installs persistent cooldown coordination for the current server process. */
@@ -113,6 +123,14 @@ async function readSnapshot(
   };
 }
 
+/** Ends the active persistent cooldown while retaining its incident history. */
+async function reset(): Promise<SlowTradingBinanceHealthSnapshot> {
+  install();
+  // PROD:BINANCE_MANUAL_COOLDOWN_RESET
+  await binanceRequestCoordinator.cooldown.reset();
+  return readSnapshot();
+}
+
 const slowTradingBinanceHealth = {
   coordinator: {
     install,
@@ -120,6 +138,7 @@ const slowTradingBinanceHealth = {
   snapshot: {
     read: readSnapshot,
   },
+  reset,
   storage: {
     readLogs,
   },

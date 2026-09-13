@@ -12,6 +12,7 @@ vi.mock("@lib/trading", () => ({
 
 import binanceRequestCoordinator, {
   BinanceCooldownError,
+  type BinanceCooldownState,
 } from "@/lib/exchange/platform/binance/request-coordinator";
 
 function response<T>(data: T, headers: Record<string, string> = {}) {
@@ -120,12 +121,13 @@ describe("Binance request coordinator", () => {
       typeof binanceRequestCoordinator.cooldown.get
     > = null;
     const persistence = {
-      readActive: vi.fn(async (now: number) =>
-        persisted && persisted.retryAt > now ? persisted : null,
-      ),
+      readLatest: vi.fn(async () => persisted),
       record: vi.fn(async ({ state }: { state: NonNullable<typeof persisted> }) => {
         persisted = state;
         return state;
+      }),
+      reset: vi.fn(async (now: number) => {
+        if (persisted) persisted = { ...persisted, retryAt: now };
       }),
     };
     binanceRequestCoordinator.persistence.use(persistence);
@@ -165,8 +167,44 @@ describe("Binance request coordinator", () => {
     ).rejects.toBeInstanceOf(BinanceCooldownError);
 
     // PROD:BINANCE_PERSISTENT_COOLDOWN
-    expect(persistence.readActive).toHaveBeenCalled();
+    expect(persistence.readLatest).toHaveBeenCalled();
     expect(blockedRequest).not.toHaveBeenCalled();
+  });
+
+  it("manually resets the persistent and in-memory cooldown gate", async () => {
+    const bannedUntil = Date.now() + 30 * 60_000;
+    let persisted = {
+      endpoint: "/fapi/v1/klines",
+      kind: "public" as const,
+      reason: "IP banned",
+      retryAt: bannedUntil,
+      startedAt: Date.now(),
+    };
+    const persistence = {
+      readLatest: vi.fn(async () => persisted),
+      record: vi.fn(async ({ state }: { state: BinanceCooldownState }) => state),
+      reset: vi.fn(async (now: number) => {
+        persisted = { ...persisted, retryAt: now };
+      }),
+    };
+    binanceRequestCoordinator.persistence.use(persistence);
+    await binanceRequestCoordinator.cooldown.refresh();
+
+    await binanceRequestCoordinator.cooldown.reset();
+
+    // PROD:BINANCE_MANUAL_COOLDOWN_RESET
+    expect(persistence.reset).toHaveBeenCalledWith(Date.now());
+    expect(binanceRequestCoordinator.cooldown.get()).toBeNull();
+    const request = vi.fn().mockResolvedValue(response({ ok: true }));
+    await binanceRequestCoordinator.request.run(
+      {
+        domain: "https://fapi.binance.com",
+        endpoint: "/fapi/v1/klines",
+        kind: "public",
+      },
+      request,
+    );
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
   it("does not classify rate limits as retryable failures", () => {

@@ -26,7 +26,10 @@ import MultiLineTimelined from "@/components/ui/Chart/MultiLineTimelined";
 import type { CoinTagState } from "@/lib/devBacktest/coins/tag-types";
 import type { VolatilityPoint } from "@/lib/dynamic";
 import type { UnifiedFundingRate } from "@/lib/exchange";
-import type { SlowTradingDashboardState } from "@/lib/slowTrading";
+import type {
+  SlowTradingBinanceHealthSnapshot,
+  SlowTradingDashboardState,
+} from "@/lib/slowTrading";
 import { tradeLog } from "@/lib/trading/helper/log";
 
 import { delayExecution, queueExecution } from "../client/utils";
@@ -224,6 +227,12 @@ export default function DynamicTradeHistoryPage({
     setSymbols(symbolsLocal);
 
     return symbolsLocal;
+  }
+
+  function applyBinanceHealth(health: SlowTradingBinanceHealthSnapshot) {
+    setDashboardState((current) =>
+      current ? { ...current, binanceHealth: health } : current,
+    );
   }
 
   const execute = async (reinitialize = false) => {
@@ -843,7 +852,10 @@ export default function DynamicTradeHistoryPage({
                   onRefresh={execute}
                   state={dashboardState}
                 />
-                <BinanceCooldownStatusSection state={dashboardState} />
+                <BinanceCooldownStatusSection
+                  onReset={applyBinanceHealth}
+                  state={dashboardState}
+                />
 
                 <OpenPositions
                   availableTags={coinMetadata.tags.map((tag) => tag.text)}
@@ -907,7 +919,10 @@ export default function DynamicTradeHistoryPage({
                       onRefresh={execute}
                       state={dashboardState}
                     />
-                    <BinanceCooldownStatusSection state={dashboardState} />
+                    <BinanceCooldownStatusSection
+                      onReset={applyBinanceHealth}
+                      state={dashboardState}
+                    />
                   </Stack>
                 </Grid>
                 <Grid size={{ xl: 5, lg: 5, md: 6, xs: 12 }}>

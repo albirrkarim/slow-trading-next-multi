@@ -224,6 +224,28 @@ describe("slow specs logs", () => {
 
     // PROD:BINANCE_PERSISTENT_COOLDOWN
     expect(request).not.toHaveBeenCalled();
+
+    const health = await slowTrading.binanceHealth.reset();
+    const resumedRequest = vi.fn(async () => ({ data: {}, headers: {} }) as any);
+    await coordinator.request.run(
+      {
+        domain: "https://fapi.binance.com",
+        endpoint: "/fapi/v1/klines",
+        kind: "public",
+      },
+      resumedRequest,
+    );
+
+    // PROD:BINANCE_MANUAL_COOLDOWN_RESET
+    expect(health.current).toBeNull();
+    expect(health.logs[0]).toEqual(
+      expect.objectContaining({
+        endpoint: "/fapi/v2/balance",
+        end: expect.any(Number),
+      }),
+    );
+    expect(health.logs[0].end).toBeLessThan(bannedUntil);
+    expect(resumedRequest).toHaveBeenCalledTimes(1);
   });
 
   it("deletes records from every persistent log without removing others", async () => {

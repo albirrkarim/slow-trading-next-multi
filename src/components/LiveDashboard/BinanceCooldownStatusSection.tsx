@@ -2,12 +2,19 @@
 
 import AccessTimeOutlinedIcon from "@mui/icons-material/AccessTimeOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
-import { Box, Chip, Stack, Typography } from "@mui/material";
+import { Box, Button, Chip, Stack, Typography } from "@mui/material";
+import axios from "axios";
+import { useSnackbar } from "notistack";
 import { useEffect, useState } from "react";
 
+import { endpoints } from "@/components/endpoints";
 import HeaderMetrics from "@/components/ui/HeaderMetrics";
-import type { SlowTradingDashboardState } from "@/lib/slowTrading";
+import type {
+  SlowTradingDashboardState,
+  SlowTradingBinanceHealthSnapshot,
+} from "@/lib/slowTrading";
 
 const JAKARTA_TIME_ZONE = "Asia/Jakarta";
 
@@ -29,11 +36,15 @@ function formatRemaining(ms: number): string {
 }
 
 export default function BinanceCooldownStatusSection({
+  onReset,
   state,
 }: {
+  onReset: (health: SlowTradingBinanceHealthSnapshot) => void;
   state: SlowTradingDashboardState;
 }) {
+  const { enqueueSnackbar } = useSnackbar();
   const [now, setNow] = useState(0);
+  const [resetting, setResetting] = useState(false);
   const health = state.binanceHealth ?? { current: null, logs: [] };
   const active = Boolean(health.current && health.current.retryAt > now);
 
@@ -45,6 +56,27 @@ export default function BinanceCooldownStatusSection({
       window.clearInterval(intervalId);
     };
   }, []);
+
+  async function resetCooldown() {
+    setResetting(true);
+    try {
+      const response = await axios.post<SlowTradingBinanceHealthSnapshot>(
+        endpoints.slow.prod.binanceCooldownReset,
+      );
+      onReset(response.data);
+      setNow(Date.now());
+      enqueueSnackbar("Binance REST cooldown reset", { variant: "success" });
+    } catch (error) {
+      enqueueSnackbar(
+        axios.isAxiosError(error)
+          ? error.response?.data?.error ?? error.message
+          : "Failed to reset Binance REST cooldown",
+        { variant: "error" },
+      );
+    } finally {
+      setResetting(false);
+    }
+  }
 
   return (
     // PROD:BINANCE_PERSISTENT_COOLDOWN
@@ -81,6 +113,23 @@ export default function BinanceCooldownStatusSection({
               />
             )}
           </Stack>
+        }
+        titleRight={
+          active ? (
+            <Button
+              color="error"
+              disabled={resetting}
+              onClick={(event) => {
+                event.stopPropagation();
+                void resetCooldown();
+              }}
+              size="small"
+              startIcon={<RestartAltIcon />}
+              variant="outlined"
+            >
+              {resetting ? "Resetting…" : "Reset cooldown"}
+            </Button>
+          ) : undefined
         }
       >
         {(expanded) =>

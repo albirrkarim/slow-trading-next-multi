@@ -17,6 +17,7 @@ export const slowEndpoints = {
     withdraw: `${DASHBOARD_UI_API}/slow-trading/withdraw`,
     balanceRefresh: `${DASHBOARD_UI_API}/slow-trading/balance-refresh`,
     balanceSnapshots: `${DASHBOARD_UI_API}/slow-trading/balance-snapshots`,
+    binanceCooldownReset: `${DASHBOARD_UI_API}/slow-trading/binance-cooldown-reset`,
     queue: `${DASHBOARD_UI_API}/slow-trading/queue`,
     logs: `${DASHBOARD_UI_API}/slow-trading/logs`,
     mcpTokens: `${DASHBOARD_UI_API}/slow-trading/mcp-tokens`,

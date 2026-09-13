@@ -30,8 +30,8 @@ export interface BinanceCooldownState {
 }
 
 export interface BinanceCooldownPersistence {
-  /** Reads the active cooldown shared by every runtime route/process. */
-  readActive: (now: number) => Promise<BinanceCooldownState | null>;
+  /** Reads the latest persisted cooldown shared by every runtime route/process. */
+  readLatest: () => Promise<BinanceCooldownState | null>;
   /** Persists a newly detected or extended Binance cooldown. */
   record: (params: {
     code?: number | string;
@@ -40,6 +40,8 @@ export interface BinanceCooldownPersistence {
     state: BinanceCooldownState;
     status?: number;
   }) => Promise<BinanceCooldownState>;
+  /** Ends every persisted active cooldown at the operator reset time. */
+  reset: (now: number) => Promise<void>;
 }
 
 export class BinanceApiError extends Error {
@@ -297,11 +299,27 @@ function getActiveCooldown(now = Date.now()): BinanceCooldownState | null {
 /** Hydrates the in-memory gate from persistent shared runtime health. */
 async function refreshCooldown(now = Date.now()): Promise<BinanceCooldownState | null> {
   const runtime = getRuntimeState();
-  const persisted = await runtime.persistence?.readActive(now);
-  if (persisted && persisted.retryAt > (runtime.cooldown?.retryAt ?? 0)) {
-    runtime.cooldown = { ...persisted };
+  const persisted = await runtime.persistence?.readLatest();
+  if (persisted?.retryAt && persisted.retryAt > now) {
+    if (persisted.retryAt > (runtime.cooldown?.retryAt ?? 0)) {
+      runtime.cooldown = { ...persisted };
+    }
+  } else if (
+    persisted &&
+    runtime.cooldown?.startedAt === persisted.startedAt
+  ) {
+    runtime.cooldown = null;
   }
   return getActiveCooldown(now);
+}
+
+/** Manually clears the persistent cooldown gate after an operator changes IP. */
+async function resetCooldown(now = Date.now()): Promise<void> {
+  const runtime = getRuntimeState();
+  await runtime.persistence?.reset(now);
+  runtime.cooldown = null;
+  runtime.lastRequestAt = 0;
+  runtime.usageByScope.clear();
 }
 
 function assertAvailable(now = Date.now()): void {
@@ -476,6 +494,7 @@ const binanceRequestCoordinator = {
     assertAvailable,
     get: getActiveCooldown,
     refresh: refreshCooldown,
+    reset: resetCooldown,
   },
   error: {
     isRateLimit: isRateLimitError,
