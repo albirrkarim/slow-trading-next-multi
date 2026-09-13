@@ -69,6 +69,11 @@ describe("navbar production stage runs", () => {
     expect(screen.getByText("Capture Entry")).toBeTruthy();
     expect(screen.getByText("0 reports / 1 coin")).toBeTruthy();
     expect(screen.getByText("1 report / 2 coins")).toBeTruthy();
+    expect(screen.getByText("1 Aug 10:24 WIB")).toBeTruthy();
+    expect(screen.getByText("1 Aug 10:23 WIB")).toBeTruthy();
+    expect(
+      screen.getByText("Last run: 1 - Aug 10:24 WIB (2s)"),
+    ).toBeTruthy();
     expect(screen.queryByText("latest prices")).toBeNull();
     expect(
       window.getComputedStyle(screen.getByText("Stage").closest("th")!).color,

@@ -15,7 +15,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import moment from "moment";
+import moment from "moment-timezone";
 
 import slowTradingStages from "@/lib/slowTrading/stages";
 import type {
@@ -31,6 +31,7 @@ const STAGE_LABELS: Record<SlowTradingStage, string> = {
   management: "Management",
   "capture-entry": "Capture Entry",
 };
+const JAKARTA_TIME_ZONE = "Asia/Jakarta";
 
 /** Formats a stage duration for the compact navbar display. */
 function formatDuration(durationMs?: number) {
@@ -96,7 +97,9 @@ function formatLastRunLabel(dashboardState: SlowTradingDashboardState) {
   }
 
   const duration = formatDuration(latestRun.ms);
-  const runDate = moment(latestRun.t).format("D - MMM HH:mm");
+  const runDate = moment
+    .tz(latestRun.t, JAKARTA_TIME_ZONE)
+    .format("D - MMM HH:mm [WIB]");
   return [`Last run: ${runDate}`, duration ? `(${duration})` : ""]
     .filter(Boolean)
     .join(" ");
@@ -217,7 +220,11 @@ function StageRunsTable({
                   </TableCell>
                   <TableCell sx={{ px: 1, whiteSpace: "nowrap" }}>
                     <Typography variant="caption">
-                      {run ? moment(run.t).format("D MMM HH:mm") : "Never"}
+                      {run
+                        ? moment
+                            .tz(run.t, JAKARTA_TIME_ZONE)
+                            .format("D MMM HH:mm [WIB]")
+                        : "Never"}
                     </Typography>
                   </TableCell>
                   <TableCell align="right" sx={{ px: 1 }}>
