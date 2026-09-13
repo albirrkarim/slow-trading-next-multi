@@ -55,7 +55,9 @@ describe("open-position Speedup chip", () => {
     );
 
     // PROD:OPEN_POSITION_STALE_MONITORING_WARNING
-    expect(screen.getByLabelText("Monitoring stale")).toBeDefined();
+    expect(
+      screen.getByLabelText("Last monitored is 01 Jan 07:09 WIB"),
+    ).toBeDefined();
   });
 
   it("shows the latest successful monitoring time for Speedup positions", async () => {

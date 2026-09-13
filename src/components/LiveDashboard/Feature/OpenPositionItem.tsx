@@ -139,6 +139,17 @@ function formatDate(value?: number) {
   return new Date(value).toLocaleString();
 }
 
+/** Formats stale-monitoring status in the fixed Jakarta operator timezone. */
+function formatLastMonitoredLabel(value?: number): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return "Never monitored";
+  }
+
+  return `Last monitored is ${moment(value)
+    .tz("Asia/Jakarta")
+    .format("DD MMM HH:mm [WIB]")}`;
+}
+
 const tooltipSlotProps = {
   tooltip: {
     sx: {
@@ -303,10 +314,14 @@ export default function OpenPositionItem({
                 }
               >
                 <Chip
-                  aria-label="Monitoring stale"
+                  aria-label={formatLastMonitoredLabel(
+                    lastMonitoringStage?.lastUpdated,
+                  )}
                   color="error"
                   icon={<WarningAmberRoundedIcon />}
-                  label="Monitoring stale"
+                  label={formatLastMonitoredLabel(
+                    lastMonitoringStage?.lastUpdated,
+                  )}
                   size="small"
                   variant="outlined"
                 />
