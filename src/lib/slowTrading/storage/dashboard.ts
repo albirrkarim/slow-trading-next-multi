@@ -23,6 +23,7 @@ import binanceRequestCoordinator, {
   BinanceCooldownError,
 } from "@/lib/exchange/platform/binance/request-coordinator";
 import blackSwan from "@/lib/trading/black-swan";
+import slowTradingBinanceHealth from "../binance-health";
 
 /**
  * Gets slow trading latest price map from SLOW state or storage.
@@ -361,6 +362,10 @@ export function buildSlowTradingDashboardState(
     blackSwan: clone(
       modeState.blackSwan ?? blackSwan.state.create(),
     ),
+    binanceHealth: {
+      current: binanceRequestCoordinator.cooldown.get(),
+      logs: [],
+    },
     balances: {
       availableQuoteAsset,
       reservedQuoteAsset,
@@ -401,6 +406,9 @@ export async function buildSlowTradingDashboardStateRealtime(
   storage: SlowTradingStorageData,
 ): Promise<SlowTradingDashboardState> {
   let snapshot = buildSlowTradingDashboardState(storage);
+  snapshot.binanceHealth = await slowTradingBinanceHealth.snapshot.read({
+    limit: 20,
+  });
 
   if (snapshot.activeMode === "live") {
     const liveQuoteBalance = await getSlowTradingLiveQuoteBalance(storage);

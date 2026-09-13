@@ -21,6 +21,43 @@ vi.mock("@/components/dev/Coins/CoinTagChip", () => ({
 }));
 
 describe("open-position Speedup chip", () => {
+  it("warns when successful monitoring is older than ten minutes", () => {
+    const now = Date.UTC(2026, 0, 1, 0, 20);
+    const position = createTestPosition({
+      direction: "LONG",
+      entryPrice: 10,
+      executionMode: "live",
+      symbol: "SUI",
+    });
+    position.lastMonitoringStage = {
+      stage: "standard",
+      lastUpdated: now - 11 * 60_000,
+      reason: "No Speedup rule matched",
+    };
+
+    render(
+      <OpenPositionItem
+        availableTags={[]}
+        coinDescription=""
+        coinTags={[]}
+        config={{ watchReservePctAlloc: 2 } as any}
+        exchangeType="binance"
+        now={now}
+        onCoinDescriptionChange={vi.fn()}
+        onCoinTagsChange={vi.fn()}
+        pnlContributionShare={1}
+        position={{ ...position, mode: "live" }}
+        spendableQuoteAsset={100}
+        tagColors={{}}
+        tagDescriptions={{}}
+        volatilityPoints={[]}
+      />,
+    );
+
+    // PROD:OPEN_POSITION_STALE_MONITORING_WARNING
+    expect(screen.getByLabelText("Monitoring stale")).toBeDefined();
+  });
+
   it("shows the latest successful monitoring time for Speedup positions", async () => {
     const lastUpdated = Date.UTC(2026, 0, 1, 0, 5);
     const position = createTestPosition({

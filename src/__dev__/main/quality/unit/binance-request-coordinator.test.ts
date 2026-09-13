@@ -105,11 +105,68 @@ describe("Binance request coordinator", () => {
     // PROD:BINANCE_GLOBAL_COOLDOWN
     expect(firstRequest).toHaveBeenCalledTimes(1);
     expect(blockedRequest).not.toHaveBeenCalled();
-    expect(binanceRequestCoordinator.cooldown.get()).toEqual({
+    expect(binanceRequestCoordinator.cooldown.get()).toMatchObject({
+      endpoint: "/fapi/v1/klines",
+      kind: "public",
       reason: `Way too many requests; IP banned until ${bannedUntil}`,
       retryAt: bannedUntil,
+      startedAt: Date.now(),
     });
     expect(mocks.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("hydrates a persisted cooldown before invoking a REST callback", async () => {
+    let persisted: ReturnType<
+      typeof binanceRequestCoordinator.cooldown.get
+    > = null;
+    const persistence = {
+      readActive: vi.fn(async (now: number) =>
+        persisted && persisted.retryAt > now ? persisted : null,
+      ),
+      record: vi.fn(async ({ state }: { state: NonNullable<typeof persisted> }) => {
+        persisted = state;
+        return state;
+      }),
+    };
+    binanceRequestCoordinator.persistence.use(persistence);
+    const bannedUntil = Date.now() + 30 * 60_000;
+
+    await expect(
+      binanceRequestCoordinator.request.run(
+        {
+          domain: "https://fapi.binance.com",
+          endpoint: "/fapi/v2/balance",
+          kind: "private",
+        },
+        vi.fn().mockRejectedValue({
+          response: {
+            data: {
+              code: -1003,
+              msg: `Way too many requests; IP banned until ${bannedUntil}`,
+            },
+            status: 418,
+          },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(BinanceCooldownError);
+
+    binanceRequestCoordinator.state.reset();
+    binanceRequestCoordinator.persistence.use(persistence);
+    const blockedRequest = vi.fn().mockResolvedValue(response({ ok: true }));
+    await expect(
+      binanceRequestCoordinator.request.run(
+        {
+          domain: "https://fapi.binance.com",
+          endpoint: "/fapi/v1/klines",
+          kind: "public",
+        },
+        blockedRequest,
+      ),
+    ).rejects.toBeInstanceOf(BinanceCooldownError);
+
+    // PROD:BINANCE_PERSISTENT_COOLDOWN
+    expect(persistence.readActive).toHaveBeenCalled();
+    expect(blockedRequest).not.toHaveBeenCalled();
   });
 
   it("does not classify rate limits as retryable failures", () => {

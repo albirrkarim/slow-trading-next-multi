@@ -9,9 +9,10 @@ import slowTradingStorage from "./storage";
 import binanceRequestCoordinator, {
   BinanceCooldownError,
 } from "@/lib/exchange/platform/binance/request-coordinator";
+import slowTradingBinanceHealth from "./binance-health";
 
 const MINUTE_MS = 60 * 1000;
-export const SLOW_TRADING_RUNNER_IMPLEMENTATION_VERSION = 10;
+export const SLOW_TRADING_RUNNER_IMPLEMENTATION_VERSION = 11;
 
 /** Background in-process scheduler for the independent SLOW production stages. */
 export class SlowTradingRunner {
@@ -30,6 +31,7 @@ export class SlowTradingRunner {
     }
 
     this.isRunning = true;
+    slowTradingBinanceHealth.coordinator.install();
     tradeLog.log("runner started");
     // PROD:STAGE_RUN_STATS
     for (const stage of slowTradingStages.order) {
@@ -122,7 +124,10 @@ export class SlowTradingRunner {
     const intervalMs =
       slowTradingStages.interval.getMinutes(storage.runtime, stage) * MINUTE_MS;
 
-    const activeCooldown = binanceRequestCoordinator.cooldown.get();
+    const activeCooldown =
+      storage.config.exchangeType === "binance"
+        ? await binanceRequestCoordinator.cooldown.refresh()
+        : binanceRequestCoordinator.cooldown.get();
     if (activeCooldown && storage.config.exchangeType === "binance") {
       tradeLog.debug(
         `skipping ${stage} stage during Binance cooldown until ${new Date(

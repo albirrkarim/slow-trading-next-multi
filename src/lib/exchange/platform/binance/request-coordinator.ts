@@ -7,9 +7,9 @@ const BASE_REQUEST_GAP_MS = 350;
 const HIGH_USAGE_REQUEST_GAP_MS = 1_000;
 const CRITICAL_USAGE_REQUEST_GAP_MS = 2_000;
 
-type BinanceRequestKind = "private" | "public";
+export type BinanceRequestKind = "private" | "public";
 
-interface BinanceRequestDescriptor {
+export interface BinanceRequestDescriptor {
   domain: string;
   endpoint: string;
   kind: BinanceRequestKind;
@@ -22,8 +22,24 @@ interface BinanceUsageState {
 }
 
 export interface BinanceCooldownState {
+  endpoint: string;
+  kind: BinanceRequestKind;
   reason: string;
   retryAt: number;
+  startedAt: number;
+}
+
+export interface BinanceCooldownPersistence {
+  /** Reads the active cooldown shared by every runtime route/process. */
+  readActive: (now: number) => Promise<BinanceCooldownState | null>;
+  /** Persists a newly detected or extended Binance cooldown. */
+  record: (params: {
+    code?: number | string;
+    descriptor: BinanceRequestDescriptor;
+    detectedAt: number;
+    state: BinanceCooldownState;
+    status?: number;
+  }) => Promise<BinanceCooldownState>;
 }
 
 export class BinanceApiError extends Error {
@@ -75,10 +91,32 @@ export class BinanceCooldownError extends BinanceApiError {
   }
 }
 
-let requestQueue: Promise<unknown> = Promise.resolve();
-let lastRequestAt = 0;
-let cooldownState: BinanceCooldownState | null = null;
-const usageByScope = new Map<string, BinanceUsageState>();
+interface BinanceCoordinatorRuntimeState {
+  cooldown: BinanceCooldownState | null;
+  lastRequestAt: number;
+  persistence: BinanceCooldownPersistence | null;
+  queue: Promise<unknown>;
+  usageByScope: Map<string, BinanceUsageState>;
+}
+
+const GLOBAL_STATE_KEY = Symbol.for(
+  "slow-trading.binance-request-coordinator.state",
+);
+
+/** Shares Binance coordination across server bundles loaded in one process. */
+function getRuntimeState(): BinanceCoordinatorRuntimeState {
+  const scope = globalThis as typeof globalThis & {
+    [GLOBAL_STATE_KEY]?: BinanceCoordinatorRuntimeState;
+  };
+  scope[GLOBAL_STATE_KEY] ??= {
+    cooldown: null,
+    lastRequestAt: 0,
+    persistence: null,
+    queue: Promise.resolve(),
+    usageByScope: new Map<string, BinanceUsageState>(),
+  };
+  return scope[GLOBAL_STATE_KEY];
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -236,22 +274,34 @@ function getWeightLimit(domain: string): number {
 }
 
 function getUsage(scope: string, now: number): BinanceUsageState {
+  const runtime = getRuntimeState();
   const windowStartMs = Math.floor(now / MINUTE_MS) * MINUTE_MS;
-  const existing = usageByScope.get(scope);
+  const existing = runtime.usageByScope.get(scope);
   if (!existing || existing.windowStartMs !== windowStartMs) {
     const next = { usedWeight: 0, windowStartMs };
-    usageByScope.set(scope, next);
+    runtime.usageByScope.set(scope, next);
     return next;
   }
   return existing;
 }
 
 function getActiveCooldown(now = Date.now()): BinanceCooldownState | null {
-  if (!cooldownState || cooldownState.retryAt <= now) {
-    cooldownState = null;
+  const runtime = getRuntimeState();
+  if (!runtime.cooldown || runtime.cooldown.retryAt <= now) {
+    runtime.cooldown = null;
     return null;
   }
-  return { ...cooldownState };
+  return { ...runtime.cooldown };
+}
+
+/** Hydrates the in-memory gate from persistent shared runtime health. */
+async function refreshCooldown(now = Date.now()): Promise<BinanceCooldownState | null> {
+  const runtime = getRuntimeState();
+  const persisted = await runtime.persistence?.readActive(now);
+  if (persisted && persisted.retryAt > (runtime.cooldown?.retryAt ?? 0)) {
+    runtime.cooldown = { ...persisted };
+  }
+  return getActiveCooldown(now);
 }
 
 function assertAvailable(now = Date.now()): void {
@@ -264,10 +314,14 @@ function assertAvailable(now = Date.now()): void {
   });
 }
 
-function activateCooldown(error: unknown, descriptor: BinanceRequestDescriptor) {
+async function activateCooldown(
+  error: unknown,
+  descriptor: BinanceRequestDescriptor,
+) {
   if (!isRateLimitError(error)) return null;
 
   const now = Date.now();
+  const runtime = getRuntimeState();
   const message = getErrorMessage(error);
   const retryAfter = resolveRetryAfterMs(
     getHeader((error as any)?.response?.headers, "retry-after"),
@@ -278,21 +332,44 @@ function activateCooldown(error: unknown, descriptor: BinanceRequestDescriptor) 
     now + DEFAULT_COOLDOWN_MS,
     retryAfter ?? 0,
     bannedUntil ?? 0,
-    cooldownState?.retryAt ?? 0,
+    runtime.cooldown?.retryAt ?? 0,
   );
-  const enteredOrExtended = !cooldownState || retryAt > cooldownState.retryAt;
+  const enteredOrExtended =
+    !runtime.cooldown || retryAt > runtime.cooldown.retryAt;
 
-  cooldownState = {
+  let nextState: BinanceCooldownState = {
+    endpoint: descriptor.endpoint,
+    kind: descriptor.kind,
     reason: message,
     retryAt,
+    startedAt: runtime.cooldown?.startedAt ?? now,
   };
+
+  if (runtime.persistence) {
+    try {
+      nextState = await runtime.persistence.record({
+        code: getErrorCode(error),
+        descriptor,
+        detectedAt: now,
+        state: nextState,
+        status: getErrorStatus(error),
+      });
+    } catch (persistenceError) {
+      tradeLog.error("Failed to persist Binance REST cooldown", {
+        endpoint: descriptor.endpoint,
+        error: persistenceError,
+      });
+    }
+  }
+  runtime.cooldown = nextState;
 
   if (enteredOrExtended) {
     tradeLog.error("Binance REST cooldown activated", {
       endpoint: descriptor.endpoint,
       kind: descriptor.kind,
       reason: message,
-      retryAt,
+      retryAt: nextState.retryAt,
+      startedAt: nextState.startedAt,
     });
   }
 
@@ -300,7 +377,7 @@ function activateCooldown(error: unknown, descriptor: BinanceRequestDescriptor) 
     activated: enteredOrExtended,
     code: getErrorCode(error),
     reason: message,
-    retryAt,
+    retryAt: nextState.retryAt,
     status: getErrorStatus(error),
   });
 }
@@ -319,8 +396,10 @@ function observeResponse(
 }
 
 async function throttle(descriptor: BinanceRequestDescriptor): Promise<void> {
+  await refreshCooldown();
   assertAvailable();
 
+  const runtime = getRuntimeState();
   let now = Date.now();
   const scope = getScope(descriptor.domain);
   let usage = getUsage(scope, now);
@@ -343,14 +422,14 @@ async function throttle(descriptor: BinanceRequestDescriptor): Promise<void> {
       : ratio >= 0.7
         ? HIGH_USAGE_REQUEST_GAP_MS
         : BASE_REQUEST_GAP_MS;
-  const elapsed = now - lastRequestAt;
+  const elapsed = now - runtime.lastRequestAt;
   if (elapsed < minimumGapMs) {
     await delay(minimumGapMs - elapsed);
     assertAvailable();
   }
 
-  lastRequestAt = Date.now();
-  getUsage(scope, lastRequestAt).usedWeight += weight;
+  runtime.lastRequestAt = Date.now();
+  getUsage(scope, runtime.lastRequestAt).usedWeight += weight;
 }
 
 /** Runs one public or private Binance REST call through the shared queue. */
@@ -358,19 +437,20 @@ async function run<T>(
   descriptor: BinanceRequestDescriptor,
   request: () => Promise<AxiosResponse<T>>,
 ): Promise<AxiosResponse<T>> {
-  const result = requestQueue.then(async () => {
+  const runtime = getRuntimeState();
+  const result = runtime.queue.then(async () => {
     await throttle(descriptor);
     try {
       const response = await request();
       observeResponse(descriptor, response);
       return response;
     } catch (error) {
-      const cooldownError = activateCooldown(error, descriptor);
+      const cooldownError = await activateCooldown(error, descriptor);
       throw cooldownError ?? error;
     }
   });
 
-  requestQueue = result.then(
+  runtime.queue = result.then(
     () => undefined,
     () => undefined,
   );
@@ -378,16 +458,24 @@ async function run<T>(
 }
 
 function resetState(): void {
-  requestQueue = Promise.resolve();
-  lastRequestAt = 0;
-  cooldownState = null;
-  usageByScope.clear();
+  const runtime = getRuntimeState();
+  runtime.queue = Promise.resolve();
+  runtime.lastRequestAt = 0;
+  runtime.cooldown = null;
+  runtime.persistence = null;
+  runtime.usageByScope.clear();
+}
+
+/** Installs the application persistence used by every Binance request. */
+function usePersistence(persistence: BinanceCooldownPersistence | null): void {
+  getRuntimeState().persistence = persistence;
 }
 
 const binanceRequestCoordinator = {
   cooldown: {
     assertAvailable,
     get: getActiveCooldown,
+    refresh: refreshCooldown,
   },
   error: {
     isRateLimit: isRateLimitError,
@@ -396,6 +484,9 @@ const binanceRequestCoordinator = {
   request: {
     run,
     weight: estimateRequestWeight,
+  },
+  persistence: {
+    use: usePersistence,
   },
   state: {
     reset: resetState,

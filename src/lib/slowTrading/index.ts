@@ -20,6 +20,7 @@ import slowTradingWorkerCapacity from "./worker-capacity";
 import slowTradingWithdrawal from "./withdrawal";
 import slowTradingBlackSwan from "./black-swan";
 import slowTradingDailyPnlLimit from "./daily-pnl-limit";
+import slowTradingBinanceHealth from "./binance-health";
 
 /**
  * Grouped SLOW trading API. Prefer this facade for new SLOW orchestration code
@@ -27,6 +28,7 @@ import slowTradingDailyPnlLimit from "./daily-pnl-limit";
  */
 const slowTrading = {
   balanceSummary: slowTradingBalanceSummary,
+  binanceHealth: slowTradingBinanceHealth,
   blackSwan: slowTradingBlackSwan,
   debugSync: slowTradingDebugSync,
   dailyPnlLimit: slowTradingDailyPnlLimit,

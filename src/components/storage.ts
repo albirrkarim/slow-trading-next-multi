@@ -45,6 +45,7 @@ const SLOW_FILES = {
   notificationDedupe: `${SLOW_TRADING_DIR}/notification-dedupe.json`,
   queue: `${SLOW_TRADING_DIR}/queue.json`,
   logs: {
+    binanceCooldowns: `${SLOW_TRADING_DIR}/logs/binance_cooldowns.json`,
     errors: `${SLOW_TRADING_DIR}/logs/errors.json`,
     management: `${SLOW_TRADING_DIR}/logs/management.json`,
     safeHaven: `${SLOW_TRADING_DIR}/logs/safe_haven.json`,

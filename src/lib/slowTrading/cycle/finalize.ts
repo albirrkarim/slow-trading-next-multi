@@ -42,8 +42,13 @@ async function execute(
     volatilityPointsMap,
   } = runtime;
 
-  // H. Refresh final live balance and persist all updated execution state.
-  if (!isSandbox) {
+  // H. Refresh only after an order changed the account. The cycle-start balance
+  // remains authoritative for monitoring-only passes.
+  const executedOrder = reports.some((report) =>
+    ["BUY", "SELL"].includes(report.tradingDetail?.action ?? ""),
+  );
+  if (!isSandbox && executedOrder) {
+    // PROD:BINANCE_BALANCE_REQUEST_BUDGET
     const realQuoteFinal = await profiler.time("cycle.balanceRefresh", () =>
       exchange.getBalance("USDT_USDT"),
     );

@@ -118,7 +118,7 @@ describe("BlackSwanStatusSection", () => {
     // PROD:BLACK_SWAN_RISK_SENTINEL
     expect(source.indexOf("<BlackSwanStatusSection")).toBeGreaterThan(-1);
     expect(source).toMatch(
-      /<Grid size=\{\{ xl: 4, lg: 3, md: 6, xs: 12 \}\}>\s*<BlackSwanStatusSection/,
+      /<Grid size=\{\{ xl: 4, lg: 3, md: 6, xs: 12 \}\}>\s*<Stack>\s*<BlackSwanStatusSection/,
     );
     expect(source).not.toContain("<EntrySignals");
   });

@@ -8,6 +8,7 @@ import {
   Button,
   Grid,
   LinearProgress,
+  Stack,
   Typography,
   useMediaQuery,
 } from "@mui/material";
@@ -44,6 +45,7 @@ import WorkerEntrySequenceMetrics from "./Feature/WorkerEntrySequenceMetrics";
 import WorkerNeededEstimation from "./Feature/WorkerNeededEstimation";
 import LiveDashboardNavbar from "./Navbar";
 import BlackSwanStatusSection from "./BlackSwanStatusSection";
+import BinanceCooldownStatusSection from "./BinanceCooldownStatusSection";
 import SystemAccountSummary from "./SystemAccountSummary";
 import DateSelectionDialog from "./Navbar/DateSelectionDialog";
 import { DASHBOARD_POLL_INTERVAL_MS } from "./constants";
@@ -841,6 +843,7 @@ export default function DynamicTradeHistoryPage({
                   onRefresh={execute}
                   state={dashboardState}
                 />
+                <BinanceCooldownStatusSection state={dashboardState} />
 
                 <OpenPositions
                   availableTags={coinMetadata.tags.map((tag) => tag.text)}
@@ -899,10 +902,13 @@ export default function DynamicTradeHistoryPage({
             ) : (
               <Grid container spacing={2}>
                 <Grid size={{ xl: 4, lg: 3, md: 6, xs: 12 }}>
-                  <BlackSwanStatusSection
-                    onRefresh={execute}
-                    state={dashboardState}
-                  />
+                  <Stack>
+                    <BlackSwanStatusSection
+                      onRefresh={execute}
+                      state={dashboardState}
+                    />
+                    <BinanceCooldownStatusSection state={dashboardState} />
+                  </Stack>
                 </Grid>
                 <Grid size={{ xl: 5, lg: 5, md: 6, xs: 12 }}>
                   <OpenPositions

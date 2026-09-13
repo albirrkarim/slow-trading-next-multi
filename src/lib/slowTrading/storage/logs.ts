@@ -5,6 +5,7 @@ import { MAX_SLOW_TRADING_LOG_ENTRIES } from "./constants";
 import slowTradingJsonFile from "./json-file";
 import type {
   SlowTradingErrorLogEntry,
+  SlowTradingBinanceCooldownLogEntry,
   SlowTradingErrorStatus,
   SlowTradingErrorStatusUpdateResult,
   SlowTradingLogKind,
@@ -267,7 +268,10 @@ export async function appendSlowTradingWithdrawalLog(
  * Loads slow trading logs from SLOW persistent storage.
  */
 export async function loadSlowTradingLogs(): Promise<SlowTradingLogs> {
-  const [errors, management, safeHaven, withdrawals] = await Promise.all([
+  const [binanceCooldowns, errors, management, safeHaven, withdrawals] = await Promise.all([
+    readLogFile<SlowTradingBinanceCooldownLogEntry>(
+      FILES.slow.logs.binanceCooldowns,
+    ),
     readLogFile<SlowTradingErrorLogEntry>(FILES.slow.logs.errors),
     readLogFile<SlowTradingManagementLogEntry>(FILES.slow.logs.management),
     readLogFile<SlowTradingSafeHavenLogEntry>(FILES.slow.logs.safeHaven),
@@ -275,6 +279,7 @@ export async function loadSlowTradingLogs(): Promise<SlowTradingLogs> {
   ]);
 
   return {
+    binanceCooldowns: binanceCooldowns.sort((a, b) => b.t - a.t),
     errors: errors.sort((a, b) => b.createdAt - a.createdAt),
     management: management.sort((a, b) => b.createdAt - a.createdAt),
     safeHaven: safeHaven.sort((a, b) => b.createdAt - a.createdAt),

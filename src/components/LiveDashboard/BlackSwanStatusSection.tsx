@@ -175,15 +175,7 @@ export default function BlackSwanStatusSection({
       aria-label="Live Black Swan decision"
       aria-live="polite"
       component="section"
-      sx={(theme) => ({
-        border: `1px solid ${theme.palette[color].main}`,
-        borderColor: theme.palette[color].main,
-        borderLeftWidth: 4,
-        borderRadius: 1,
-        mb: 2,
-        overflow: "hidden",
-        p: { xs: 1.5, sm: 2 },
-      })}
+      sx={{ mb: 2 }}
     >
       <HeaderMetrics
         defaultExpanded={false}
@@ -191,8 +183,8 @@ export default function BlackSwanStatusSection({
         rememberExpand="black-swan-risk-sentinel"
         title={
           <Stack alignItems="center" direction="row" flexWrap="wrap" gap={1}>
-            <ShieldOutlinedIcon color={color} />
-            <Typography fontWeight={800} variant="h6">
+            <ShieldOutlinedIcon color={color} fontSize="small" />
+            <Typography fontWeight="bold" variant="body1">
               Black Swan Risk Sentinel
             </Typography>
             <Chip color={color} label={state.blackSwan.status} size="small" />
@@ -227,7 +219,16 @@ export default function BlackSwanStatusSection({
       >
         {(expanded) =>
           expanded && (
-            <Stack gap={1.25}>
+            <Stack
+              gap={1.25}
+              sx={(theme) => ({
+                border: `1px solid ${theme.palette[color].main}`,
+                borderLeftWidth: 4,
+                borderRadius: 1,
+                mt: 1,
+                p: { xs: 1.5, sm: 2 },
+              })}
+            >
               <Box>
                 <Typography fontWeight={700} variant="body1">
                   {protectionActive

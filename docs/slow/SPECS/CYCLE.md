@@ -281,10 +281,12 @@ TC: `PROD:SHARED_MARKET_SINGLE_FLIGHT`
 ### 8.1 Binance Request Coordinator
 
 Every Binance public and private REST request in the exchange adapter must pass
-through one in-process coordinator. The coordinator serializes REST work,
+through one process-wide coordinator. The coordinator serializes REST work,
 estimates the documented endpoint request weight, observes
 `X-MBX-USED-WEIGHT-*` response headers, and slows or defers requests as the
-current request-weight window approaches its limit.
+current request-weight window approaches its limit. Its process state uses one
+`globalThis` key so separately bundled server routes cannot create independent
+queues in the same Node.js process.
 
 The coordinator is below SLOW orchestration so independent cycle stages,
 entry diagnostics, dashboard data, volatility refresh, and private account
@@ -295,7 +297,9 @@ TC: `PROD:BINANCE_REQUEST_COORDINATOR`
 ### 8.2 Binance Global Cooldown
 
 HTTP `429`, HTTP `418`, and Binance error code `-1003` activate one hard
-cooldown for the running app instance. The coordinator uses `Retry-After` and
+cooldown for the running app instance. The cooldown is persisted and hydrated
+before every Binance REST callback, so route reloads and process restarts do
+not forget an active ban. The coordinator uses `Retry-After` and
 Binance's `banned until` timestamp when available, and otherwise applies a
 safe fallback cooldown.
 
@@ -311,8 +315,13 @@ While the cooldown is active:
 - Realtime dashboard reads keep the latest persisted live balance while the
   cooldown is active and do not append another error-log record for each
   account or browser refresh.
+- Continuous detections merge into one bounded cooldown incident with its
+  original start, latest end, triggering endpoint, exact reason, and occurrence
+  count. The dashboard and MCP monitoring logs expose this incident history.
 
 TC: `PROD:BINANCE_GLOBAL_COOLDOWN`
+
+TC: `PROD:BINANCE_PERSISTENT_COOLDOWN`
 
 ### 8.3 Retry Classification
 

@@ -15,6 +15,10 @@ import type {
 } from "@/lib/trading/models";
 import type { BlackSwanState } from "@/lib/trading/black-swan";
 import type { SlowTradingCyclePerformanceSummary } from "./performance";
+import type {
+  BinanceCooldownState,
+  BinanceRequestKind,
+} from "@/lib/exchange/platform/binance/request-coordinator";
 
 /** Available SLOW execution modes. */
 export type SlowTradingMode = PositionExecutionMode;
@@ -274,6 +278,36 @@ export interface SlowTradingErrorLogEntry {
   details?: Record<string, unknown>;
 }
 
+/** One persistent Binance REST cooldown incident. */
+export interface SlowTradingBinanceCooldownLogEntry {
+  /** Stable incident id. */
+  id: string;
+  /** First detection timestamp in milliseconds. */
+  t: number;
+  /** Latest Binance retry timestamp in milliseconds. */
+  end: number;
+  /** REST endpoint that detected the latest ban extension. */
+  endpoint: string;
+  /** Whether the detecting request was public or authenticated. */
+  kind: BinanceRequestKind;
+  /** Exact Binance cooldown reason. */
+  reason: string;
+  /** Number of detections merged into this continuous incident. */
+  occurrences: number;
+  /** Binance error code when supplied. */
+  code?: number | string;
+  /** HTTP status when supplied. */
+  status?: number;
+}
+
+/** Binance runtime health rendered by the dashboard and MCP. */
+export interface SlowTradingBinanceHealthSnapshot {
+  /** Currently active process-wide REST cooldown, when any. */
+  current: BinanceCooldownState | null;
+  /** Recent cooldown incidents, newest first. */
+  logs: SlowTradingBinanceCooldownLogEntry[];
+}
+
 /** Result of one atomic error-log status transition. */
 export interface SlowTradingErrorStatusUpdateResult {
   missingIds: string[];
@@ -352,6 +386,8 @@ export interface SlowTradingWithdrawalLogEntry {
 
 /** Grouped SLOW logs returned to the dashboard. */
 export interface SlowTradingLogs {
+  /** Recent Binance REST cooldown incidents. */
+  binanceCooldowns?: SlowTradingBinanceCooldownLogEntry[];
   /** Recent operational errors. */
   errors: SlowTradingErrorLogEntry[];
   /** Recent configured-symbol additions and removals. */
@@ -677,6 +713,8 @@ export interface SlowTradingDashboardState {
   runtime: SlowTradingDashboardRuntimeConfig;
   /** Current persisted portfolio-wide protection status and evidence. */
   blackSwan: BlackSwanState;
+  /** Current and historical Binance REST cooldown health. */
+  binanceHealth?: SlowTradingBinanceHealthSnapshot;
   /** Balance summary for the active mode. */
   balances: {
     /** Quote asset available before reserve subtraction. */

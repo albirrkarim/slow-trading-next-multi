@@ -13,6 +13,7 @@ import moment from "moment-timezone";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import SpeedIcon from "@mui/icons-material/Speed";
+import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import TradeChartBase from "@/components/LiveDashboard/Shared/TradeChartBase";
 
 import {
@@ -48,6 +49,7 @@ interface OpenPositionItemProps {
   exchangeType: DynamicTradeConfig["exchangeType"];
   pnlContributionShare: number;
   position: SlowTradingHistoryPosition;
+  now?: number;
   spendableQuoteAsset: number;
   exitingSymbol?: string | null;
   onCoinDescriptionChange: (symbol: string, description: string) => void;
@@ -171,6 +173,7 @@ export default function OpenPositionItem({
   exchangeType,
   pnlContributionShare,
   position,
+  now = 0,
   spendableQuoteAsset,
   exitingSymbol,
   onCoinDescriptionChange,
@@ -184,6 +187,10 @@ export default function OpenPositionItem({
   const profitPercent = position.pnl.netPct ?? 0;
   const lastMonitoringStage = position.lastMonitoringStage;
   const isSpeedupStage = lastMonitoringStage?.stage === "speedup";
+  const monitoringAgeMs = lastMonitoringStage
+    ? Math.max(0, now - lastMonitoringStage.lastUpdated)
+    : Number.POSITIVE_INFINITY;
+  const monitoringStale = monitoringAgeMs > 10 * 60_000;
   const profitUsdt = position.pnl.netUsdt ?? 0;
   const contributionOpacity =
     openPositionPnlContribution.opacity(pnlContributionShare);
@@ -280,6 +287,28 @@ export default function OpenPositionItem({
                     "& .MuiChip-icon": { margin: 0 },
                     "& .MuiChip-label": { display: "none" },
                   }}
+                />
+              </MetricTooltip>
+            )}
+
+            {monitoringStale && (
+              // PROD:OPEN_POSITION_STALE_MONITORING_WARNING
+              <MetricTooltip
+                title={
+                  lastMonitoringStage
+                    ? `Last successful monitoring was ${Math.floor(
+                        monitoringAgeMs / 60_000,
+                      )} minutes ago at ${formatDate(lastMonitoringStage.lastUpdated)}. The position has exceeded the 10-minute health threshold.`
+                    : "No successful monitoring timestamp is recorded for this open position."
+                }
+              >
+                <Chip
+                  aria-label="Monitoring stale"
+                  color="error"
+                  icon={<WarningAmberRoundedIcon />}
+                  label="Monitoring stale"
+                  size="small"
+                  variant="outlined"
                 />
               </MetricTooltip>
             )}

@@ -54,6 +54,17 @@ function boundedLogs(
   secrets: readonly string[],
 ) {
   return {
+    binanceCooldowns: (logs.binanceCooldowns ?? []).slice(0, limit).map((entry) => ({
+      id: entry.id,
+      startAt: iso(entry.t),
+      endAt: iso(entry.end),
+      endpoint: entry.endpoint,
+      kind: entry.kind,
+      occurrences: entry.occurrences,
+      code: entry.code ?? null,
+      httpStatus: entry.status ?? null,
+      reason: scrubText(entry.reason, secrets),
+    })),
     errors: logs.errors.slice(0, limit).map((entry) => ({
       id: entry.id,
       createdAt: iso(entry.createdAt),

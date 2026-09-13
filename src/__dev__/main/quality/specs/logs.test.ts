@@ -147,6 +147,64 @@ describe("slow specs logs", () => {
     expect(logs.errors).toEqual([]);
   });
 
+  it("persists Binance cooldown incidents and restores the request gate", async () => {
+    const slowTrading = (await import("@/lib/slowTrading")).default;
+    const coordinator = (
+      await import("@/lib/exchange/platform/binance/request-coordinator")
+    ).default;
+    coordinator.state.reset();
+    slowTrading.binanceHealth.coordinator.install();
+    const bannedUntil = Date.now() + 30 * 60_000;
+
+    await expect(
+      coordinator.request.run(
+        {
+          domain: "https://fapi.binance.com",
+          endpoint: "/fapi/v2/balance",
+          kind: "private",
+        },
+        async () => {
+          throw {
+            response: {
+              data: {
+                code: -1003,
+                msg: `Way too many requests; IP banned until ${bannedUntil}`,
+              },
+              status: 418,
+            },
+          };
+        },
+      ),
+    ).rejects.toMatchObject({ retryAt: bannedUntil });
+
+    const logs = await slowTrading.storage.logs.load();
+    expect(logs.binanceCooldowns).toContainEqual(
+      expect.objectContaining({
+        end: bannedUntil,
+        endpoint: "/fapi/v2/balance",
+        kind: "private",
+        occurrences: 1,
+      }),
+    );
+
+    coordinator.state.reset();
+    slowTrading.binanceHealth.coordinator.install();
+    const request = vi.fn();
+    await expect(
+      coordinator.request.run(
+        {
+          domain: "https://fapi.binance.com",
+          endpoint: "/fapi/v1/klines",
+          kind: "public",
+        },
+        request,
+      ),
+    ).rejects.toMatchObject({ retryAt: bannedUntil });
+
+    // PROD:BINANCE_PERSISTENT_COOLDOWN
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it("deletes records from every persistent log without removing others", async () => {
     const storage = (await import("@/lib/slowTrading")).default.storage;
     const first = await storage.logs.appendError({

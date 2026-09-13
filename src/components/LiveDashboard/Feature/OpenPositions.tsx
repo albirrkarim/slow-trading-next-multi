@@ -14,7 +14,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import HeaderMetrics from "@/components/ui/HeaderMetrics";
 import openPositionPnlContribution from "./open-position-pnl-contribution";
@@ -98,6 +98,7 @@ export default function OpenPositions({
   volume24hBySymbol,
 }: OpenPositionsProps) {
   const [pnlSortOrder, setPnlSortOrder] = useState<PnlSortOrder>("worst");
+  const [now, setNow] = useState(0);
   const sortedPositions = useMemo(
     () => sortPositionsByPnl(positions, pnlSortOrder),
     [pnlSortOrder, positions],
@@ -107,6 +108,15 @@ export default function OpenPositions({
     [positions],
   );
   const isWorstFirst = pnlSortOrder === "worst";
+
+  useEffect(() => {
+    const initialTimeoutId = window.setTimeout(() => setNow(Date.now()), 0);
+    const intervalId = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => {
+      window.clearTimeout(initialTimeoutId);
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   return (
     <HeaderMetrics
@@ -184,6 +194,7 @@ export default function OpenPositions({
                       totalAbsolutePnlUsdt,
                     )}
                     position={position}
+                    now={now}
                     spendableQuoteAsset={spendableQuoteAsset}
                     exitingSymbol={
                       exitingSymbol === `${position.account}:${position.symbol}`
