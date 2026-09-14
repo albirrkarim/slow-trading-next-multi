@@ -186,6 +186,7 @@
     }
   ],
   "enableWatchLogic": true,
+  "entrySpareBufferEnabled": true,
   "watchReserveLevels": 1,
   "watchMaxNextAveragingLevels": 3,
   "watchReservePctAlloc": 2,

@@ -84,6 +84,7 @@ export function fitBacktestEntryMargin(params: {
       desiredMarginUsdt: params.desiredMarginUsdt,
       spendableUsdt: params.spendableUsdt,
       enableWatchLogic: config.enableWatchLogic !== false,
+      entrySpareBufferEnabled: config.entrySpareBufferEnabled !== false,
       reserveLevels: config.watchReserveLevels ?? 2,
       pctAlloc: config.watchReservePctAlloc ?? 2,
       maxEntryBased24HourVolPct: config.maxEntryBased24HourVolPct ?? 0.2,

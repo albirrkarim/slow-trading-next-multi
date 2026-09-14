@@ -519,8 +519,10 @@ between `Editing Account` and Entry. It persists as the selected account's
 exit, reserve, leverage, or worker-capacity calculations.
 
 The Entry preview shows estimated entry margin, averaging reserve, total
-budget per worker, preserved bailout buffer when applicable, and available
-worker count. In the multi-account Trading editor, its balance, open positions,
+budget per worker, the optional entry-sized spare that remains spendable,
+preserved bailout buffer when applicable, and available worker count. The spare
+line must explain that it is not locked or reserved and is distinct from the
+largest-`UNRESERVED` bailout buffer. In the multi-account Trading editor, its balance, open positions,
 position limit, and bailout candidates belong only to the account selected by
 `Editing Account`; combined dashboard totals must not enter this calculation.
 It includes a local spendable-assumption input that defaults to that selected

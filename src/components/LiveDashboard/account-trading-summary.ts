@@ -10,6 +10,7 @@ const DEFAULT_ACCOUNT_TRADING_CONFIG: SlowTradingAccountTradingConfig = {
     DEFAULT_DYNAMIC_TRADE_CONFIG_PRODUCTION,
   ),
   enableWatchLogic: false,
+  entrySpareBufferEnabled: true,
   maxEntryMargin: 0,
   maxEntryMarginPct: 0,
   maxLeverage: 0,

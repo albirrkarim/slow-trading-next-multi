@@ -3,6 +3,7 @@ import type { SlowTradingAccountTradingConfig } from "@/lib/slowTrading";
 const BOOLEAN_KEYS = [
   "averagingRescueProjectionGuardEnabled",
   "enableWatchLogic",
+  "entrySpareBufferEnabled",
   "exitSidewaysToFreeWorkersForStrongCandidates",
   "lateEntryVPointPriceDriftEnabled",
 ] as const satisfies ReadonlyArray<keyof SlowTradingAccountTradingConfig>;

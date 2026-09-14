@@ -495,6 +495,7 @@ export interface SlowTradingAccountTradingConfig
     | "adaptiveAveraging"
     | "averagingRescueProjectionGuardEnabled"
     | "enableWatchLogic"
+    | "entrySpareBufferEnabled"
     | "exactLeverage"
     | "exitSidewaysToFreeWorkersForStrongCandidates"
     | "lateEntryVPointPriceDriftEnabled"

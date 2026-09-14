@@ -94,6 +94,12 @@ export interface DynamicTradeConfig {
   enableWatchLogic?: boolean;
 
   /**
+   * When ON, entry sizing leaves one additional entry-margin unit spendable
+   * after funding the entry and its reserved averaging ladder. Defaults to ON.
+   */
+  entrySpareBufferEnabled?: boolean;
+
+  /**
    * Limits the reserved balance lock for future watch adds.
    * Does not stop engine.watch from requesting more averaging by itself. Set 0 to disable.
    */

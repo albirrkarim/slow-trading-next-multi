@@ -60,6 +60,7 @@ const backtestRequestConfig = {
         averagingRescueProjectionGuardEnabled:
           config.averagingRescueProjectionGuardEnabled ?? true,
         enableWatchLogic: config.enableWatchLogic !== false,
+        entrySpareBufferEnabled: config.entrySpareBufferEnabled !== false,
         exactLeverage: normalizeNonNegativeInteger(config.exactLeverage),
         exitSidewaysToFreeWorkersForStrongCandidates:
           config.exitSidewaysToFreeWorkersForStrongCandidates ?? false,

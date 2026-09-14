@@ -249,7 +249,9 @@ Entry sizing must be adjusted in this order:
 3. Temporarily cap `balance.spendable` for the sizing calculation to the lower
    value of the real spendable balance and the 24h-volume budget.
 4. Adjust the entry amount so the entry plus all planned reserve/averaging
-   levels fit inside that effective sizing budget.
+   levels fit inside that effective sizing budget. When
+   `config.entrySpareBufferEnabled` is not `false`, also leave one additional
+   entry-margin unit spendable after the entry and reserved ladder are funded.
 5. If `config.maxEntryMarginPct` is greater than `0`, adjust again so the entry
    plus reserves fit inside that percentage of the effective sizing budget.
 6. If `config.maxEntryMargin` is greater than `0`, adjust again so the entry
@@ -271,6 +273,26 @@ reserve planning.
 for example balance.spendable = $100 and config.maxEntryMarginPct = 75%
 
 so the sizing calculation can use at most $75.
+
+- config.entrySpareBufferEnabled
+
+Default: `true`
+
+When enabled, the reserve-fitting divisor includes one additional entry-margin
+unit. That amount is not locked and is not added to `balance.reserved`; it stays
+in `balance.spendable` as general liquid capital. It is separate from the exact
+largest-`UNRESERVED` bailout buffer in `BOTH:ALWAYS_HAVE_SPENDABLE_TO_BAILING_OUT`.
+
+For one reserved level with multiplier `2`, entry sizing uses:
+
+```txt
+1x entry + 2x reserved averaging + 1x spare = 4x
+entryMargin = floor(effectiveSizingBudget / 4)
+```
+
+When disabled, the same setup uses only `1x + 2x = 3x`. The entry and reserve
+must still fit, and the separate largest-`UNRESERVED` bailout guard remains
+active.
 
 - config.maxEntryBased24HourVolPct
 
@@ -515,6 +537,10 @@ so we need reject the new entry.
 
 so spendable also acts as the balance for bailing out the single largest
 `UNRESERVED` step across current positions and the projected new position.
+
+This exact bailout preservation is separate from
+`config.entrySpareBufferEnabled`. Turning the optional one-entry-margin spare
+off must not disable this guard.
 
 TC: `BOTH:ALWAYS_HAVE_SPENDABLE_TO_BAILING_OUT`
 

@@ -54,18 +54,20 @@ describe("SLOW multi-account specs", () => {
     ]);
   });
 
-  it("defaults and persists the per-account late-entry drift guard", async () => {
+  it("defaults and persists per-account entry guards", async () => {
     const slowTrading = (await import("@/lib/slowTrading")).default;
     const defaults = slowTrading.storage.data.createDefault();
     const template = defaults.runtime.exchangeAccounts[0];
 
     expect(template.trading.lateEntryVPointPriceDriftEnabled).toBe(true);
+    expect(template.trading.entrySpareBufferEnabled).toBe(true);
     await slowTrading.storage.account.saveAccounts(
       [
         {
           ...template,
           trading: {
             ...template.trading,
+            entrySpareBufferEnabled: false,
             lateEntryVPointPriceDriftEnabled: false,
           },
         },
@@ -78,6 +80,8 @@ describe("SLOW multi-account specs", () => {
 
     // PROD:LATE_ENTRY_VPOINT_PRICE_DRIFT_PCT
     expect(accounts[0].trading.lateEntryVPointPriceDriftEnabled).toBe(false);
+    // BOTH:ADJUST_ENTRY_AMOUNT
+    expect(accounts[0].trading.entrySpareBufferEnabled).toBe(false);
   });
 
   it("keeps live and sandbox memory isolated by account slug", async () => {

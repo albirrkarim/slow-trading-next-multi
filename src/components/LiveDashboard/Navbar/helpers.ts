@@ -246,6 +246,7 @@ export function makeConfigDraft(state: DashboardState): ConfigDraft {
       (wallet) => ({ ...wallet }),
     ),
     enableWatchLogic: state.config.enableWatchLogic ?? false,
+    entrySpareBufferEnabled: state.config.entrySpareBufferEnabled ?? true,
     watchReserveLevels: state.config.watchReserveLevels,
     watchMaxNextAveragingLevels: state.config.watchMaxNextAveragingLevels,
     watchReservePctAlloc: state.config.watchReservePctAlloc,
@@ -281,6 +282,7 @@ export function applyAccountProfileToConfigDraft(
     averagingRescueProjectionGuardEnabled:
       trading.averagingRescueProjectionGuardEnabled,
     enableWatchLogic: trading.enableWatchLogic,
+    entrySpareBufferEnabled: trading.entrySpareBufferEnabled ?? true,
     lateEntryVPointPriceDriftEnabled:
       trading.lateEntryVPointPriceDriftEnabled !== false,
     exactLeverage: trading.exactLeverage,
@@ -388,6 +390,8 @@ export function applyBacktestConfigToDraft(
         DEFAULT_DYNAMIC_TRADE_CONFIG_PRODUCTION.modelConfig,
     ),
     enableWatchLogic: backtestConfig.enableWatchLogic,
+    entrySpareBufferEnabled:
+      backtestConfig.entrySpareBufferEnabled ?? true,
     watchReserveLevels: backtestConfig.watchReserveLevels,
     watchMaxNextAveragingLevels: backtestConfig.watchMaxNextAveragingLevels,
     watchReservePctAlloc: backtestConfig.watchReservePctAlloc,

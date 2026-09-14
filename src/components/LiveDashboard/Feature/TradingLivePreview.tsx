@@ -21,6 +21,7 @@ import AveragingSimulationPreview from "./AveragingSimulationPreview";
 import {
   buildTradingLivePreview,
   type TradingLivePreviewConfig,
+  type TradingLivePreviewData,
   type TradingLivePreviewExitStage,
 } from "./trading-live-preview";
 
@@ -136,6 +137,99 @@ function PreviewCalculation({
         </Typography>
       </Tooltip>
     </Box>
+  );
+}
+
+function SpareEntryBufferReference({
+  preview,
+}: {
+  preview: Pick<
+    TradingLivePreviewData,
+    | "entryMarginUsdt"
+    | "entrySpareBufferEnabled"
+    | "entrySpareBufferUsdt"
+    | "spendableUsdt"
+    | "workerCostUsdt"
+  >;
+}) {
+  return (
+    <ReadMoreDialogButton
+      dialogTitle="Spare Entry-Margin Buffer"
+      tooltip="Read more about the spare entry-margin buffer"
+    >
+      <Box sx={{ display: "grid", gap: 2 }}>
+        <Typography variant="body2">
+          This optional sizing cushion keeps one additional entry-margin unit
+          spendable after the new worker&apos;s entry and reserved averaging
+          ladder are funded.
+        </Typography>
+
+        <Box>
+          <Typography fontWeight={700} gutterBottom variant="body2">
+            What it does
+          </Typography>
+          <Typography color="text.secondary" variant="body2">
+            When enabled, SLOW includes one extra entry-sized unit while fitting
+            the entry margin. The money stays in spendable balance; it is not
+            locked and is not moved into the averaging reserve.
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography fontWeight={700} gutterBottom variant="body2">
+            What it does not do
+          </Typography>
+          <Typography color="text.secondary" variant="body2">
+            It does not replace the bailout buffer. SLOW separately preserves
+            the largest actual UNRESERVED averaging step. Turning this spare off
+            leaves that bailout protection active. Both protections remain in
+            the same spendable balance, so they can overlap rather than creating
+            two separately locked pools.
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography fontWeight={700} gutterBottom variant="body2">
+            Current preview
+          </Typography>
+          <Typography
+            sx={{ fontVariantNumeric: "tabular-nums" }}
+            variant="body2"
+          >
+            Entry margin: {formatUsdt(preview.entryMarginUsdt)}
+          </Typography>
+          <Typography
+            sx={{ fontVariantNumeric: "tabular-nums" }}
+            variant="body2"
+          >
+            Worker entry + reserves: {formatUsdt(preview.workerCostUsdt)}
+          </Typography>
+          <Typography
+            sx={{ fontVariantNumeric: "tabular-nums" }}
+            variant="body2"
+          >
+            Optional spare: {formatUsdt(preview.entrySpareBufferUsdt)}
+          </Typography>
+          <Typography
+            fontWeight={700}
+            sx={{ fontVariantNumeric: "tabular-nums" }}
+            variant="body2"
+          >
+            {formatUsdt(preview.workerCostUsdt)} +{" "}
+            {formatUsdt(preview.entrySpareBufferUsdt)} ={" "}
+            {formatUsdt(
+              preview.workerCostUsdt + preview.entrySpareBufferUsdt,
+            )}{" "}
+            of {formatUsdt(preview.spendableUsdt)} current spendable
+          </Typography>
+        </Box>
+
+        <Typography color="text.secondary" variant="body2">
+          Current setting: {preview.entrySpareBufferEnabled ? "ON" : "OFF"}.
+          Change it under Trading → Averaging → Spare Entry-Margin Buffer.
+        </Typography>
+      </Box>
+    </ReadMoreDialogButton>
   );
 }
 
@@ -411,6 +505,13 @@ export default function TradingLivePreview({
   const workerBudgetFormula = `${entryPartsUsdt
     .map(formatUsdt)
     .join(" + ")} = ${formatUsdt(preview.workerCostUsdt)}`;
+  const spareBufferFormula = preview.entrySpareBufferEnabled
+    ? `${formatUsdt(preview.workerCostUsdt)} worker + ${formatUsdt(
+        preview.entrySpareBufferUsdt,
+      )} spare = ${formatUsdt(
+        preview.workerCostUsdt + preview.entrySpareBufferUsdt,
+      )} of ${formatUsdt(preview.spendableUsdt)}`
+    : "Disabled — no additional entry-sized amount is kept";
   const bailoutCandidateAmounts = [
     ...preview.bailoutCandidates.map((candidate) => candidate.marginUsdt),
     ...(preview.projectedBailoutUsdt > 0
@@ -704,6 +805,16 @@ export default function TradingLivePreview({
               detail="entry + each rolling averaging reserve"
               formula={workerBudgetFormula}
               label="Budget per worker"
+            />
+            <PreviewCalculation
+              detail={
+                preview.entrySpareBufferEnabled
+                  ? "The spare equals one entry margin and stays spendable after this worker's entry and reserved averaging ladder are funded. It is not locked or reserved, and it is separate from the largest-UNRESERVED bailout buffer."
+                  : "The optional one-entry-margin spare is off. Entry sizing fits only the worker's entry and reserved averaging ladder; the separate largest-UNRESERVED bailout buffer still applies."
+              }
+              formula={spareBufferFormula}
+              label="Spare entry-margin buffer"
+              labelAction={<SpareEntryBufferReference preview={preview} />}
             />
             <PreviewCalculation
               detail={

@@ -40,6 +40,7 @@ Then the normal SLOW entry sizing function is reused, including:
 - `config.maxEntryMarginPct`
 - `config.maxEntryMargin`
 - `config.enableWatchLogic`
+- `config.entrySpareBufferEnabled`
 - `config.watchReserveLevels`
 - `config.watchReservePctAlloc`
 - `config.maxLeverage`

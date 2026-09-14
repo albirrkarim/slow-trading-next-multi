@@ -10,6 +10,7 @@ const TRADING_CONFIG_KEYS = [
   "adaptiveAveraging",
   "averagingRescueProjectionGuardEnabled",
   "enableWatchLogic",
+  "entrySpareBufferEnabled",
   "exactLeverage",
   "exitSidewaysToFreeWorkersForStrongCandidates",
   "lateEntryVPointPriceDriftEnabled",

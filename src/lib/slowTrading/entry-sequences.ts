@@ -463,6 +463,8 @@ function estimateSystemMaximalCapacity({
   const pctAlloc = config.watchReservePctAlloc ?? 2;
   const hasReserve =
     watchEnabled && reserveLevels > 0 && Number.isFinite(pctAlloc) && pctAlloc > 0;
+  const hasSpareBuffer =
+    hasReserve && config.entrySpareBufferEnabled !== false;
   const requiredMultiplier = hasReserve
     ? getSlowWatchReserveRequiredMarginMultiplier({
         reserveLevels,
@@ -488,6 +490,7 @@ function estimateSystemMaximalCapacity({
       desiredMarginUsdt: volumeBudgetUsdt,
       spendableUsdt: volumeBudgetUsdt,
       enableWatchLogic: watchEnabled,
+      entrySpareBufferEnabled: config.entrySpareBufferEnabled !== false,
       reserveLevels,
       pctAlloc,
       maxEntryBased24HourVolPct: config.maxEntryBased24HourVolPct ?? 0.2,
@@ -507,7 +510,7 @@ function estimateSystemMaximalCapacity({
     });
     const workerCostUsdt = roundUsdt(entryMarginUsdt * requiredMultiplier);
     const effectiveCapitalUsdt = roundUsdt(
-      entryMarginUsdt * (requiredMultiplier + (hasReserve ? 1 : 0)),
+      entryMarginUsdt * (requiredMultiplier + (hasSpareBuffer ? 1 : 0)),
     );
     const maxProfitPct =
       Number.isFinite(takeProfitPct) && takeProfitPct > 0

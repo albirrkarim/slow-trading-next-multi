@@ -86,6 +86,7 @@ export interface ConfigDraft {
   withdrawalSchedules: WithdrawalScheduleDraft[];
   withdrawalWalletBook: WithdrawalWalletDraft[];
   enableWatchLogic?: boolean;
+  entrySpareBufferEnabled?: boolean;
   watchReserveLevels?: number;
   watchMaxNextAveragingLevels?: number;
   watchReservePctAlloc?: number;

@@ -11,6 +11,7 @@ import { TRADE_MESSAGE } from "../message";
 
 interface EntryFundingConfig {
   enableWatchLogic?: boolean;
+  entrySpareBufferEnabled?: boolean;
   maxEntryBased24HourVolPct?: number;
   maxEntryMargin?: number;
   maxEntryMarginPct?: number;
@@ -109,6 +110,8 @@ function calculateEntryFundingPlan(
           desiredMarginUsdt: params.requestedMarginUsdt,
           spendableUsdt,
           enableWatchLogic: watchEnabled,
+          entrySpareBufferEnabled:
+            params.config.entrySpareBufferEnabled !== false,
           reserveLevels,
           pctAlloc,
           maxEntryBased24HourVolPct:

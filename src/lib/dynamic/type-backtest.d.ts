@@ -109,6 +109,12 @@ export interface BacktestConfigDynamic {
     enableWatchLogic?: boolean;
 
     /**
+     * When ON, entry sizing leaves one additional entry-margin unit spendable
+     * after funding the entry and its reserved averaging ladder. Defaults to ON.
+     */
+    entrySpareBufferEnabled?: boolean;
+
+    /**
      * Number of future watch levels to reserve for.
      */
     watchReserveLevels?: number;

@@ -361,6 +361,22 @@ function TradingAccountSettings({
                   info="Relative cap for automatic averaging. Example: entry at level 4 and max 2 means watch logic may add on level 5 and 6, but not 7. Set 0 to disable."
                 />
               </Grid>
+
+              <Grid size={{ xs: 12, md: 8 }}>
+                <SettingsCheckbox
+                  checked={configDraft.entrySpareBufferEnabled ?? true}
+                  disabled={!averagingEnabled}
+                  info="When ON, entry sizing leaves one additional entry-margin unit spendable after paying for the entry and its reserved averaging steps. It is not locked or reserved. Example: with 210 USDT, one 2x reserve, and no other limit, SLOW fits floor(210 / (1x entry + 2x reserve + 1x spare)) = 52 USDT. Turn OFF to fit only the entry and reserved steps; the separate largest-UNRESERVED bailout guard still applies."
+                  label="Spare Entry-Margin Buffer"
+                  onChange={(checked) =>
+                    setConfigDraft((prev) =>
+                      prev
+                        ? { ...prev, entrySpareBufferEnabled: checked }
+                        : prev,
+                    )
+                  }
+                />
+              </Grid>
             </Grid>
 
             <SettingsCheckbox

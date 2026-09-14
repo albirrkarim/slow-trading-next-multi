@@ -130,6 +130,30 @@ describe("slow specs entry", () => {
 
     // BOTH:ADJUST_ENTRY_AMOUNT
     expect(
+      slowTrading.watchReserve.entry.adjustMarginForConfig({
+        desiredMarginUsdt: 210,
+        spendableUsdt: 210,
+        entrySpareBufferEnabled: false,
+        reserveLevels: 1,
+        pctAlloc: 2,
+      }),
+    ).toBe(70);
+
+    // BOTH:ADJUST_ENTRY_AMOUNT
+    expect(
+      fitBacktestEntryMargin({
+        desiredMarginUsdt: 210,
+        spendableUsdt: 210,
+        config: createBacktestConfig({
+          entrySpareBufferEnabled: false,
+          watchReserveLevels: 1,
+          watchReservePctAlloc: 2,
+        }),
+      }),
+    ).toBe(70);
+
+    // BOTH:ADJUST_ENTRY_AMOUNT
+    expect(
       fitBacktestEntryMargin({
         desiredMarginUsdt: 50,
         spendableUsdt: 100,

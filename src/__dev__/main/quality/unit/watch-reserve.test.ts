@@ -53,6 +53,28 @@ describe("reserve helpers", () => {
     expect(100 - fittedEntryMargin - getReservedRemainingUsdt(watchState)).toBe(10);
   });
 
+  it("can disable the additional entry-sized spendable buffer", () => {
+    const fittedEntryMargin = fitEntryMarginToSlowWatchReserve({
+      desiredMarginUsdt: 50,
+      spendableUsdt: 100,
+      reserveLevels: 2,
+      pctAlloc: 2,
+      entrySpareBufferEnabled: false,
+    });
+    const watchState = buildSlowWatchReserveState({
+      direction: "LONG",
+      baseMarginUsdt: fittedEntryMargin,
+      entryLevel: -4,
+      reserveLevels: 2,
+      pctAlloc: 2,
+    });
+
+    // BOTH:ADJUST_ENTRY_AMOUNT
+    expect(fittedEntryMargin).toBe(11);
+    expect(getReservedRemainingUsdt(watchState)).toBe(88);
+    expect(100 - fittedEntryMargin - getReservedRemainingUsdt(watchState)).toBe(1);
+  });
+
   it("computes spendable balance from exchange-free quote asset", () => {
     expect(
       getSpendableQuoteAssetValue({

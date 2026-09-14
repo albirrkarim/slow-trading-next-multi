@@ -252,6 +252,13 @@ describe("SettingsDialogTradingTab", () => {
     expect(
       (
         screen.getByRole("checkbox", {
+          name: "Spare Entry-Margin Buffer",
+        }) as HTMLInputElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      (
+        screen.getByRole("checkbox", {
           name: "Adaptive Averaging",
         }) as HTMLInputElement
       ).disabled,
@@ -289,6 +296,13 @@ describe("SettingsDialogTradingTab", () => {
     expect(
       (
         screen.getByRole("checkbox", {
+          name: "Spare Entry-Margin Buffer",
+        }) as HTMLInputElement
+      ).disabled,
+    ).toBe(false);
+    expect(
+      (
+        screen.getByRole("checkbox", {
           name: "Adaptive Averaging",
         }) as HTMLInputElement
       ).disabled,
@@ -300,6 +314,32 @@ describe("SettingsDialogTradingTab", () => {
         }) as HTMLInputElement
       ).disabled,
     ).toBe(false);
+  });
+
+  it("updates the spare entry-margin buffer independently", () => {
+    const setConfigDraft = vi.fn();
+    render(
+      <SettingsDialogTradingTab
+        configDraft={{
+          ...configDraft,
+          enableWatchLogic: true,
+          entrySpareBufferEnabled: true,
+        }}
+        dashboardState={dashboardState}
+        setConfigDraft={setConfigDraft}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Spare Entry-Margin Buffer",
+      }),
+    );
+    const updateConfig = setConfigDraft.mock.calls[0][0];
+
+    expect(updateConfig(configDraft)).toMatchObject({
+      entrySpareBufferEnabled: false,
+    });
   });
 
   it("updates adaptive averaging settings as one grouped config", () => {

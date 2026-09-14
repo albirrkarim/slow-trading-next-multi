@@ -137,6 +137,7 @@ export function fitEntryMarginToSlowWatchReserve(params: {
   spendableUsdt: number;
   reserveLevels?: number;
   pctAlloc?: number;
+  entrySpareBufferEnabled?: boolean;
 }): number {
   // BOTH:ADJUST_ENTRY_AMOUNT
   const desiredMarginUsdt = params.desiredMarginUsdt;
@@ -153,6 +154,7 @@ export function fitEntryMarginToSlowWatchReserve(params: {
 
   const reserveLevels = Math.max(0, Math.floor(params.reserveLevels ?? 2));
   const pctAlloc = params.pctAlloc ?? 2;
+  const entrySpareBufferEnabled = params.entrySpareBufferEnabled !== false;
 
   if (reserveLevels <= 0 || !Number.isFinite(pctAlloc) || pctAlloc <= 0) {
     return roundUsdt(Math.min(desiredMarginUsdt, spendableUsdt));
@@ -163,8 +165,12 @@ export function fitEntryMarginToSlowWatchReserve(params: {
     pctAlloc,
   });
 
-  // Keep one base-margin buffer spendable after entry + reserve, matching README_SLOW.
-  const maxMarginUsdt = Math.floor(spendableUsdt / (requiredMultiplier + 1));
+  // BOTH:ADJUST_ENTRY_AMOUNT
+  // The optional spare stays spendable; it is not part of the reserved ladder.
+  const spareMultiplier = entrySpareBufferEnabled ? 1 : 0;
+  const maxMarginUsdt = Math.floor(
+    spendableUsdt / (requiredMultiplier + spareMultiplier),
+  );
 
   return roundUsdt(Math.min(desiredMarginUsdt, maxMarginUsdt));
 }
@@ -204,6 +210,7 @@ export function adjustEntryMarginForSlowConfig(params: {
   desiredMarginUsdt: number;
   spendableUsdt: number;
   enableWatchLogic?: boolean;
+  entrySpareBufferEnabled?: boolean;
   reserveLevels?: number;
   pctAlloc?: number;
   maxEntryBased24HourVolPct?: number;
@@ -216,6 +223,7 @@ export function adjustEntryMarginForSlowConfig(params: {
     desiredMarginUsdt,
     spendableUsdt,
     enableWatchLogic = true,
+    entrySpareBufferEnabled = true,
     reserveLevels = 2,
     pctAlloc = 2,
     maxEntryBased24HourVolPct = 0.2,
@@ -251,6 +259,7 @@ export function adjustEntryMarginForSlowConfig(params: {
         spendableUsdt: effectiveSpendableUsdt,
         reserveLevels,
         pctAlloc,
+        entrySpareBufferEnabled,
       })
     : Math.min(desiredMarginUsdt, effectiveSpendableUsdt);
 

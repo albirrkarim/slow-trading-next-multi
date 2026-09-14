@@ -177,6 +177,7 @@ export function useLiveDashboardNavbar({
           symbols: symbolsParsed,
           modelConfig: configDraft.modelConfig,
           enableWatchLogic: configDraft.enableWatchLogic,
+          entrySpareBufferEnabled: configDraft.entrySpareBufferEnabled,
           watchReserveLevels: configDraft.watchReserveLevels,
           watchMaxNextAveragingLevels: configDraft.watchMaxNextAveragingLevels,
           watchReservePctAlloc: configDraft.watchReservePctAlloc,

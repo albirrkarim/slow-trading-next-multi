@@ -168,6 +168,8 @@ describe("TradingSettingsPreview", () => {
       bailoutBufferUsdt: 100,
       entryBudgetUsdt: 530,
       entryMarginUsdt: 7,
+      entrySpareBufferEnabled: true,
+      entrySpareBufferUsdt: 7,
       exitStages: [
         {
           averagingStepsUsed: 0,
@@ -306,6 +308,9 @@ describe("TradingSettingsPreview", () => {
     expect(
       screen.getAllByText("$7.00 + $14.00 + $42.00 = $63.00"),
     ).toHaveLength(2);
+    expect(
+      screen.getByText("$63.00 worker + $7.00 spare = $70.00 of $630.00"),
+    ).toBeDefined();
     const bailoutPreview = screen.getByTestId("bailout-buffer-preview");
     const bailoutCandidates = within(bailoutPreview).getByTestId(
       "bailout-buffer-candidates",
@@ -374,6 +379,69 @@ describe("TradingSettingsPreview", () => {
     expect((await screen.findByRole("tooltip")).textContent).toBe(
       "cumulative margin x leverage",
     );
+  });
+
+  it("explains and toggles the entry-sized spare buffer", () => {
+    const spareBufferDashboardState = {
+      balances: { spendableQuoteAsset: 210 },
+      openPositions: [],
+    } as unknown as DashboardState;
+    const enabledConfig = {
+      ...configDraft,
+      entrySpareBufferEnabled: true,
+      maxEntryMargin: 65,
+      watchMaxNextAveragingLevels: 1,
+      watchReserveLevels: 1,
+    };
+    const enabledPreview = buildTradingLivePreview({
+      config: enabledConfig,
+      dashboardState: spareBufferDashboardState,
+    });
+    const disabledPreview = buildTradingLivePreview({
+      config: { ...enabledConfig, entrySpareBufferEnabled: false },
+      dashboardState: spareBufferDashboardState,
+    });
+
+    // PROD:TRADING_ENTRY_LIVE_PREVIEW
+    // BOTH:ADJUST_ENTRY_AMOUNT
+    expect(enabledPreview).toMatchObject({
+      entryMarginUsdt: 52,
+      entrySpareBufferEnabled: true,
+      entrySpareBufferUsdt: 52,
+      reserveStepsUsdt: [104],
+      workerCostUsdt: 156,
+    });
+    expect(disabledPreview).toMatchObject({
+      entryMarginUsdt: 65,
+      entrySpareBufferEnabled: false,
+      entrySpareBufferUsdt: 0,
+      reserveStepsUsdt: [130],
+      workerCostUsdt: 195,
+    });
+
+    render(
+      <TradingSettingsPreview
+        configDraft={enabledConfig}
+        dashboardState={spareBufferDashboardState}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "$156.00 worker + $52.00 spare = $208.00 of $210.00",
+      ),
+    ).toBeDefined();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Read more about the spare entry-margin buffer",
+      }),
+    );
+    expect(screen.getByText("What it does")).toBeDefined();
+    expect(
+      screen.getByText(
+        "It does not replace the bailout buffer. SLOW separately preserves the largest actual UNRESERVED averaging step. Turning this spare off leaves that bailout protection active. Both protections remain in the same spendable balance, so they can overlap rather than creating two separately locked pools.",
+      ),
+    ).toBeDefined();
   });
 
   it("previews unreserved stages through max next averaging levels", () => {

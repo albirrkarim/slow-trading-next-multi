@@ -102,10 +102,15 @@ function buildEffectiveBalanceTooltip({
   estimate: SlowSystemCapacityEstimate;
 }) {
   const maxEntryPct = config.maxEntryBased24HourVolPct ?? 0.2;
+  const spareDescription =
+    config.entrySpareBufferEnabled === false
+      ? "The optional entry-sized spare is disabled."
+      : "One additional entry-margin unit remains spendable as the optional spare buffer.";
 
   return tooltipContent([
     "Peak effective capital needed at one time in the current range.",
-    "For each active sequence: fitted entry margin + reserve ladder + base-margin buffer.",
+    "For each active sequence: fitted entry margin + reserve ladder, plus the optional spare when enabled.",
+    spareDescription,
     `Entry margin is fitted with 24h volume × ${formatPercent(maxEntryPct)}, max entry %, fixed max entry, and watch reserve settings.`,
     "At every timestamp SLOW sums active sequence capital. This card shows the maximum sum.",
     `Current result: ${formatFullUsdt(
@@ -152,12 +157,17 @@ function buildWorkerNeededChartTooltip() {
 
 function buildCapitalNeededChartTooltip(config: DynamicTradeConfig) {
   const maxEntryPct = config.maxEntryBased24HourVolPct ?? 0.2;
+  const spareDescription =
+    config.entrySpareBufferEnabled === false
+      ? "The optional entry-sized spare is disabled."
+      : "One additional entry-margin unit remains spendable as the optional spare buffer.";
 
   return tooltipContent([
     "Shows the effective capital needed over time to support the active workers.",
     `For each sequence, SLOW starts from 24h quote volume × ${formatPercent(maxEntryPct)}.`,
     "Then it runs the same entry sizing logic used by trading: reserve ladder, max entry %, fixed max entry, trading mode, and leverage config.",
-    "Per active sequence capital: fitted entry margin + reserved averaging ladder + base-margin buffer.",
+    "Per active sequence capital: fitted entry margin + reserved averaging ladder, plus the optional spare when enabled.",
+    spareDescription,
     "The chart value is the sum of active sequence capital at each timestamp.",
   ]);
 }

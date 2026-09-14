@@ -66,6 +66,7 @@ export type BacktestConfig = {
     marginMode?: "ISOLATED" | "CROSS";
 
     enableWatchLogic?: boolean;
+    entrySpareBufferEnabled?: boolean;
     watchReserveLevels?: number;
     watchMaxNextAveragingLevels?: number;
     watchReservePctAlloc?: number;
@@ -132,6 +133,7 @@ export const DEFAULT_BACKTEST_CONFIG: BacktestConfig = {
     marginMode: "ISOLATED",
 
     enableWatchLogic: true,
+    entrySpareBufferEnabled: true,
     watchReserveLevels: 2,
     watchMaxNextAveragingLevels: 2,
     watchReservePctAlloc: 2,
@@ -464,6 +466,39 @@ export default function DynamicBacktestConfig({
                                         })
                                     }
                                     sx={{ ...compactControlSx, width: 152 }}
+                                />
+
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
+                                            checked={
+                                                backtestConfig.entrySpareBufferEnabled ??
+                                                true
+                                            }
+                                            disabled={
+                                                backtestConfig.enableWatchLogic === false
+                                            }
+                                            onChange={(e) =>
+                                                updateBacktest({
+                                                    entrySpareBufferEnabled:
+                                                        e.target.checked,
+                                                })
+                                            }
+                                            size="small"
+                                        />
+                                    }
+                                    label={
+                                        <HelpLabel
+                                            label="Spare Entry Buffer"
+                                            tooltip="Applied to backtest and live sizing. Keeps one extra entry-margin unit spendable after the entry and reserved averaging ladder. It is not reserved. Turning it off does not disable the separate largest-UNRESERVED bailout guard."
+                                        />
+                                    }
+                                    sx={{
+                                        height: 40,
+                                        m: 0,
+                                        px: 0.5,
+                                        whiteSpace: "nowrap",
+                                    }}
                                 />
 
                                 <FormControlLabel

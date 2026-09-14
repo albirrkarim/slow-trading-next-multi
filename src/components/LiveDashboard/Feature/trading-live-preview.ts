@@ -12,6 +12,7 @@ import levelBasedPctDriftStopLoss from "@/lib/trading/level-based-pct-drift-stop
 export interface TradingLivePreviewConfig {
   adaptiveAveraging?: AdaptiveAveragingConfig;
   enableWatchLogic?: boolean;
+  entrySpareBufferEnabled?: boolean;
   exactLeverage?: number;
   maxEntryMargin?: number;
   maxEntryMarginPct?: number;
@@ -92,6 +93,8 @@ export interface TradingLivePreviewData {
   bailoutBufferUsdt: number;
   entryBudgetUsdt: number;
   entryMarginUsdt: number;
+  entrySpareBufferEnabled: boolean;
+  entrySpareBufferUsdt: number;
   exitStages: TradingLivePreviewExitStage[];
   leverage: number;
   currentOpenPositions: number;
@@ -400,6 +403,12 @@ export function buildTradingLivePreview(params: {
           ),
         );
   const pctAlloc = config.watchReservePctAlloc ?? 2;
+  const entrySpareBufferEnabled =
+    config.enableWatchLogic !== false &&
+    reserveLevels > 0 &&
+    Number.isFinite(pctAlloc) &&
+    pctAlloc > 0 &&
+    config.entrySpareBufferEnabled !== false;
   const volatilityThresholdPct = Math.max(
     0,
     Number(dashboardState.globalConfig?.volatilityThresholdPct) || 0,
@@ -605,6 +614,8 @@ export function buildTradingLivePreview(params: {
     bailoutBufferUsdt: capacity.bailoutBufferUsdt,
     entryBudgetUsdt: capacity.entryBudgetUsdt,
     entryMarginUsdt: capacity.entryMarginUsdt,
+    entrySpareBufferEnabled,
+    entrySpareBufferUsdt: capacity.entrySpareBufferUsdt,
     exitStages,
     leverage,
     currentOpenPositions: capacity.currentOpenPositions,

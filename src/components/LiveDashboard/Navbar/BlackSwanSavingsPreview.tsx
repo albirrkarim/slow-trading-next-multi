@@ -266,6 +266,7 @@ export default function BlackSwanSavingsPreview({
       decisionEngineVersion: configDraft.decisionEngineVersion,
       description: configDraft.description,
       enableWatchLogic: configDraft.enableWatchLogic,
+      entrySpareBufferEnabled: configDraft.entrySpareBufferEnabled,
       exactLeverage: configDraft.exactLeverage,
       exchangeType: configDraft.exchangeType,
       exitSidewaysToFreeWorkersForStrongCandidates:

@@ -40,6 +40,7 @@ export const DEFAULT_DYNAMIC_TRADE_CONFIG_PRODUCTION: DynamicTradeConfig = {
   tradingMode: TradingMode.SPOT,
   lateEntryVPointPriceDriftEnabled: true,
   exchangeType: "binance",
+  entrySpareBufferEnabled: true,
   adaptiveAveraging: adaptiveAveraging.config.createDefault(),
   averagingRescueProjectionGuardEnabled: true,
   exitSidewaysToFreeWorkersForStrongCandidates: false,

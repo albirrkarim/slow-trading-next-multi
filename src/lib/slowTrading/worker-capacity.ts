@@ -10,6 +10,7 @@ export interface SlowWorkerCapacity {
   currentOpenPositions: number;
   entryBudgetUsdt: number;
   entryMarginUsdt: number;
+  entrySpareBufferUsdt: number;
   existingBailoutBufferUsdt: number;
   maxOpenPositions: number;
   projectedBailoutBufferUsdt: number;
@@ -20,6 +21,7 @@ export interface SlowWorkerCapacity {
 
 export interface SlowWorkerCapacityConfig {
   enableWatchLogic?: boolean;
+  entrySpareBufferEnabled?: boolean;
   maxEntryMargin?: number;
   maxEntryMarginPct?: number;
   maxOpenPositions?: number;
@@ -140,6 +142,7 @@ export function calculateSlowWorkerCapacity(params: {
       desiredMarginUsdt: sizingBudgetUsdt,
       spendableUsdt: sizingBudgetUsdt,
       enableWatchLogic: watchEnabled,
+      entrySpareBufferEnabled: config.entrySpareBufferEnabled !== false,
       reserveLevels,
       pctAlloc,
       maxEntryMarginPct: config.maxEntryMarginPct ?? 0,
@@ -166,6 +169,14 @@ export function calculateSlowWorkerCapacity(params: {
         spendableUsdt,
         watchEnabled,
       });
+  const entrySpareBufferUsdt =
+    watchEnabled &&
+    reserveLevels > 0 &&
+    Number.isFinite(pctAlloc) &&
+    pctAlloc > 0 &&
+    config.entrySpareBufferEnabled !== false
+      ? entryMarginUsdt
+      : 0;
   const {
     bailoutBufferUsdt,
     entryBudgetUsdt,
@@ -205,6 +216,7 @@ export function calculateSlowWorkerCapacity(params: {
     currentOpenPositions,
     entryBudgetUsdt,
     entryMarginUsdt,
+    entrySpareBufferUsdt,
     existingBailoutBufferUsdt,
     maxOpenPositions,
     projectedBailoutBufferUsdt,

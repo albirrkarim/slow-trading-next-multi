@@ -44,6 +44,30 @@ describe("settings behavior: entry", () => {
     ).toBe(50);
   });
 
+  it("uses entrySpareBufferEnabled to control the additional liquid margin", () => {
+    expect(
+      slowTradingWatchReserve.entry.adjustMarginForConfig({
+        desiredMarginUsdt: 210,
+        spendableUsdt: 210,
+        enableWatchLogic: true,
+        entrySpareBufferEnabled: true,
+        reserveLevels: 1,
+        pctAlloc: 2,
+      }),
+    ).toBe(52);
+
+    expect(
+      slowTradingWatchReserve.entry.adjustMarginForConfig({
+        desiredMarginUsdt: 210,
+        spendableUsdt: 210,
+        enableWatchLogic: true,
+        entrySpareBufferEnabled: false,
+        reserveLevels: 1,
+        pctAlloc: 2,
+      }),
+    ).toBe(70);
+  });
+
   it("applies maxEntryMarginPct and maxEntryMargin as real margin caps", () => {
     expect(
       slowTradingWatchReserve.entry.adjustMarginForConfig({

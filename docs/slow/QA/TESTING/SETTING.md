@@ -165,6 +165,14 @@ assertion should focus on the contract the setting promises.
   - the cycle should call watch reserve averaging recommendation for active
     positions.
 
+- `entrySpareBufferEnabled = true`
+  - entry sizing should leave one additional entry-margin unit spendable after
+    fitting the entry and reserved averaging ladder.
+
+- `entrySpareBufferEnabled = false`
+  - entry sizing should fit only the entry and reserved averaging ladder;
+  - the largest-`UNRESERVED` bailout guard should remain active.
+
 - `adaptiveAveraging.enabled = false`
   - averaging should use the normal reserve multiplier behavior.
 
